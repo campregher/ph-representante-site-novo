@@ -13,20 +13,21 @@ const WhatsAppIcon = () => (
 
 export default function WhatsAppButton() {
   const [showTooltip, setShowTooltip] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    // Show tooltip after 3 seconds
-    const t = setTimeout(() => {
+    const showTimer = setTimeout(() => {
       setShowTooltip(true);
-      // Hide after 5 seconds
-      setTimeout(() => setShowTooltip(false), 5000);
     }, 3000);
-    return () => clearTimeout(t);
-  }, []);
 
-  if (!mounted) return null;
+    const hideTimer = setTimeout(() => {
+      setShowTooltip(false);
+    }, 8000);
+
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
+  }, []);
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">

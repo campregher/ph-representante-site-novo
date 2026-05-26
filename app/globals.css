@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand:       #dc2626;
+  --color-brand-hover: #b91c1c;
+  --color-brand-light: #ef4444;
+
+  /* Dark palette */
+  --color-dark-950: #0d0d0d;
+  --color-dark-900: #111111;
+  --color-dark-800: #1a1a1a;
+  --color-dark-700: #232323;   /* secondary — user defined */
+  --color-dark-600: #2a2a2a;
+  --color-dark-500: #333333;
+  --color-dark-400: #3d3d3d;
+}
+
+:root {
+  --background: #111111;
+  --foreground: #f9fafb;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar        { width: 5px; }
+::-webkit-scrollbar-track  { background: #1a1a1a; }
+::-webkit-scrollbar-thumb  { background: #dc2626; border-radius: 3px; }
+
+/* Selection */
+::selection { background: rgba(220,38,38,0.3); color: #fff; }
+
+/* Subtle grid — dark version */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Gradient text — red to orange */
+.text-gradient {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass cards — dark variant */
+.glass {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.glass-strong {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+/* Brand card */
+.dark-card {
+  background: #232323;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* Glows */
+.glow-red    { box-shadow: 0 4px 24px rgba(220,38,38,0.40), 0 1px 4px rgba(0,0,0,0.4); }
+.glow-red-sm { box-shadow: 0 2px 14px rgba(220,38,38,0.30); }
+
+/* WhatsApp pulse */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0.55); }
+  50%       { box-shadow: 0 0 0 12px rgba(37,211,102,0); }
+}
+.pulse-green { animation: pulse-glow 2s infinite; }
+
+/* Modality badges — dark */
+.badge-atacado {
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.30);
+  color: #93c5fd;
+}
+.badge-drop {
+  background: rgba(220,38,38,0.12);
+  border: 1px solid rgba(220,38,38,0.30);
+  color: #fca5a5;
+}
+.badge-both {
+  background: rgba(249,115,22,0.12);
+  border: 1px solid rgba(249,115,22,0.30);
+  color: #fdba74;
+}
+
+/* Top red accent line */
+.red-line::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #dc2626, transparent);
+}

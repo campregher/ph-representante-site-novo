@@ -113,6 +113,9 @@ export default function LeadForm() {
       setSubmittedData(data);
       setShowSuccess(true);
       reset();
+      if (typeof window !== "undefined" && typeof (window as Window & { gtag?: (...args: unknown[]) => void }).gtag === "function") {
+        (window as Window & { gtag: (...args: unknown[]) => void }).gtag("event", "conversion", { send_to: "AW-18096631778/qtyLCJz6i6IcEOLfkrVD" });
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Nao foi possivel enviar o formulario.");
     } finally {

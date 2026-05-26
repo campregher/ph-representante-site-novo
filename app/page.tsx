@@ -4,6 +4,7 @@ import About from "@/components/About";
 import BusinessModels from "@/components/BusinessModels";
 import Brands from "@/components/Brands";
 import Services from "@/components/Services";
+import YouTubeVideos from "@/components/YouTubeVideos";
 import LeadForm from "@/components/LeadForm";
 import Testimonials from "@/components/Testimonials";
 import FAQ from "@/components/FAQ";
@@ -19,6 +20,7 @@ export default function Home() {
       <BusinessModels />
       <Brands />
       <Services />
+      <YouTubeVideos />
       <LeadForm />
       <Testimonials />
       <FAQ />

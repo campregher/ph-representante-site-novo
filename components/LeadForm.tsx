@@ -113,8 +113,11 @@ export default function LeadForm() {
       setSubmittedData(data);
       setShowSuccess(true);
       reset();
-      if (typeof window !== "undefined" && typeof (window as Window & { gtag?: (...args: unknown[]) => void }).gtag === "function") {
-        (window as Window & { gtag: (...args: unknown[]) => void }).gtag("event", "conversion", { send_to: "AW-18096631778/qtyLCJz6i6IcEOLfkrVD" });
+      const _gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+      if (typeof _gtag === "function") {
+        _gtag("event", "conversion", { send_to: "AW-18096631778/qtyLCJz6i6IcEOLfkrVD" });
+        _gtag("event", "ads_conversion_Solicitar_cota_o_1", {});
+        _gtag("event", "conversion", { send_to: "AW-18096631778/a6PTCIzDhaQcEOLfkrVD", value: 1.0, currency: "BRL" });
       }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Nao foi possivel enviar o formulario.");

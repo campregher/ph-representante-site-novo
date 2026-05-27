@@ -131,7 +131,7 @@ const structuredData = [
         name: "Como funciona o dropshipping automotivo?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Você anuncia os produtos da PH no Mercado Livre ou Shopee com sua margem. Quando o cliente compra, você repassa o pedido para a PH e o produto é enviado diretamente ao consumidor.",
+          text: "Você anuncia os produtos das representadas no Mercado Livre ou Shopee com sua margem. Quando o cliente compra, você repassa o pedido com a etiqueta SKU. A representada recebe, embala e posta com destino ao cliente final. Os custos são repassados à representada, que fatura diariamente ou semanalmente.",
         },
       },
       {

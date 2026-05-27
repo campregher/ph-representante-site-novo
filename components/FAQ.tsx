@@ -6,13 +6,13 @@ import { Plus, Minus, MessageCircle } from "lucide-react";
 import { WHATSAPP_URL } from "@/lib/constants";
 
 const faqs = [
-  { q: "Como funciona o dropshipping automotivo?",           a: "Você anuncia os produtos da PH no Mercado Livre ou Shopee com sua margem. Quando o cliente compra, você repassa o pedido para nós e nós enviamos diretamente ao consumidor. Você lucra sem precisar ter estoque ou capital empatado." },
+  { q: "Como funciona o dropshipping automotivo?",           a: "Você anuncia os produtos das representadas no Mercado Livre ou Shopee com sua margem. Quando o cliente compra, você repassa o pedido com a etiqueta SKU. A representada recebe, separa, embala e posta no ponto de coleta mais próximo com destino ao cliente final. Os custos do produto são repassados à representada, que fatura diariamente ou semanalmente." },
   { q: "Preciso ter estoque para trabalhar com vocês?",      a: "Não! No dropshipping você vende sem estoque. No atacado, você compra por volume e mantém seu próprio estoque. Nossa equipe ajuda a escolher o modelo ideal para o seu perfil." },
   { q: "Qual o prazo de pagamento no atacado?",              a: "Trabalhamos com diversas condições: à vista com desconto, parcelamento em boleto (7, 14, 21 dias) e condições especiais para clientes frequentes. Entre em contato para receber a tabela de preços." },
   { q: "Vocês atendem todo o Brasil?",                      a: "Sim! Atendemos distribuidores, lojistas e sellers de todo o Brasil. Nossos fabricantes parceiros possuem logística nacional com prazos competitivos." },
   { q: "Como funciona o atacado? Existe pedido mínimo?",     a: "Sim, existe uma quantidade mínima por pedido que varia conforme a marca e o produto. Os preços são escalonados — quanto mais você compra, melhor o preço. Entre em contato para receber as tabelas com os mínimos por SKU." },
   { q: "Vocês fazem gestão de conta no Mercado Livre e Shopee?", a: "Sim! Oferecemos serviços completos: criação de anúncios, SEO, gestão de Ads, análise de métricas, otimização de conversão e consultoria estratégica. Temos cases de sellers que triplicaram o faturamento." },
-  { q: "Como faço para começar no dropshipping?",           a: "Entre em contato pelo WhatsApp ou formulário, nossa equipe apresenta o catálogo com os produtos disponíveis para drop, você começa a anunciar, e a cada pedido nos envia os dados para envio. Sem taxa de adesão ou mensalidade." },
+  { q: "Como faço para começar no dropshipping?",           a: "Entre em contato pelo WhatsApp ou formulário, nossa equipe apresenta o catálogo com os produtos disponíveis para drop, você começa a anunciar e a cada venda repassa o pedido com a etiqueta SKU para a representada cuidar do envio. Sem taxa de adesão ou mensalidade." },
   { q: "Quais produtos posso vender pelo dropshipping?",    a: "Tapetes bandeja (ATTIS), calhas de chuva (ECOFLEX), frisos e calotas (TIGER), apoio de braço e soleiras (SOFISTICAR), tapetes de carpete (TEVIC), racks e longarinas (VHIP). O catálogo cresce constantemente." },
 ];
 

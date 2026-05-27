@@ -8,11 +8,11 @@ const atacadoBenefits = ["Melhor margem de lucro","Prazo de pagamento diferencia
 const dropBenefits    = ["Zero estoque necessário","Baixo investimento inicial","Ideal para iniciantes e sellers","Pagamento semanal ou diário","Integração com Mercado Livre e Shopee","Envio direto ao cliente final","Suporte para criação de anúncios","Crescimento sem limite de capital"];
 
 const dropSteps = [
-  { icon: Store,        number: "01", title: "Você anuncia",  desc: "Seller publica o produto no marketplace com sua margem.",       accent: "border-brand/30",  iconBg: "bg-brand/10",      iconC: "text-brand" },
-  { icon: ShoppingCart, number: "02", title: "Cliente compra", desc: "Consumidor realiza a compra no seu anúncio.",                  accent: "border-orange-500/30", iconBg: "bg-orange-500/10", iconC: "text-orange-400" },
-  { icon: Send,         number: "03", title: "Você repassa",  desc: "Seller envia o pedido para a PH com os dados do comprador.",    accent: "border-yellow-500/30", iconBg: "bg-yellow-500/10", iconC: "text-yellow-400" },
-  { icon: Package,      number: "04", title: "Nós enviamos",  desc: "PH Representante envia o produto direto ao cliente final.",     accent: "border-green-500/30",  iconBg: "bg-green-500/10",  iconC: "text-green-400" },
-  { icon: DollarSign,   number: "05", title: "Você lucra",    desc: "Você recebe a diferença do valor de venda sem ter investido.",  accent: "border-blue-500/30",   iconBg: "bg-blue-500/10",   iconC: "text-blue-400" },
+  { icon: Store,        number: "01", title: "Você anuncia",      desc: "Seller publica os produtos das representadas no marketplace com sua margem de lucro.",                               accent: "border-brand/30",      iconBg: "bg-brand/10",      iconC: "text-brand" },
+  { icon: ShoppingCart, number: "02", title: "Cliente compra",   desc: "Consumidor realiza a compra no seu anúncio.",                                                                             accent: "border-orange-500/30", iconBg: "bg-orange-500/10", iconC: "text-orange-400" },
+  { icon: Send,         number: "03", title: "Você repassa",     desc: "Seller envia o pedido com a etiqueta SKU para as representadas.",                                                         accent: "border-yellow-500/30", iconBg: "bg-yellow-500/10", iconC: "text-yellow-400" },
+  { icon: Package,      number: "04", title: "Representada envia", desc: "A representada recebe, separa, embala e posta no ponto de coleta com destino ao cliente final.",                        accent: "border-green-500/30",  iconBg: "bg-green-500/10",  iconC: "text-green-400" },
+  { icon: DollarSign,   number: "05", title: "Você lucra",       desc: "Os custos são repassados à representada, que fatura diariamente ou semanalmente. Você fica com a margem.",               accent: "border-blue-500/30",   iconBg: "bg-blue-500/10",   iconC: "text-blue-400" },
 ];
 
 const cardV = { hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } };
@@ -73,7 +73,7 @@ export default function BusinessModels() {
                   <h3 className="text-2xl font-black text-white">Dropshipping</h3>
                 </div>
               </div>
-              <p className="text-gray-400 mb-6 leading-relaxed">Venda sem estoque. Anuncie nos marketplaces, receba os pedidos e nós cuidamos do envio. Baixo investimento inicial.</p>
+              <p className="text-gray-400 mb-6 leading-relaxed">Venda sem estoque. Anuncie os produtos das representadas nos marketplaces, repasse os pedidos com a etiqueta SKU e as representadas cuidam do envio. Baixo investimento inicial.</p>
               <ul className="space-y-2.5 mb-8">
                 {dropBenefits.map((b) => (
                   <li key={b} className="flex items-start gap-2.5 text-sm text-gray-400">

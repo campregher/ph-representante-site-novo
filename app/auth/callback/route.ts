@@ -5,18 +5,17 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const next       = searchParams.get("next") ?? "/";
+  const tokenHash  = searchParams.get("token_hash");
+  const type       = searchParams.get("type") as "recovery" | "invite" | "signup" | "magiclink" | null;
 
   const errorUrl = next.startsWith("/marca")
     ? `${origin}/marca/login?error=link_expired`
     : `${origin}/portal/login?error=link_expired`;
 
-  if (!code) return NextResponse.redirect(errorUrl);
+  if (!tokenHash || !type) return NextResponse.redirect(errorUrl);
 
-  // Cria a resposta de redirect primeiro para setar cookies nela
-  const redirectUrl = `${origin}${next}`;
-  const response = NextResponse.redirect(redirectUrl);
+  const response = NextResponse.redirect(`${origin}${next}`);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
   if (error) return NextResponse.redirect(errorUrl);
 
   return response;

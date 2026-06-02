@@ -110,3 +110,49 @@ body {
   height: 1px;
   background: linear-gradient(90deg, transparent, #dc2626, transparent);
 }
+
+/* ── Print styles ── */
+@media print {
+  @page { margin: 1.2cm; size: A4; }
+
+  /* Hide everything except the print document */
+  body * { visibility: hidden; }
+  #print-doc, #print-doc * { visibility: visible; }
+
+  #print-doc {
+    position: fixed;
+    inset: 0;
+    overflow: visible;
+  }
+
+  /* Force light background */
+  #print-doc [class*="bg-dark"],
+  #print-doc [class*="bg-white/"] { background: #ffffff !important; }
+
+  /* Text */
+  #print-doc [class*="text-white"]   { color: #111111 !important; }
+  #print-doc [class*="text-gray-3"],
+  #print-doc [class*="text-gray-4"]  { color: #9ca3af !important; }
+  #print-doc [class*="text-gray-5"],
+  #print-doc [class*="text-gray-6"]  { color: #6b7280 !important; }
+  #print-doc [class*="text-brand"]   { color: #dc2626 !important; }
+
+  /* Borders */
+  #print-doc [class*="border-white"] { border-color: #e5e7eb !important; }
+  #print-doc [class*="divide-white"] > * + * { border-color: #e5e7eb !important; }
+
+  /* Status badge colors */
+  #print-doc [class*="text-yellow"]  { color: #d97706 !important; }
+  #print-doc [class*="text-green"]   { color: #16a34a !important; }
+  #print-doc [class*="text-red"]     { color: #dc2626 !important; }
+  #print-doc [class*="bg-yellow"]    { background: #fefce8 !important; }
+  #print-doc [class*="bg-green"]     { background: #f0fdf4 !important; }
+  #print-doc [class*="bg-red"]       { background: #fef2f2 !important; }
+  #print-doc [class*="bg-brand"]     { background: #fef2f2 !important; }
+
+  /* Images always opaque */
+  #print-doc img { opacity: 1 !important; }
+
+  /* Borders */
+  #print-doc { border: none !important; }
+}

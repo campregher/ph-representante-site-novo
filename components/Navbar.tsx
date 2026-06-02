@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, MessageCircle, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, BookOpen, UserCircle2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { WHATSAPP_URL } from "@/lib/constants";
+import { usePathname, useRouter } from "next/navigation";
 
 const navLinks = [
   { label: "Início",        href: "#inicio" },
@@ -17,6 +17,8 @@ const navLinks = [
 ];
 
 export default function Navbar() {
+  const router = useRouter();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -29,9 +31,13 @@ export default function Navbar() {
 
   const handleNavClick = (href: string) => {
     setIsOpen(false);
-    setTimeout(() => {
-      document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
-    }, 250);
+    if (pathname !== "/") {
+      router.push("/" + href);
+    } else {
+      setTimeout(() => {
+        document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
+      }, 250);
+    }
   };
 
   return (
@@ -78,12 +84,17 @@ export default function Navbar() {
           </div>
 
           {/* CTA */}
-          <div className="hidden lg:flex items-center">
-            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+          <div className="hidden lg:flex items-center gap-2">
+            <Link href="/catalogo"
+              className="flex items-center gap-2 px-4 py-2.5 bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-brand/30 text-gray-300 hover:text-white text-sm font-semibold rounded-full transition-all duration-200"
+            >
+              <BookOpen size={15} /> Catálogo
+            </Link>
+            <Link href="/portal/login"
               className="flex items-center gap-2 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-sm font-semibold rounded-full transition-all duration-200 glow-red-sm hover:scale-105"
             >
-              <MessageCircle size={16} /> Falar no WhatsApp
-            </a>
+              <UserCircle2 size={16} /> Área do Cliente
+            </Link>
           </div>
 
           {/* Mobile toggle */}
@@ -105,12 +116,17 @@ export default function Navbar() {
                   className="w-full text-left px-4 py-3 text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-colors font-medium"
                 >{link.label}</button>
               ))}
-              <div className="pt-3">
-                <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+              <div className="pt-3 space-y-2">
+                <Link href="/catalogo" onClick={() => setIsOpen(false)}
+                  className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-dark-800 border border-white/10 text-gray-300 font-semibold rounded-full transition-colors"
+                >
+                  <BookOpen size={18} /> Ver Catálogo
+                </Link>
+                <Link href="/portal/login" onClick={() => setIsOpen(false)}
                   className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-brand hover:bg-brand-hover text-white font-semibold rounded-full transition-colors"
                 >
-                  <MessageCircle size={18} /> Falar no WhatsApp
-                </a>
+                  <UserCircle2 size={18} /> Área do Cliente
+                </Link>
               </div>
             </div>
           </motion.div>

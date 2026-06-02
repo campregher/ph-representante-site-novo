@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MessageCircle, FileText, ArrowRight, TrendingUp, Users, Package, MapPin, ShoppingCart, Star, Zap } from "lucide-react";
+import Link from "next/link";
 import { WHATSAPP_URL } from "@/lib/constants";
 
 const stats = [
@@ -104,7 +105,6 @@ function MarketplaceDashboard() {
 }
 
 export default function Hero() {
-  const scrollToForm = () => document.querySelector("#contato")?.scrollIntoView({ behavior: "smooth" });
 
   return (
     <section id="inicio" className="relative min-h-screen flex flex-col justify-center overflow-hidden bg-dark-950">
@@ -154,13 +154,13 @@ export default function Hero() {
               >
                 <MessageCircle size={20} /> Falar no WhatsApp
               </a>
-              <button onClick={scrollToForm}
+              <Link href="/catalogo"
                 className="flex items-center justify-center gap-2 px-7 py-4 bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-white/20 text-gray-300 hover:text-white font-semibold rounded-full transition-all duration-200 text-base group"
               >
                 <FileText size={20} />
-                Solicitar Catálogo
+                Ver Catálogo
                 <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </button>
+              </Link>
             </motion.div>
 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.5 }}

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Toaster } from "sonner";
+import AuthRecoveryHandler from "@/components/AuthRecoveryHandler";
 import "./globals.css";
 
 const GOOGLE_ADS_ID = "AW-18096631778";
@@ -177,7 +179,15 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
+        <AuthRecoveryHandler />
         {children}
+        <Toaster
+          theme="dark"
+          richColors
+          position="top-right"
+          closeButton
+          toastOptions={{ duration: 4500 }}
+        />
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
           strategy="afterInteractive"

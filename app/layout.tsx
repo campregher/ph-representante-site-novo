@@ -189,15 +189,16 @@ export default function RootLayout({
           toastOptions={{ duration: 4500 }}
         />
         <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
+          src="https://www.googletagmanager.com/gtag/js?id=G-8D8YLGH1SG"
           strategy="afterInteractive"
         />
-        <Script id="google-ads-init" strategy="afterInteractive">
+        <Script id="google-analytics-init" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', '${GOOGLE_ADS_ID}');
+            gtag('config', 'G-8D8YLGH1SG');
+            ${GOOGLE_ADS_ID ? `gtag('config', '${GOOGLE_ADS_ID}');` : ""}
           `}
         </Script>
       </body>

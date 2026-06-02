@@ -3,6 +3,7 @@ import { getMarcaUser } from "@/lib/marca-auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import MarcaShell from "@/components/marca/MarcaShell";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Painel da Marca — PH Representante" };
 
 export default async function MarcaLayout({ children }: { children: React.ReactNode }) {

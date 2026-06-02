@@ -20,26 +20,38 @@ export default function NovaSenhaPage() {
   const [ready,     setReady]     = useState(false);
 
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (!hash) { setReady(true); return; }
+    // PKCE flow: sessão já foi estabelecida pelo /auth/callback — só verifica se existe
+    // Legacy flow: tokens no hash (fallback)
+    supabase.current.auth.getSession().then(({ data }) => {
+      if (data.session) { setReady(true); return; }
 
-    const params       = new URLSearchParams(hash);
-    const accessToken  = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
-    const type         = params.get("type");
+      // Tenta o fluxo legado com tokens no hash
+      const hash = window.location.hash.slice(1);
+      if (!hash) {
+        setError("Link inválido ou expirado. Solicite um novo link de acesso.");
+        setReady(true);
+        return;
+      }
 
-    if (type === "recovery" && accessToken && refreshToken) {
-      supabase.current.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-        .then(({ data, error: err }) => {
-          if (err || !data.session) {
-            setError("Link inválido ou expirado. Solicite um novo link de acesso.");
-          }
-          window.history.replaceState(null, "", window.location.pathname);
-        })
-        .finally(() => setReady(true));
-    } else {
-      setReady(true);
-    }
+      const params       = new URLSearchParams(hash);
+      const accessToken  = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const type         = params.get("type");
+
+      if (type === "recovery" && accessToken && refreshToken) {
+        supabase.current.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(({ data: d, error: err }) => {
+            if (err || !d.session) {
+              setError("Link inválido ou expirado. Solicite um novo link de acesso.");
+            }
+            window.history.replaceState(null, "", window.location.pathname);
+          })
+          .finally(() => setReady(true));
+      } else {
+        setError("Link inválido ou expirado. Solicite um novo link de acesso.");
+        setReady(true);
+      }
+    });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
     ? `${origin}/marca/login?error=link_expired`
     : `${origin}/portal/login?error=link_expired`;
 
-  if (!tokenHash || !type) return NextResponse.redirect(errorUrl);
+  // Debug: mostra todos os params recebidos
+  if (!tokenHash || !type) {
+    const allParams = searchParams.toString();
+    return NextResponse.redirect(`${errorUrl}&debug=missing_params&params=${encodeURIComponent(allParams)}`);
+  }
 
   const response = NextResponse.redirect(`${origin}${next}`);
 

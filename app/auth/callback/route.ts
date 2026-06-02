@@ -33,7 +33,10 @@ export async function GET(request: NextRequest) {
   );
 
   const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-  if (error) return NextResponse.redirect(errorUrl);
+  if (error) {
+    const debug = `${errorUrl}&msg=${encodeURIComponent(error.message)}&th=${tokenHash.slice(0,8)}&t=${type}`;
+    return NextResponse.redirect(debug);
+  }
 
   return response;
 }

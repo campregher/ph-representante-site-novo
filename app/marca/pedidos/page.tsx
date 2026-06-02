@@ -90,7 +90,7 @@ function MarcaPedidosPage() {
     { key: "recusado",     label: `Recusados (${counts.recusado ?? 0})`        },
   ];
 
-  const isSelectionMode = tab === "a_pagar" || tab === "enviado";
+  const isSelectionMode = tab === "a_pagar" || tab === "enviado" || tab === "em_separacao";
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -108,7 +108,7 @@ function MarcaPedidosPage() {
     }
   }
 
-  async function executarLote(action: "confirmar_pagamento" | "confirmar_recebimento") {
+  async function executarLote(action: "confirmar_pagamento" | "confirmar_recebimento" | "marcar_enviado") {
     if (selected.size === 0) return;
     setConfirming(true);
     try {
@@ -119,7 +119,7 @@ function MarcaPedidosPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      const label = action === "confirmar_pagamento" ? "como pago" : "como em separação";
+      const label = action === "confirmar_pagamento" ? "como pago" : action === "marcar_enviado" ? "como enviado" : "como em separação";
       toast.success(`${data.updated} pedido${data.updated !== 1 ? "s" : ""} marcado${data.updated !== 1 ? "s" : ""} ${label}!`);
       await load();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro ao processar pedidos"); }
@@ -299,6 +299,15 @@ function MarcaPedidosPage() {
               >
                 {confirming ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
                 Confirmar pagamento
+              </button>
+            ) : tab === "em_separacao" ? (
+              <button
+                onClick={() => executarLote("marcar_enviado")}
+                disabled={confirming}
+                className="flex items-center gap-2 px-5 py-3 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {confirming ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
+                Marcar como enviado
               </button>
             ) : (
               <button

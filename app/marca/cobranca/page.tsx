@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { RefreshCw, ChevronDown, ChevronUp, DollarSign, CheckCircle, CalendarDays, Loader2, Printer, Mail } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronUp, DollarSign, CheckCircle, CalendarDays, Loader2, Printer, Mail, Package } from "lucide-react";
 
 interface Pedido {
   id: string; numero: number;
@@ -17,6 +17,11 @@ interface ClienteCobranca {
   id: string; nome: string; cnpj: string; email: string;
   bloqueado: boolean; semanas: Semana[]; totalPendente: number;
 }
+interface PedidoAvulso {
+  id: string; numero: number; total: number; created_at: string;
+  condicao_pagamento: string | null; prazo_boleto: string | null;
+  cliente: { id: string; nome: string; cnpj: string; email: string };
+}
 
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function orderTotal(o: Pedido) {
@@ -25,6 +30,7 @@ function orderTotal(o: Pedido) {
 
 export default function MarcaCobrancaPage() {
   const [clientes,   setClientes]   = useState<ClienteCobranca[]>([]);
+  const [avulsos,    setAvulsos]    = useState<PedidoAvulso[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [expanded,   setExpanded]   = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Set<string>>(new Set());
@@ -36,7 +42,8 @@ export default function MarcaCobrancaPage() {
       const res  = await fetch("/api/marca/cobranca");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setClientes(Array.isArray(data) ? data : []);
+      setClientes(Array.isArray(data.clientes) ? data.clientes : []);
+      setAvulsos(Array.isArray(data.avulsos) ? data.avulsos : []);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro ao carregar cobranças"); }
     finally { setLoading(false); }
   }
@@ -85,7 +92,9 @@ export default function MarcaCobrancaPage() {
     finally { setEmailSending(null); }
   }
 
-  const totalGeral = clientes.reduce((s, c) => s + c.totalPendente, 0);
+  const totalSemanal = clientes.reduce((s, c) => s + c.totalPendente, 0);
+  const totalAvulsos = avulsos.reduce((s, p) => s + p.total, 0);
+  const totalGeral   = totalSemanal + totalAvulsos;
 
   return (
     <div className="min-h-screen">
@@ -95,7 +104,7 @@ export default function MarcaCobrancaPage() {
             <h1 className="text-sm font-bold text-white">Faturamento Semanal</h1>
             {!loading && (
               <p className="text-xs text-gray-500">
-                {clientes.length} cliente{clientes.length !== 1 ? "s" : ""} com pedidos a pagar
+                {clientes.length} semanal · {avulsos.length} avulso{avulsos.length !== 1 ? "s" : ""}
               </p>
             )}
           </div>
@@ -117,15 +126,22 @@ export default function MarcaCobrancaPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         {loading ? (
           <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center text-gray-500 text-sm">Carregando...</div>
-        ) : clientes.length === 0 ? (
+        ) : clientes.length === 0 && avulsos.length === 0 ? (
           <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center space-y-2">
             <CheckCircle size={28} className="text-green-500 mx-auto" />
             <p className="text-white font-semibold text-sm">Nenhuma cobrança pendente!</p>
-            <p className="text-xs text-gray-500">Todos os pedidos semanais estão quitados.</p>
+            <p className="text-xs text-gray-500">Todos os pedidos estão quitados.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {clientes.map((c) => {
+          <div className="space-y-6">
+
+            {/* ── Semanal ── */}
+            {clientes.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <CalendarDays size={12} /> Faturamento Semanal
+                </h2>
+                {clientes.map((c) => {
               const isOpen = expanded === c.id;
               const isAnyConfirming = c.semanas.some((s) => s.pedidos.some((p) => confirming.has(p.id)));
               return (
@@ -234,6 +250,63 @@ export default function MarcaCobrancaPage() {
                 </div>
               );
             })}
+              </div>
+            )}
+
+            {/* ── Avulsos (pix / boleto) ── */}
+            {avulsos.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <Package size={12} /> Pedidos Avulsos — PIX / Boleto
+                </h2>
+                <div className="bg-dark-800 border border-white/8 rounded-2xl divide-y divide-white/5">
+                  {avulsos.map((p) => {
+                    const isConf = confirming.has(p.id);
+                    const cond   = p.condicao_pagamento === "pix" ? "PIX"
+                      : p.condicao_pagamento === "boleto" ? `Boleto${p.prazo_boleto ? ` ${p.prazo_boleto}d` : ""}`
+                      : (p.condicao_pagamento ?? "");
+                    return (
+                      <div key={p.id} className="flex items-center gap-4 px-5 py-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-white">#{p.numero}</span>
+                            <span className="text-xs text-gray-400">{p.cliente.nome}</span>
+                            {cond && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/8 text-gray-400 border border-white/10">{cond}</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {new Date(p.created_at).toLocaleDateString("pt-BR")} · {p.cliente.cnpj}
+                          </p>
+                        </div>
+                        <span className="text-sm font-black text-white flex-shrink-0">{fmt(p.total)}</span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => window.open(`/api/marca/imprimir?ids=${p.id}`, "_blank")}
+                            className="p-1.5 text-gray-500 hover:text-white border border-white/10 hover:border-white/20 rounded-lg transition-all"
+                            title="Imprimir"
+                          >
+                            <Printer size={12} />
+                          </button>
+                          <button
+                            onClick={() => confirmarPagamento([p])}
+                            disabled={isConf}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 rounded-xl transition-all disabled:opacity-50"
+                          >
+                            {isConf ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                            Pago
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="px-5 py-3 bg-white/2 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">{avulsos.length} pedido{avulsos.length !== 1 ? "s" : ""} avulso{avulsos.length !== 1 ? "s" : ""}</span>
+                    <span className="text-sm font-black text-white">{fmt(totalAvulsos)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

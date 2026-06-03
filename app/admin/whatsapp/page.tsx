@@ -65,11 +65,11 @@ export default function WhatsAppDisparoPage() {
       const res = await fetch("/api/admin/whatsapp/disparo", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ contatos: lote, mensagem, delayMs: 800 }),
+        body:    JSON.stringify({ contatos: lote, mensagem, delayMs: 45000 }),
       });
       const data = await res.json();
       todos.push(...(data.resultados ?? []));
-      setProgresso(Math.min(i + LOTE, contatos.length));
+        setProgresso(Math.min(i + LOTE, contatos.length));
     }
 
     setResultados(todos);

@@ -5,6 +5,7 @@ import { Package, Upload, Home, Users, ClipboardList, Tag, Menu, X, History, Lay
 import LogoutButton from "@/components/admin/LogoutButton";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import SinoNotificacoes from "@/components/shared/SinoNotificacoes";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -27,7 +28,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           <Menu size={18} />
         </button>
-        <p className="text-xs font-bold text-brand tracking-widest uppercase">PH Admin</p>
+        <p className="text-xs font-bold text-brand tracking-widest uppercase flex-1">PH Admin</p>
+        <SinoNotificacoes />
       </header>
 
       {/* Backdrop */}

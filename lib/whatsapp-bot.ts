@@ -1,5 +1,5 @@
 import { createAdminClient }  from "@/lib/supabase/server";
-import { sendText, getMediaBase64 } from "@/lib/evolution";
+import { sendText } from "@/lib/evolution";
 import { getProducts }              from "@/lib/produtos";
 import { sendNewOrderAlert }        from "@/lib/email";
 
@@ -25,12 +25,11 @@ interface Session {
 }
 
 export interface IncomingMsg {
-  phone:      string;
-  text:       string | null;
-  msgKey?:    Record<string, unknown>;
-  msgContent?: Record<string, unknown>;
-  mediaName?: string;
-  mediaMime?: string;
+  phone:       string;
+  text:        string | null;
+  mediaBase64?: string | null; // Z-API envia base64 diretamente no webhook
+  mediaName?:  string;
+  mediaMime?:  string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -182,19 +181,15 @@ async function onReceivingEtiquetas(db: DB, s: Session, msg: IncomingMsg) {
     return;
   }
 
-  if (msg.msgKey && msg.msgContent) {
-    const media = await getMediaBase64(msg.msgKey, msg.msgContent);
-    if (!media?.base64) {
-      await sendText(s.phone, "Não consegui processar o arquivo. Tente enviar novamente.");
-      return;
-    }
-
-    const ext      = (media.mimetype ?? "").split("/")[1]?.split(";")[0] ?? "bin";
+  if (msg.mediaBase64) {
+    const base64   = msg.mediaBase64;
+    const mimetype = msg.mediaMime ?? "application/octet-stream";
+    const ext      = mimetype.split("/")[1]?.split(";")[0] ?? "bin";
     const fileName = msg.mediaName || `etiqueta-${Date.now()}.${ext}`;
-    const buffer   = Buffer.from(media.base64, "base64");
+    const buffer   = Buffer.from(base64, "base64");
     const path     = `whatsapp/${s.cliente_id}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-    const { error } = await db.storage.from("etiquetas").upload(path, buffer, { contentType: media.mimetype, upsert: false });
+    const { error } = await db.storage.from("etiquetas").upload(path, buffer, { contentType: mimetype, upsert: false });
     if (error) {
       await sendText(s.phone, "Erro ao salvar o arquivo. Tente novamente.");
       return;

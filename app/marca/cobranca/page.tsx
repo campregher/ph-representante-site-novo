@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { RefreshCw, ChevronDown, ChevronUp, DollarSign, CheckCircle, CalendarDays, Loader2, Printer, Mail, Package } from "lucide-react";
+import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 
 interface Pedido {
   id: string; numero: number;
@@ -98,17 +99,10 @@ export default function MarcaCobrancaPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-dark-900 border-b border-white/8">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-sm font-bold text-white">Faturamento Semanal</h1>
-            {!loading && (
-              <p className="text-xs text-gray-500">
-                {clientes.length} semanal · {avulsos.length} avulso{avulsos.length !== 1 ? "s" : ""}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
+      <MarcaContentHeader
+        title="Faturamento Semanal"
+        actions={
+          <>
             {totalGeral > 0 && (
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black border bg-yellow-400/10 text-yellow-400 border-yellow-400/25">
                 <DollarSign size={11} /> {fmt(totalGeral)} a receber
@@ -119,9 +113,9 @@ export default function MarcaCobrancaPage() {
             >
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         {loading ? (

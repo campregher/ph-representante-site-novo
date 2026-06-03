@@ -127,11 +127,12 @@ export default function PortalDashboard({
 
   return (
     <div className="min-h-screen">
-      <header className="bg-dark-900 border-b border-white/8">
+      {/* Header apenas no desktop — no mobile o PortalShell já renderiza o header */}
+      <header className="hidden md:block bg-dark-900 border-b border-white/8">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Image src="/images/ph.png" alt="PH Representante" width={120} height={32} className="object-contain h-8 w-auto" />
           <div className="flex items-center gap-4">
-            <span className="text-xs text-gray-500 hidden sm:block truncate max-w-[220px]">{cliente.razao_social}</span>
+            <span className="text-xs text-gray-500 truncate max-w-[220px]">{cliente.razao_social}</span>
             <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-white transition-colors">
               <LogOut size={14} /> Sair
             </button>

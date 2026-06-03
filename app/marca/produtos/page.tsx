@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Plus, RefreshCw, Package, Search, Pencil, Trash2, X, Loader2, ToggleLeft, ToggleRight, FileSpreadsheet } from "lucide-react";
+import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 import Image from "next/image";
 
 interface Product {
@@ -115,8 +116,9 @@ export default function MarcaProdutosPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-dark-900 border-b border-white/8">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
+      <MarcaContentHeader title="Produtos" />
+      <div className="bg-dark-900 border-b border-white/8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <div className="flex-1 relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
             <input
@@ -143,7 +145,7 @@ export default function MarcaProdutosPage() {
             <Plus size={14} /> Novo produto
           </button>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         {loading ? (

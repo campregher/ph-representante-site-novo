@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getMarcaUser } from "@/lib/marca-auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendOrderReceivedEmail, sendShippingEmail, sendPaymentConfirmationEmail } from "@/lib/email";
+import { criarNotificacao, getClienteUserId } from "@/lib/notificacoes";
 
 export const runtime = "nodejs";
 
@@ -99,6 +100,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       } catch { /* email failure does not block action */ }
     }
 
+    if (existing.cliente_id) {
+      getClienteUserId(existing.cliente_id as string).then((uid) => {
+        if (uid) criarNotificacao({
+          destinatarioTipo: "portal",
+          destinatarioId:   uid,
+          tipo:             "pedido_aprovado",
+          titulo:           `Pedido #${existing.numero} aprovado`,
+          mensagem:         "Seu pedido foi recebido e está em separação.",
+          link:             `/portal/orcamentos/${id}`,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ ok: true });
   }
 
@@ -127,6 +141,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           transportadora: existing.transportadora as string | null,
         });
       } catch { /* email failure does not block action */ }
+    }
+
+    if (existing.cliente_id) {
+      getClienteUserId(existing.cliente_id as string).then((uid) => {
+        if (uid) criarNotificacao({
+          destinatarioTipo: "portal",
+          destinatarioId:   uid,
+          tipo:             "pedido_enviado",
+          titulo:           `Pedido #${existing.numero} enviado`,
+          mensagem:         "Seu pedido foi enviado e está a caminho.",
+          link:             `/portal/orcamentos/${id}`,
+        }).catch(() => {});
+      }).catch(() => {});
     }
 
     return NextResponse.json({ ok: true });
@@ -158,6 +185,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       } catch { /* email failure does not block action */ }
     }
 
+    if (existing.cliente_id) {
+      getClienteUserId(existing.cliente_id as string).then((uid) => {
+        if (uid) criarNotificacao({
+          destinatarioTipo: "portal",
+          destinatarioId:   uid,
+          tipo:             "pedido_pago",
+          titulo:           `Pagamento do pedido #${existing.numero} confirmado`,
+          mensagem:         `R$ ${totalReal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} confirmado.`,
+          link:             `/portal/orcamentos/${id}`,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ ok: true });
   }
 
@@ -173,6 +213,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .eq("id", id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (existing.cliente_id) {
+      getClienteUserId(existing.cliente_id as string).then((uid) => {
+        if (uid) criarNotificacao({
+          destinatarioTipo: "portal",
+          destinatarioId:   uid,
+          tipo:             "pedido_recusado",
+          titulo:           `Pedido #${existing.numero} recusado`,
+          mensagem:         motivo ?? "Seu pedido foi recusado pela marca.",
+          link:             `/portal/orcamentos/${id}`,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ ok: true });
   }
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { RefreshCw, ShoppingBag, CheckCircle, Truck, Clock, TrendingUp, DollarSign, ChevronRight, PackageCheck, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 
 interface DashboardData {
   aguardando: number;
@@ -89,16 +90,16 @@ export default function MarcaDashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-dark-900 border-b border-white/8">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <h1 className="text-sm font-bold text-white">Dashboard</h1>
+      <MarcaContentHeader
+        title="Dashboard"
+        actions={
           <button onClick={load} disabled={loading}
             className="p-2 text-gray-500 hover:text-white bg-dark-800 border border-white/8 rounded-xl transition-all"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-5">
 

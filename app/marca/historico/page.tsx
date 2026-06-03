@@ -7,6 +7,7 @@ import {
   RefreshCw, Printer, ChevronRight, CreditCard, CheckCircle,
   XCircle, Clock, Loader2, FileText,
 } from "lucide-react";
+import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 
 interface Pedido {
   id: string; numero: number; status: string; tipo_pedido: string | null;
@@ -98,16 +99,16 @@ export default function MarcaHistoricoPage() {
 
   return (
     <div className="min-h-screen pb-28">
-      <header className="bg-dark-900 border-b border-white/8">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <h1 className="text-sm font-bold text-white">Histórico de Cobranças</h1>
+      <MarcaContentHeader
+        title="Histórico de Cobranças"
+        actions={
           <button onClick={load} disabled={loading}
             className="p-2 text-gray-500 hover:text-white bg-dark-800 border border-white/8 rounded-xl transition-all"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Tabs */}

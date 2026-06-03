@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { sendNewOrderAlert } from "@/lib/email";
+import { criarNotificacao, getMarcaUserId } from "@/lib/notificacoes";
 
 export const runtime = "nodejs";
 
@@ -121,6 +122,20 @@ export async function POST(request: Request) {
     const now   = new Date(orcamento.created_at);
     const dataBR = now.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
     const horaBR = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    // Notificação in-app para a marca (em background)
+    getMarcaUserId(marca).then((marcaUserId) => {
+      if (marcaUserId) {
+        criarNotificacao({
+          destinatarioTipo: "marca",
+          destinatarioId:   marcaUserId,
+          tipo:             "novo_pedido",
+          titulo:           `Novo pedido #${orcamento.numero} de ${clienteRow.razao_social}`,
+          mensagem:         `${tipoPedido === "dropshipping" ? "DROP" : "Estoque"} · R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+          link:             `/marca/pedidos/${orcamento.id}`,
+        }).catch(() => {});
+      }
+    }).catch(() => {});
 
     // Envia alerta por email (em background — não bloqueia a resposta ao cliente)
     const adminEmail = process.env.EMAIL_ADMIN;

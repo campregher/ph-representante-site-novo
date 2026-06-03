@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Users, Mail, Phone, MapPin, XCircle, Ban, ShieldCheck, Loader2, CheckSquare, Square, ChevronDown, ChevronUp, Hash, Home } from "lucide-react";
+import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 
 interface MarcaCliente {
   id: string; status: string; bloqueado: boolean; observacao: string | null;
@@ -112,19 +113,16 @@ export default function MarcaClientesPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-dark-900 border-b border-white/8">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-sm font-bold text-white">Clientes</h1>
-            {!loading && <p className="text-xs text-gray-500">{clientes.length} cliente{clientes.length !== 1 ? "s" : ""}</p>}
-          </div>
+      <MarcaContentHeader
+        title="Clientes"
+        actions={
           <button onClick={load} disabled={loading}
             className="p-2 text-gray-500 hover:text-white bg-dark-800 border border-white/8 rounded-xl transition-all"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         {loading ? (

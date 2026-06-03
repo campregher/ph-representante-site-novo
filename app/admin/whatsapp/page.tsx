@@ -15,10 +15,15 @@ interface Contato {
   [k: string]: string;
 }
 
-interface ContatoValidado extends Contato {
+interface ContatoValidado {
+  telefone:     string;
+  nome:         string;
+  empresa:      string;
+  email:        string;
   telefoneNorm: string | null;
   erros:        string[];
   aviso:        string | null;
+  [k: string]:  unknown;
 }
 
 interface Resultado { telefone: string; nome: string; status: "ok" | "erro"; motivo?: string }

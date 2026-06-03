@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
-import { Upload, Send, CheckCircle, XCircle, Loader2, MessageSquare, Users, FileSpreadsheet, X } from "lucide-react";
+import { Upload, Send, CheckCircle, XCircle, Loader2, MessageSquare, Users, FileSpreadsheet, X, Download } from "lucide-react";
 
 interface Contato { telefone: string; nome: string; [k: string]: string }
 interface Resultado { telefone: string; nome: string; status: "ok" | "erro"; motivo?: string }
@@ -27,17 +27,20 @@ export default function WhatsAppDisparoPage() {
 
       const parsed: Contato[] = rows
         .map((row) => {
-          // Detecta coluna de telefone (primeira coluna com "tel" ou "phone" ou "whats" ou apenas coluna A)
-          const keys = Object.keys(row);
-          const telKey = keys.find(k => /tel|phone|whats|fone|celular/i.test(k)) ?? keys[0];
-          const nomeKey = keys.find(k => /nome|name/i.test(k)) ?? keys[1] ?? "";
+          const keys    = Object.keys(row);
+          const telKey  = keys.find(k => /tel|phone|whats|fone|celular/i.test(k)) ?? keys[2] ?? keys[0];
+          const nomeKey = keys.find(k => /^nome$/i.test(k)) ?? keys.find(k => /nome|name/i.test(k)) ?? keys[0];
+          const empKey  = keys.find(k => /empresa|company|loja|fantasia/i.test(k)) ?? keys[1] ?? "";
+          const emailKey = keys.find(k => /email|e-mail/i.test(k)) ?? "";
           return {
             telefone: String(row[telKey] ?? "").trim(),
             nome:     String(row[nomeKey] ?? "").trim(),
+            empresa:  empKey ? String(row[empKey] ?? "").trim() : "",
+            email:    emailKey ? String(row[emailKey] ?? "").trim() : "",
             ...row,
           };
         })
-        .filter(c => c.telefone);
+        .filter(c => c.telefone && c.nome && c.empresa);
 
       setContatos(parsed);
     };
@@ -88,6 +91,13 @@ export default function WhatsAppDisparoPage() {
           <h1 className="text-lg font-bold text-white">Disparo WhatsApp</h1>
           <p className="text-xs text-gray-500">Envie mensagens em massa a partir de uma lista Excel</p>
         </div>
+        <a
+          href="/api/admin/whatsapp/template"
+          download
+          className="ml-auto flex items-center gap-1.5 px-3 py-2 bg-dark-800 border border-white/8 hover:border-brand/30 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all"
+        >
+          <Download size={13} /> Baixar template
+        </a>
       </div>
 
       {/* Upload */}
@@ -134,8 +144,9 @@ export default function WhatsAppDisparoPage() {
           <div className="max-h-48 overflow-y-auto divide-y divide-white/5">
             {contatos.slice(0, 100).map((c, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                <span className="text-[10px] text-gray-600 w-6 text-right">{i + 1}</span>
-                <span className="text-xs font-medium text-white w-40 truncate">{c.nome || "—"}</span>
+                <span className="text-[10px] text-gray-600 w-6 text-right flex-shrink-0">{i + 1}</span>
+                <span className="text-xs font-medium text-white w-32 truncate flex-shrink-0">{c.nome || "—"}</span>
+                <span className="text-xs text-gray-500 w-32 truncate flex-shrink-0">{c.empresa || "—"}</span>
                 <span className="text-xs text-gray-400 font-mono">{c.telefone}</span>
               </div>
             ))}
@@ -153,7 +164,10 @@ export default function WhatsAppDisparoPage() {
         <div className="px-4 py-3 border-b border-white/8">
           <p className="text-xs font-semibold text-white">Mensagem</p>
           <p className="text-[10px] text-gray-500 mt-0.5">
-            Use <code className="bg-white/8 px-1 rounded">{"{{nome}}"}</code> para personalizar com o nome do contato
+            Variáveis disponíveis:{" "}
+            {["{{nome}}", "{{empresa}}", "{{telefone}}", "{{email}}"].map(v => (
+              <code key={v} className="bg-white/8 px-1 rounded mx-0.5">{v}</code>
+            ))}
           </p>
         </div>
         <div className="p-4">

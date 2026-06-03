@@ -50,10 +50,12 @@ export async function POST(request: Request) {
       continue;
     }
 
-    // Substitui variáveis {{nome}}, {{telefone}}, etc.
+    // Substitui variáveis {{nome}}, {{empresa}}, {{telefone}}, {{email}}, etc.
     const texto = mensagem
       .replace(/\{\{nome\}\}/gi,     nome)
+      .replace(/\{\{empresa\}\}/gi,  c.empresa ?? "")
       .replace(/\{\{telefone\}\}/gi, c.telefone)
+      .replace(/\{\{email\}\}/gi,    c.email ?? "")
       .replace(/\{\{(\w+)\}\}/gi, (_, key) => c[key] ?? "");
 
     try {

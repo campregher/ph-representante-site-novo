@@ -52,7 +52,10 @@ export async function uploadMedia(buffer: Buffer, mimeType: string, filename: st
     const form = new FormData();
     form.append("messaging_product", "whatsapp");
     form.append("type", mimeType);
-    form.append("file", new Blob([buffer], { type: mimeType }), filename);
+    const arrayBuffer = new ArrayBuffer(buffer.byteLength);
+    new Uint8Array(arrayBuffer).set(buffer);
+
+    form.append("file", new Blob([arrayBuffer], { type: mimeType }), filename);
 
     const res = await fetch(`${API_URL}/${phoneId()}/media`, {
       method:  "POST",

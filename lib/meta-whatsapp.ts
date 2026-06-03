@@ -4,19 +4,27 @@ function phoneId() { return process.env.META_PHONE_NUMBER_ID ?? ""; }
 function token()   { return process.env.META_ACCESS_TOKEN ?? ""; }
 
 export async function sendText(to: string, text: string): Promise<void> {
-  await fetch(`${API_URL}/${phoneId()}/messages`, {
-    method:  "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      "Authorization": `Bearer ${token()}`,
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: text },
-    }),
-  }).catch(() => {});
+  try {
+    const res = await fetch(`${API_URL}/${phoneId()}/messages`, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token()}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: text },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[meta-whatsapp] sendText error:", res.status, JSON.stringify(err));
+    }
+  } catch (e) {
+    console.error("[meta-whatsapp] sendText exception:", e);
+  }
 }
 
 export async function getMediaUrl(mediaId: string): Promise<string | null> {

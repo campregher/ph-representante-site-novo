@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   RefreshCw, TrendingUp, DollarSign, AlertCircle, Users,
-  Package, Clock, BarChart3,
+  Package, Clock, BarChart3, MessageSquare,
 } from "lucide-react";
 
 interface DashData {
@@ -52,11 +53,18 @@ export default function AdminDashboard() {
           <h1 className="text-xl font-black text-white">Dashboard</h1>
           <p className="text-xs text-gray-500 mt-0.5">Visão geral de vendas e performance</p>
         </div>
-        <button onClick={load} disabled={loading}
-          className="ml-auto p-2 text-gray-500 hover:text-white bg-dark-800 border border-white/8 rounded-xl transition-all"
-        >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <Link href="/admin/whatsapp"
+            className="flex items-center gap-2 px-3 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/25 text-green-400 text-xs font-semibold rounded-xl transition-all"
+          >
+            <MessageSquare size={13} /> Disparo WhatsApp
+          </Link>
+          <button onClick={load} disabled={loading}
+            className="p-2 text-gray-500 hover:text-white bg-dark-800 border border-white/8 rounded-xl transition-all"
+          >
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
 
       {loading ? (

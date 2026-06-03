@@ -3,6 +3,7 @@ import { getMarcaUser } from "@/lib/marca-auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendOrderReceivedEmail, sendShippingEmail, sendPaymentConfirmationEmail } from "@/lib/email";
 import { criarNotificacao, getClienteUserId } from "@/lib/notificacoes";
+import { sendText } from "@/lib/evolution";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { data: existing } = await db
     .from("orcamentos")
-    .select("id, status, numero, total, tipo_pedido, transportadora, cliente_id, clientes(razao_social, email), orcamento_itens(valor_total)")
+    .select("id, status, numero, total, tipo_pedido, transportadora, cliente_id, clientes(razao_social, email, whatsapp), orcamento_itens(valor_total)")
     .eq("id", id)
     .eq("marca", ctx.marcaSlug)
     .single();
@@ -53,7 +54,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     etiquetas_confirmadas?: boolean;
   };
 
-  const cliente = existing.clientes as unknown as { razao_social: string; email: string } | null;
+  const cliente = existing.clientes as unknown as { razao_social: string; email: string; whatsapp?: string | null } | null;
+  const clienteWpp = cliente?.whatsapp ? cliente.whatsapp.replace(/\D/g, "") : null;
 
   // ── Confirmar recebimento → em_separacao ─────────────────────────────────────
   if (action === "confirmar_recebimento") {
@@ -112,6 +114,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }).catch(() => {});
       }).catch(() => {});
     }
+    if (clienteWpp) sendText(clienteWpp, `✅ *Pedido #${existing.numero} aprovado!*\n\nSeu pedido foi recebido e está em separação.`).catch(() => {});
 
     return NextResponse.json({ ok: true });
   }
@@ -155,6 +158,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }).catch(() => {});
       }).catch(() => {});
     }
+    if (clienteWpp) sendText(clienteWpp, `📦 *Pedido #${existing.numero} enviado!*\n\nSeu pedido está a caminho.`).catch(() => {});
 
     return NextResponse.json({ ok: true });
   }
@@ -197,6 +201,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }).catch(() => {});
       }).catch(() => {});
     }
+    if (clienteWpp) sendText(clienteWpp, `💰 *Pagamento do pedido #${existing.numero} confirmado!*\n\nValor: R$ ${totalReal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`).catch(() => {});
 
     return NextResponse.json({ ok: true });
   }
@@ -226,6 +231,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }).catch(() => {});
       }).catch(() => {});
     }
+    if (clienteWpp) sendText(clienteWpp, `❌ *Pedido #${existing.numero} recusado.*\n\n${motivo ?? "Entre em contato com a marca para mais informações."}`).catch(() => {});
 
     return NextResponse.json({ ok: true });
   }

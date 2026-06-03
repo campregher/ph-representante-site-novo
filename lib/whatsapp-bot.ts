@@ -2,6 +2,7 @@ import { createAdminClient }  from "@/lib/supabase/server";
 import { sendText } from "@/lib/evolution";
 import { getProducts }              from "@/lib/produtos";
 import { sendNewOrderAlert }        from "@/lib/email";
+import { criarNotificacao, getMarcaUserId } from "@/lib/notificacoes";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,18 @@ async function onConfirming(db: DB, s: Session, msg: IncomingMsg) {
         total, observacoes: null,
       }).catch(() => {});
     }
+
+    // Notificação in-app para a marca
+    getMarcaUserId(s.marca_slug!).then((uid) => {
+      if (uid) criarNotificacao({
+        destinatarioTipo: "marca",
+        destinatarioId:   uid,
+        tipo:             "novo_pedido",
+        titulo:           `Novo pedido #${orcamento.numero} via WhatsApp`,
+        mensagem:         `${s.tipo_pedido === "dropshipping" ? "DROP" : "Estoque"} · R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+        link:             `/marca/pedidos/${orcamento.id}`,
+      }).catch(() => {});
+    }).catch(() => {});
 
     await reset(db, s.phone);
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";

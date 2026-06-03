@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
   Send, CheckCircle, XCircle, Loader2, MessageSquare,
-  Users, FileSpreadsheet, X, Download, AlertTriangle, Info,
+  Users, FileSpreadsheet, X, Download, AlertTriangle, Info, ImagePlus, Trash2,
 } from "lucide-react";
 
 interface Contato {
@@ -84,7 +84,9 @@ export default function WhatsAppDisparoPage() {
   const [progresso,  setProgresso]  = useState(0);
   const [nomeArq,    setNomeArq]    = useState("");
   const [filtro,     setFiltro]     = useState<"todos" | "validos" | "invalidos">("todos");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [imagem,     setImagem]     = useState<{ preview: string; nome: string; mediaId: string | null; erro: string | null; carregando: boolean } | null>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+  const imgInputRef = useRef<HTMLInputElement>(null);
 
   const validos   = contatos.filter(c => c.erros.length === 0);
   const invalidos = contatos.filter(c => c.erros.length > 0);
@@ -134,6 +136,22 @@ export default function WhatsAppDisparoPage() {
     if (file) handleFile(file);
   }
 
+  async function handleImagem(file: File) {
+    const preview = URL.createObjectURL(file);
+    setImagem({ preview, nome: file.name, mediaId: null, erro: null, carregando: true });
+
+    const form = new FormData();
+    form.append("imagem", file);
+    const res  = await fetch("/api/admin/whatsapp/upload-imagem", { method: "POST", body: form });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setImagem(prev => prev ? { ...prev, erro: data.error, carregando: false } : null);
+    } else {
+      setImagem(prev => prev ? { ...prev, mediaId: data.mediaId, carregando: false } : null);
+    }
+  }
+
   async function enviar() {
     if (!validos.length || msgErro) return;
     if (!confirm(`Enviar mensagem para ${validos.length} contato(s) válido(s)?`)) return;
@@ -155,7 +173,7 @@ export default function WhatsAppDisparoPage() {
       const res  = await fetch("/api/admin/whatsapp/disparo", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ contatos: lote, mensagem, delayMs: 45000 }),
+        body:    JSON.stringify({ contatos: lote, mensagem, imagemId: imagem?.mediaId ?? null, delayMs: 45000 }),
       });
       const data = await res.json();
       todos.push(...(data.resultados ?? []));
@@ -293,6 +311,59 @@ export default function WhatsAppDisparoPage() {
         </div>
       )}
 
+      {/* Imagem opcional */}
+      <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-white">Imagem <span className="text-gray-600 font-normal">(opcional)</span></p>
+            <p className="text-[10px] text-gray-500 mt-0.5">JPG · PNG · WebP · máx. 5MB — enviada antes do texto</p>
+          </div>
+          {imagem && (
+            <button onClick={() => setImagem(null)} className="text-gray-600 hover:text-red-400 transition-colors">
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="p-4">
+          {!imagem ? (
+            <button
+              onClick={() => imgInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center gap-2 hover:border-brand/30 hover:bg-brand/5 transition-all"
+            >
+              <ImagePlus size={24} className="text-gray-600" />
+              <span className="text-xs text-gray-500">Clique para selecionar imagem</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imagem.preview} alt="preview" className="w-20 h-20 object-cover rounded-xl border border-white/10 flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1">
+                <p className="text-xs font-medium text-white truncate">{imagem.nome}</p>
+                {imagem.carregando && (
+                  <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                    <Loader2 size={11} className="animate-spin" /> Enviando para Meta...
+                  </p>
+                )}
+                {imagem.erro && (
+                  <p className="text-xs text-red-400 flex items-center gap-1"><XCircle size={11} /> {imagem.erro}</p>
+                )}
+                {imagem.mediaId && (
+                  <p className="text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11} /> Pronta para envio</p>
+                )}
+              </div>
+            </div>
+          )}
+          <input
+            ref={imgInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImagem(f); e.target.value = ""; }}
+          />
+        </div>
+      </div>
+
       {/* Mensagem */}
       <div className={`bg-dark-800 border rounded-2xl overflow-hidden ${msgErro && mensagem ? "border-red-400/30" : "border-white/8"}`}>
         <div className="px-4 py-3 border-b border-white/8">
@@ -357,7 +428,7 @@ export default function WhatsAppDisparoPage() {
       {/* Botão enviar */}
       <button
         onClick={enviar}
-        disabled={enviando || !validos.length || !!msgErro}
+        disabled={enviando || !validos.length || !!msgErro || !!imagem?.carregando || !!imagem?.erro}
         className="w-full flex items-center justify-center gap-2 py-3 bg-green-500 hover:bg-green-600 disabled:bg-dark-700 disabled:text-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all"
       >
         {enviando ? (

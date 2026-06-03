@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyToken, ADMIN_COOKIE } from "@/lib/admin-auth";
 import { cookies } from "next/headers";
 import { sendText } from "@/lib/evolution";
+import { sendImage } from "@/lib/meta-whatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 min para listas grandes
@@ -30,10 +31,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const { contatos, mensagem, delayMs = 1000 } = await request.json() as {
-    contatos: { telefone: string; nome: string; [k: string]: string }[];
-    mensagem: string;
-    delayMs?: number;
+  const { contatos, mensagem, imagemId, delayMs = 1000 } = await request.json() as {
+    contatos:  { telefone: string; nome: string; [k: string]: string }[];
+    mensagem:  string;
+    imagemId?: string | null;
+    delayMs?:  number;
   };
 
   if (!contatos?.length) return NextResponse.json({ error: "Lista vazia" }, { status: 400 });
@@ -59,7 +61,12 @@ export async function POST(request: Request) {
       .replace(/\{\{(\w+)\}\}/gi, (_, key) => c[key] ?? "");
 
     try {
-      await sendText(phone, texto);
+      if (imagemId) {
+        // Envia imagem com o texto como legenda
+        await sendImage(phone, imagemId, texto || undefined);
+      } else {
+        await sendText(phone, texto);
+      }
       resultados.push({ telefone: phone, nome, status: "ok" });
     } catch {
       resultados.push({ telefone: phone, nome, status: "erro", motivo: "Falha no envio" });

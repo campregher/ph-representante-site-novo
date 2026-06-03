@@ -46,3 +46,52 @@ export async function downloadMedia(url: string): Promise<Buffer | null> {
     return Buffer.from(await res.arrayBuffer());
   } catch { return null; }
 }
+
+export async function uploadMedia(buffer: Buffer, mimeType: string, filename: string): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", mimeType);
+    form.append("file", new Blob([buffer], { type: mimeType }), filename);
+
+    const res = await fetch(`${API_URL}/${phoneId()}/media`, {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${token()}` },
+      body:    form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[meta-whatsapp] uploadMedia error:", res.status, JSON.stringify(err));
+      return null;
+    }
+    const data = await res.json() as { id?: string };
+    return data.id ?? null;
+  } catch (e) {
+    console.error("[meta-whatsapp] uploadMedia exception:", e);
+    return null;
+  }
+}
+
+export async function sendImage(to: string, mediaId: string, caption?: string): Promise<void> {
+  try {
+    const res = await fetch(`${API_URL}/${phoneId()}/messages`, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token()}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "image",
+        image: { id: mediaId, ...(caption ? { caption } : {}) },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[meta-whatsapp] sendImage error:", res.status, JSON.stringify(err));
+    }
+  } catch (e) {
+    console.error("[meta-whatsapp] sendImage exception:", e);
+  }
+}

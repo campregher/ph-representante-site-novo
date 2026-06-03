@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Package, Upload, Home, Users, ClipboardList, Tag, Menu, X, History, LayoutDashboard, Receipt, BarChart2, Building2 } from "lucide-react";
+import { Package, Upload, Home, Users, ClipboardList, Tag, Menu, X, History, LayoutDashboard, Receipt, BarChart2, Building2, MessageSquare } from "lucide-react";
 import LogoutButton from "@/components/admin/LogoutButton";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -100,6 +100,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all"
           >
             <Upload size={15} /> Importar Excel
+          </Link>
+          <Link href="/admin/whatsapp"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all"
+          >
+            <MessageSquare size={15} /> Disparo WhatsApp
           </Link>
           <Link href="/marca/dashboard"
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all"

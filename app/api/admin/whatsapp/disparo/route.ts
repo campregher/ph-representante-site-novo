@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   const { contatos, mensagem, delayMs = 1000 } = await request.json() as {
-    contatos: { telefone: string; nome?: string; [k: string]: string }[];
+    contatos: { telefone: string; nome: string; [k: string]: string }[];
     mensagem: string;
     delayMs?: number;
   };

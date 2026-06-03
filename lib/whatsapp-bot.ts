@@ -78,14 +78,17 @@ async function reset(db: DB, phone: string) {
 }
 
 async function findCliente(db: DB, phone: string) {
-  const last8 = phone.replace(/\D/g, "").slice(-8);
+  const norm = phone.replace(/\D/g, "").slice(-11);
+
+  // Busca todos e filtra em JS normalizando os dígitos
+  // (o campo whatsapp pode ter formatação variada: "(11) 95999-3968", "11959993968", etc.)
   const { data } = await db
     .from("clientes")
     .select("id, razao_social, nome_fantasia, status, bloqueado, email, whatsapp")
-    .ilike("whatsapp", `%${last8}%`)
-    .limit(10);
+    .not("whatsapp", "is", null);
+
   if (!data?.length) return null;
-  const norm = phone.replace(/\D/g, "").slice(-11);
+
   return (data as Array<Record<string, string>>).find(
     c => (c.whatsapp ?? "").replace(/\D/g, "").slice(-11) === norm
   ) ?? null;

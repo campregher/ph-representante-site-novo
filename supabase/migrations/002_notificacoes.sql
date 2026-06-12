@@ -18,21 +18,26 @@ CREATE INDEX IF NOT EXISTS idx_notificacoes_dest
 -- RLS
 ALTER TABLE notificacoes ENABLE ROW LEVEL SECURITY;
 
--- Usuário autenticado lê apenas suas próprias notificações
+DROP POLICY IF EXISTS "select_own"        ON notificacoes;
+DROP POLICY IF EXISTS "update_own_lida"   ON notificacoes;
+DROP POLICY IF EXISTS "insert_service_role" ON notificacoes;
+
 CREATE POLICY "select_own" ON notificacoes
   FOR SELECT TO authenticated
   USING (auth.uid()::text = destinatario_id);
 
--- Usuário autenticado marca como lida apenas as suas
 CREATE POLICY "update_own_lida" ON notificacoes
   FOR UPDATE TO authenticated
   USING (auth.uid()::text = destinatario_id)
   WITH CHECK (auth.uid()::text = destinatario_id);
 
--- Apenas service_role insere (via API routes)
 CREATE POLICY "insert_service_role" ON notificacoes
   FOR INSERT TO service_role
   WITH CHECK (true);
 
--- Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE notificacoes;
+-- Realtime (ignora erro se já adicionado)
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE notificacoes;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

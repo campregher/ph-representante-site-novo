@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Save, Send, ShoppingBag, ExternalLink, AlertCircle, Unlink } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Send, ShoppingBag, ExternalLink, AlertCircle, Unlink, Users, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 import CategoryPicker from "@/components/marca/CategoryPicker";
@@ -15,6 +15,16 @@ interface SelectedCategory {
   id: string;
   name: string;
   path: string[];
+}
+
+interface Revendedor {
+  cliente_id: string;
+  ml_nickname: string | null;
+  ml_user_id:  string | null;
+  ml_item_id:  string;
+  ml_status:   string;
+  preco_revenda: number | null;
+  updated_at:  string;
 }
 
 interface MLAttr {
@@ -38,6 +48,8 @@ export default function EditarProdutoPage() {
   const [mlItemId,    setMlItemId]    = useState<string | null>(null);
   const [mlStatus,    setMlStatus]    = useState<string | null>(null);
   const [mlError,     setMlError]     = useState<string | null>(null);
+  const [revendedores,    setRevendedores]    = useState<Revendedor[]>([]);
+  const [loadingRevendedores, setLoadingRevendedores] = useState(false);
 
   /* categoria ML */
   const [category,      setCategory]      = useState<SelectedCategory | null>(null);
@@ -80,6 +92,14 @@ export default function EditarProdutoPage() {
       })
       .catch(() => toast.error("Erro ao carregar produto"))
       .finally(() => setLoading(false));
+
+    /* carrega revendedores em paralelo */
+    setLoadingRevendedores(true);
+    fetch(`/api/marca/produtos/${id}/revendedores`)
+      .then(r => r.json())
+      .then(d => setRevendedores(d.revendedores ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingRevendedores(false));
   }, [id]);
 
   function setImage(i: number, val: string) {
@@ -420,9 +440,93 @@ export default function EditarProdutoPage() {
             </div>
           </div>
 
-          {/* ── Sidebar de qualidade (sticky) ── */}
+          {/* ── Sidebar (sticky) ── */}
           <div className="w-72 flex-shrink-0 hidden lg:block">
-            <div className="sticky top-[80px] space-y-0">
+            <div className="sticky top-[80px] space-y-4">
+
+              {/* Revendedores ML */}
+              <div>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users size={11} /> Revendedores ML
+                  </p>
+                  <button
+                    onClick={() => {
+                      setLoadingRevendedores(true);
+                      fetch(`/api/marca/produtos/${id}/revendedores`)
+                        .then(r => r.json())
+                        .then(d => setRevendedores(d.revendedores ?? []))
+                        .catch(() => {})
+                        .finally(() => setLoadingRevendedores(false));
+                    }}
+                    className="text-gray-600 hover:text-gray-400 transition-colors"
+                  >
+                    <RefreshCw size={11} className={loadingRevendedores ? "animate-spin" : ""} />
+                  </button>
+                </div>
+
+                <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden">
+                  {loadingRevendedores ? (
+                    <div className="py-4 flex items-center justify-center">
+                      <Loader2 size={14} className="animate-spin text-gray-600" />
+                    </div>
+                  ) : revendedores.length === 0 ? (
+                    <div className="py-5 px-4 text-center">
+                      <ShoppingBag size={16} className="text-gray-700 mx-auto mb-1.5" />
+                      <p className="text-[11px] text-gray-600">Nenhum cliente anunciando este produto</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="px-4 py-2.5 border-b border-white/6">
+                        <p className="text-xs text-gray-400">
+                          <span className="font-bold text-white">{revendedores.length}</span> cliente{revendedores.length !== 1 ? "s" : ""} anunciando
+                        </p>
+                      </div>
+                      <div className="divide-y divide-white/4 max-h-64 overflow-y-auto">
+                        {revendedores.map((r, i) => (
+                          <div key={i} className="px-4 py-3 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-semibold text-white truncate">
+                                {r.ml_nickname ?? `Cliente ${r.cliente_id.slice(0, 6)}`}
+                              </p>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                                r.ml_status === "active" || r.ml_status === "approved"
+                                  ? "bg-green-400/15 text-green-400"
+                                  : r.ml_status === "paused"
+                                  ? "bg-yellow-400/15 text-yellow-400"
+                                  : "bg-gray-400/15 text-gray-400"
+                              }`}>
+                                {r.ml_status === "active" || r.ml_status === "approved" ? "Ativo"
+                                  : r.ml_status === "paused" ? "Pausado" : r.ml_status}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-mono text-gray-500 truncate">{r.ml_item_id}</p>
+                              {r.preco_revenda != null && (
+                                <p className="text-[10px] font-bold text-brand flex-shrink-0">
+                                  {r.preco_revenda.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`https://www.mercadolivre.com.br/anuncio/${r.ml_item_id}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors"
+                              >
+                                Ver anúncio <ExternalLink size={9} />
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Qualidade do anúncio */}
+              <div>
               <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">
                 Qualidade do anúncio
               </p>
@@ -439,6 +543,8 @@ export default function EditarProdutoPage() {
                 compatibilidades={compatibilidades}
                 loadingAttrs={loadingAttrs}
               />
+              </div>
+
             </div>
           </div>
 

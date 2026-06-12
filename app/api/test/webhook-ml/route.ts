@@ -24,6 +24,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as {
     ml_item_id: string;
     quantidade?: number;
+    label_url?: string;
   };
 
   if (!body.ml_item_id) {
@@ -104,6 +105,16 @@ export async function POST(request: Request) {
     valor_unitario: valorUnitario,
   });
 
+  /* Insere etiqueta se fornecida (ou placeholder de teste) */
+  const labelUrl = body.label_url?.trim() || null;
+  if (labelUrl) {
+    await db.from("orcamento_etiquetas").insert({
+      orcamento_id: orcamento.id,
+      nome:         `[TESTE] Etiqueta ML ${anuncio.ml_item_id}`,
+      url:          labelUrl,
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     pedido_id:    orcamento.id,
@@ -113,6 +124,7 @@ export async function POST(request: Request) {
     quantidade,
     total,
     status:       "em_separacao",
+    etiqueta:     labelUrl ? "anexada" : "não fornecida — em pedidos reais vem automaticamente do ML",
     observacao:   "Pedido de teste criado com sucesso. Verifique no painel da marca.",
   });
 }

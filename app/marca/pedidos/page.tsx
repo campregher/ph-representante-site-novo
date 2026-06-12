@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { RefreshCw, Printer, ChevronRight, Package, BadgeCheck, Loader2, AlertCircle, AlertTriangle, Clock } from "lucide-react";
+import { RefreshCw, Printer, ChevronRight, Package, BadgeCheck, Loader2, AlertCircle, AlertTriangle, Clock, Truck, FileText, ExternalLink, CheckSquare, Square, ShoppingBag } from "lucide-react";
 import MarcaContentHeader from "@/components/marca/MarcaContentHeader";
 
 interface Pedido {
@@ -16,6 +16,17 @@ interface Pedido {
   clientes: { razao_social: string; cnpj: string; cidade: string | null; estado: string | null } | null;
 }
 
+interface LoteItem     { id: string; produto_sku: string; produto_nome: string; quantidade: number; valor_unitario: number; }
+interface LoteEtiqueta { id: string; nome: string; url: string; }
+interface LotePedido {
+  id: string; numero: number; total: number; created_at: string;
+  ml_order_id: string | null; horario_postagem: string | null; observacoes: string | null;
+  clientes: { razao_social: string; email: string; cidade: string | null; estado: string | null } | null;
+  orcamento_itens: LoteItem[];
+  orcamento_etiquetas: LoteEtiqueta[];
+}
+interface LoteResumo { produto_sku: string; produto_nome: string; total_qtd: number; }
+
 const statusCfg: Record<string, { label: string; dot: string; color: string }> = {
   enviado:      { label: "Novo",        dot: "bg-yellow-400", color: "text-yellow-400"  },
   em_separacao: { label: "Em separação",dot: "bg-blue-500",   color: "text-blue-400"   },
@@ -24,7 +35,7 @@ const statusCfg: Record<string, { label: string; dot: string; color: string }> =
   recusado:     { label: "Recusado",    dot: "bg-red-500",    color: "text-red-400"    },
 };
 
-type Tab = "todos" | "enviado" | "em_separacao" | "a_pagar" | "pago" | "recusado";
+type Tab = "todos" | "enviado" | "em_separacao" | "a_pagar" | "pago" | "recusado" | "dropshipping";
 
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function orderTotal(p: Pedido) {
@@ -51,8 +62,11 @@ function MarcaPedidosPage() {
     const s = searchParams.get("status");
     return (["todos","enviado","em_separacao","a_pagar","pago","recusado"].includes(s ?? "") ? s : "todos") as Tab;
   });
-  const [selected,   setSelected]   = useState<Set<string>>(new Set());
-  const [confirming, setConfirming] = useState(false);
+  const [selected,     setSelected]     = useState<Set<string>>(new Set());
+  const [confirming,   setConfirming]   = useState(false);
+  const [lote,         setLote]         = useState<{ pedidos: LotePedido[]; resumo: LoteResumo[] } | null>(null);
+  const [loadingLote,  setLoadingLote]  = useState(false);
+  const [loteSelected, setLoteSelected] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,10 +80,23 @@ function MarcaPedidosPage() {
     finally { setLoading(false); }
   }, []);
 
+  const loadLote = useCallback(async () => {
+    setLoadingLote(true);
+    setLoteSelected(new Set());
+    try {
+      const res  = await fetch("/api/marca/dropshipping/lote");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setLote(data);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro ao carregar lote"); }
+    finally { setLoadingLote(false); }
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (tab === "dropshipping") loadLote(); }, [tab, loadLote]);
 
   // Reset selection when tab changes
-  useEffect(() => { setSelected(new Set()); }, [tab]);
+  useEffect(() => { setSelected(new Set()); setLoteSelected(new Set()); }, [tab]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { todos: pedidos.length };
@@ -82,16 +109,52 @@ function MarcaPedidosPage() {
     return pedidos.filter((p) => p.status === tab);
   }, [pedidos, tab]);
 
-  const tabs: { key: Tab; label: string }[] = [
+  const dropCount = pedidos.filter(p => p.tipo_pedido === "dropshipping" && p.status === "em_separacao").length;
+
+  const tabs: { key: Tab; label: string; highlight?: boolean }[] = [
     { key: "todos",        label: `Todos (${counts.todos ?? 0})`               },
     { key: "enviado",      label: `Novos (${counts.enviado ?? 0})`             },
     { key: "em_separacao", label: `Em separação (${counts.em_separacao ?? 0})` },
     { key: "a_pagar",      label: `A pagar (${counts.a_pagar ?? 0})`           },
     { key: "pago",         label: `Pagos (${counts.pago ?? 0})`                },
     { key: "recusado",     label: `Recusados (${counts.recusado ?? 0})`        },
+    { key: "dropshipping", label: `Lote Drop${dropCount > 0 ? ` (${dropCount})` : ""}`, highlight: dropCount > 0 },
   ];
 
   const isSelectionMode = tab === "a_pagar" || tab === "enviado" || tab === "em_separacao";
+
+  async function enviarLoteSelecionado() {
+    if (loteSelected.size === 0) return;
+    setConfirming(true);
+    try {
+      const res = await fetch("/api/marca/pedidos/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "marcar_enviado", ids: [...loteSelected] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(`${data.updated} pedido${data.updated !== 1 ? "s" : ""} marcado${data.updated !== 1 ? "s" : ""} como enviado!`);
+      await loadLote();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setConfirming(false); }
+  }
+
+  async function enviarPedidoUnico(id: string) {
+    setConfirming(true);
+    try {
+      const res = await fetch("/api/marca/pedidos/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "marcar_enviado", ids: [id] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success("Pedido marcado como enviado!");
+      await loadLote();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setConfirming(false); }
+  }
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -147,10 +210,15 @@ function MarcaPedidosPage() {
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                 tab === t.key
-                  ? "bg-brand border-brand text-white"
-                  : "bg-dark-800 border-white/8 text-gray-400 hover:text-white hover:border-white/20"
+                  ? t.key === "dropshipping"
+                    ? "bg-yellow-400 border-yellow-400 text-black"
+                    : "bg-brand border-brand text-white"
+                  : t.highlight
+                    ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/20"
+                    : "bg-dark-800 border-white/8 text-gray-400 hover:text-white hover:border-white/20"
               }`}
             >
+              {t.key === "dropshipping" && <ShoppingBag size={10} className="inline mr-1 -mt-0.5" />}
               {t.label}
             </button>
           ))}
@@ -171,8 +239,181 @@ function MarcaPedidosPage() {
           </div>
         )}
 
+        {/* ── Lote Dropshipping ── */}
+        {tab === "dropshipping" && (
+          <>
+            {loadingLote ? (
+              <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center text-gray-500 text-sm flex items-center justify-center gap-2">
+                <Loader2 size={16} className="animate-spin" /> Carregando lote...
+              </div>
+            ) : !lote || lote.pedidos.length === 0 ? (
+              <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center space-y-2">
+                <ShoppingBag size={28} className="text-gray-700 mx-auto" />
+                <p className="text-gray-500 text-sm">Nenhum pedido dropshipping em separação.</p>
+                <p className="text-gray-600 text-xs">Os pedidos ML aparecem aqui assim que uma venda for confirmada.</p>
+              </div>
+            ) : (
+              <>
+                {/* Resumo de produtos */}
+                <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/8 flex items-center gap-2">
+                    <Package size={14} className="text-yellow-400" />
+                    <p className="text-sm font-bold text-white">Produtos para separar</p>
+                    <span className="text-xs text-gray-500 ml-auto">{lote.pedidos.length} pedido{lote.pedidos.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/8 bg-dark-900/50">
+                        <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Produto</th>
+                        <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">SKU</th>
+                        <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/4">
+                      {lote.resumo.map(r => (
+                        <tr key={r.produto_sku} className="hover:bg-white/2">
+                          <td className="px-4 py-2.5 text-sm text-white font-medium">{r.produto_nome}</td>
+                          <td className="px-4 py-2.5 text-xs font-mono text-gray-500 hidden sm:table-cell">{r.produto_sku}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <span className="text-sm font-bold text-yellow-400">{r.total_qtd} un</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Seleção em lote */}
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-dark-800 border border-white/8 rounded-xl">
+                  <button
+                    onClick={() => setLoteSelected(
+                      loteSelected.size === lote.pedidos.length
+                        ? new Set()
+                        : new Set(lote.pedidos.map(p => p.id))
+                    )}
+                    className="text-gray-500 hover:text-white transition-colors"
+                  >
+                    {loteSelected.size === lote.pedidos.length && lote.pedidos.length > 0
+                      ? <CheckSquare size={15} className="text-yellow-400" />
+                      : <Square size={15} />}
+                  </button>
+                  <span className="text-xs text-gray-400">
+                    {loteSelected.size === 0 ? "Selecionar todos para envio em lote" : `${loteSelected.size} selecionado${loteSelected.size !== 1 ? "s" : ""}`}
+                  </span>
+                </div>
+
+                {/* Pedidos individuais */}
+                <div className="space-y-2">
+                  {lote.pedidos.map(p => {
+                    const cli       = p.clientes;
+                    const isSelected = loteSelected.has(p.id);
+                    const nowMs     = Date.now();
+                    const pSt       = prazoStatus(p.horario_postagem, nowMs);
+
+                    return (
+                      <div key={p.id} className={`bg-dark-800 border rounded-2xl overflow-hidden transition-all ${
+                        isSelected ? "border-yellow-400/40" : pSt === "overdue" ? "border-red-500/30" : pSt === "soon" ? "border-yellow-400/20" : "border-white/8"
+                      }`}>
+                        {/* Header do pedido */}
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <button
+                            onClick={() => setLoteSelected(prev => {
+                              const next = new Set(prev);
+                              if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                              return next;
+                            })}
+                            className="text-gray-500 hover:text-yellow-400 transition-colors flex-shrink-0"
+                          >
+                            {isSelected ? <CheckSquare size={15} className="text-yellow-400" /> : <Square size={15} />}
+                          </button>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-white">#{p.numero}</span>
+                              {cli && <span className="text-xs text-gray-300 truncate max-w-[180px]">{cli.razao_social}</span>}
+                              {p.ml_order_id && (
+                                <span className="text-[10px] font-mono text-gray-600 hidden sm:inline">{p.ml_order_id}</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {new Date(p.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              {cli?.cidade && ` · ${cli.cidade}/${cli.estado}`}
+                              {` · `}<span className="font-bold text-white">{fmt(Number(p.total))}</span>
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Link href={`/marca/pedidos/${p.id}`}
+                              className="p-1.5 text-gray-500 hover:text-white hover:bg-white/8 rounded-lg transition-all"
+                              title="Ver pedido"
+                            >
+                              <ExternalLink size={13} />
+                            </Link>
+                            <button
+                              onClick={() => enviarPedidoUnico(p.id)}
+                              disabled={confirming}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-400 text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
+                              title="Marcar este pedido como enviado"
+                            >
+                              {confirming ? <Loader2 size={11} className="animate-spin" /> : <Truck size={11} />}
+                              <span className="hidden sm:inline">Enviado</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Alerta de prazo */}
+                        {pSt !== "none" && p.horario_postagem && (
+                          <div className={`mx-4 mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                            pSt === "overdue" ? "bg-red-500/15 text-red-400" : "bg-yellow-400/10 text-yellow-400"
+                          }`}>
+                            {pSt === "overdue" ? <AlertCircle size={11} /> : <AlertTriangle size={11} />}
+                            Postagem: {formatPrazoBR(p.horario_postagem)}
+                            {pSt === "overdue" && <span className="ml-auto font-bold">ATRASADO</span>}
+                          </div>
+                        )}
+
+                        {/* Itens + Etiquetas */}
+                        <div className="border-t border-white/6 bg-dark-900/30 px-4 py-3 space-y-2">
+                          {/* Itens */}
+                          <div className="space-y-1">
+                            {p.orcamento_itens.map(item => (
+                              <div key={item.id} className="flex items-center gap-2 text-xs">
+                                <span className="font-mono text-gray-600 flex-shrink-0">{item.produto_sku}</span>
+                                <span className="text-gray-300 flex-1 truncate">{item.produto_nome}</span>
+                                <span className="text-gray-500 flex-shrink-0">×{item.quantidade}</span>
+                                <span className="text-white font-semibold flex-shrink-0">{fmt(item.valor_unitario * item.quantidade)}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Etiquetas */}
+                          {p.orcamento_etiquetas.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {p.orcamento_etiquetas.map(etq => (
+                                <a
+                                  key={etq.id}
+                                  href={etq.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/25 text-yellow-400 text-xs font-semibold rounded-xl transition-all"
+                                >
+                                  <FileText size={11} /> {etq.nome}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
         {/* List */}
-        {loading ? (
+        {tab !== "dropshipping" && (loading ? (
           <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center text-gray-500 text-sm">Carregando...</div>
         ) : filtered.length === 0 ? (
           <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center">
@@ -279,8 +520,30 @@ function MarcaPedidosPage() {
               );
             })}
           </div>
-        )}
+        ))}
       </div>
+
+      {/* ── Barra de ação em lote dropshipping ── */}
+      {tab === "dropshipping" && loteSelected.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 px-4 py-4 bg-dark-900/95 backdrop-blur-md border-t border-white/10">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-white">{loteSelected.size} pedido{loteSelected.size !== 1 ? "s" : ""} selecionado{loteSelected.size !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-gray-500">
+                Total: {fmt((lote?.pedidos ?? []).filter(p => loteSelected.has(p.id)).reduce((s, p) => s + Number(p.total), 0))}
+              </p>
+            </div>
+            <button
+              onClick={enviarLoteSelecionado}
+              disabled={confirming}
+              className="flex items-center gap-2 px-5 py-3 bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+            >
+              {confirming ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />}
+              Marcar {loteSelected.size > 1 ? `${loteSelected.size} pedidos` : "pedido"} como enviado
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Barra de ação em lote (fixa na base) ── */}
       {isSelectionMode && selected.size > 0 && (

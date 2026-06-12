@@ -105,6 +105,57 @@ export async function sincronizarAnuncioML(
   }
 }
 
+/**
+ * Atualiza automaticamente as fotos de todos os anúncios ML
+ * dos clientes que publicaram este produto.
+ * Executa em paralelo; falhas individuais são ignoradas silenciosamente.
+ */
+export async function autoSincronizarFotosML(
+  produtoId: string,
+  images: string[]
+): Promise<{ total: number; ok: number }> {
+  const db = await createAdminClient();
+
+  const { data: anuncios } = await db
+    .from("portal_ml_anuncios")
+    .select("cliente_id, ml_item_id")
+    .eq("produto_id", produtoId);
+
+  if (!anuncios?.length) return { total: 0, ok: 0 };
+
+  const pictures = images.filter(Boolean).map((url: string) => ({ source: url }));
+  if (!pictures.length) return { total: anuncios.length, ok: 0 };
+
+  const results = await Promise.allSettled(
+    anuncios.map(async a => {
+      try {
+        const token = await getValidPortalToken(a.cliente_id);
+
+        const res = await fetch(`${ML_BASE}/items/${a.ml_item_id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ pictures }),
+        });
+
+        if (!res.ok) throw new Error(`ML ${res.status}`);
+
+        await db.from("portal_ml_anuncios")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("cliente_id", a.cliente_id)
+          .eq("ml_item_id", a.ml_item_id);
+      } catch {
+        /* falha silenciosa por cliente */
+      }
+    })
+  );
+
+  const ok = results.filter(r => r.status === "fulfilled").length;
+  return { total: anuncios.length, ok };
+}
+
 /** Pausa um anúncio ML sem remover do banco */
 export async function pausarAnuncioML(
   clienteId: string,

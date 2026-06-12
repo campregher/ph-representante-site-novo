@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMarcaUser } from "@/lib/marca-auth";
 import { getProductById, updateProduct, deleteProduct } from "@/lib/produtos";
-import { notificarClientesML } from "@/lib/ml-sync";
+import { notificarClientesML, autoSincronizarFotosML } from "@/lib/ml-sync";
 
 export const runtime = "nodejs";
 
@@ -50,20 +50,42 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     ...(compatibilidades != null && { compatibilidades }),
   });
 
-  /* notifica clientes que têm este produto anunciado no ML */
+  /* notifica/sincroniza clientes que têm este produto anunciado no ML */
   let notificados = 0;
-  const becamePaused = product.active && body.active === false;
-  const contentChanged =
+  let fotosSync = { total: 0, ok: 0 };
+
+  const becamePaused  = product.active && body.active === false;
+  const imagesChanged = body.images != null;
+  const otherContentChanged =
     body.name != null || body.description != null ||
-    body.images != null || body.price != null || body.resale_price != null;
+    body.price != null || body.resale_price != null;
 
   if (becamePaused) {
     notificados = await notificarClientesML(id, product.name, "produto_pausado").catch(() => 0);
-  } else if (contentChanged) {
-    notificados = await notificarClientesML(id, product.name, "produto_editado").catch(() => 0);
+  } else {
+    const tasks: Promise<unknown>[] = [];
+
+    if (imagesChanged) {
+      const newImages: string[] = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
+      tasks.push(
+        autoSincronizarFotosML(id, newImages)
+          .then(r => { fotosSync = r; })
+          .catch(() => {})
+      );
+    }
+
+    if (otherContentChanged) {
+      tasks.push(
+        notificarClientesML(id, product.name, "produto_editado")
+          .then(n => { notificados = n; })
+          .catch(() => {})
+      );
+    }
+
+    await Promise.all(tasks);
   }
 
-  return NextResponse.json({ ...updated, notificados });
+  return NextResponse.json({ ...updated, notificados, fotosSync });
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {

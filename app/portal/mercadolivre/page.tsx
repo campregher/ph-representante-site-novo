@@ -129,7 +129,7 @@ function ProdutoPicker({
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [linking,  setLinking]  = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     clearTimeout(timerRef.current);

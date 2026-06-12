@@ -8,7 +8,7 @@ import {
   Bell, MessageSquare, Printer, Square, CheckSquare,
 } from "lucide-react";
 
-type Filtro = "todos" | "enviado" | "aprovado" | "rascunho" | "recusado" | "finalizado";
+type Filtro = "todos" | "enviado" | "em_separacao" | "aprovado" | "rascunho" | "recusado" | "finalizado";
 
 interface Item {
   id: string; produto_sku: string; produto_nome: string;
@@ -17,6 +17,7 @@ interface Item {
 interface Etiqueta { id: string; nome: string; url: string }
 interface Orcamento {
   id: string; numero: number; status: string;
+  marca: string | null;
   tipo_pedido: string | null;
   condicao_pagamento: string | null; transportadora: string | null;
   observacoes: string | null; observacao_admin: string | null;
@@ -30,14 +31,18 @@ interface Orcamento {
 }
 
 const statusColors: Record<string, string> = {
-  rascunho:  "bg-gray-400/15 text-gray-400 border-gray-400/25",
-  enviado:   "bg-yellow-400/15 text-yellow-400 border-yellow-400/25",
-  aprovado:  "bg-green-400/15 text-green-400 border-green-400/25",
-  recusado:  "bg-red-400/15 text-red-400 border-red-400/25",
-  finalizado:"bg-indigo-400/15 text-indigo-400 border-indigo-400/25",
+  rascunho:     "bg-gray-400/15 text-gray-400 border-gray-400/25",
+  enviado:      "bg-yellow-400/15 text-yellow-400 border-yellow-400/25",
+  em_separacao: "bg-orange-400/15 text-orange-400 border-orange-400/25",
+  a_pagar:      "bg-purple-400/15 text-purple-400 border-purple-400/25",
+  pago:         "bg-teal-400/15 text-teal-400 border-teal-400/25",
+  aprovado:     "bg-green-400/15 text-green-400 border-green-400/25",
+  recusado:     "bg-red-400/15 text-red-400 border-red-400/25",
+  finalizado:   "bg-indigo-400/15 text-indigo-400 border-indigo-400/25",
 };
 const statusLabels: Record<string, string> = {
-  rascunho: "Rascunho", enviado: "Enviado", aprovado: "Aprovado", recusado: "Recusado", finalizado: "Finalizado",
+  rascunho: "Rascunho", enviado: "Enviado", em_separacao: "Em Separação",
+  a_pagar: "A Pagar", pago: "Pago", aprovado: "Aprovado", recusado: "Recusado", finalizado: "Finalizado",
 };
 
 function prazoInfo(hp: string | null) {
@@ -59,6 +64,7 @@ export default function AdminOrcamentosPage() {
   const [notifMsg,        setNotifMsg]        = useState("");
   const [notifSending,    setNotifSending]    = useState(false);
   const [finalizingId,    setFinalizingId]    = useState<string | null>(null);
+  const [expedicaoSending,setExpedicaoSending]= useState(false);
 
   const [filtro,          setFiltro]          = useState<Filtro>("todos");
 
@@ -169,15 +175,38 @@ export default function AdminOrcamentosPage() {
     finally { setFinalizingId(null); }
   }
 
+  async function enviarExpedicao(ids: string[]) {
+    setExpedicaoSending(true);
+    try {
+      const res = await fetch("/api/admin/expedicao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Erro ao enviar para expedição"); return; }
+      if (data.sent === 0) toast.warning("Nenhuma marca com e-mail de expedição configurado.");
+      else toast.success(`${data.sent} e-mail${data.sent !== 1 ? "s" : ""} enviado${data.sent !== 1 ? "s" : ""} para expedição!`);
+      if (data.errors?.length) toast.error(`Falha em ${data.errors.length} pedido(s).`);
+    } catch { toast.error("Erro de conexão"); }
+    finally { setExpedicaoSending(false); }
+  }
+
   const counts = {
-    todos:     orcamentos.length,
-    rascunho:  orcamentos.filter((o) => o.status === "rascunho").length,
-    enviado:   orcamentos.filter((o) => o.status === "enviado").length,
-    aprovado:  orcamentos.filter((o) => o.status === "aprovado").length,
-    recusado:  orcamentos.filter((o) => o.status === "recusado").length,
-    finalizado:orcamentos.filter((o) => o.status === "finalizado").length,
-    alteracao: orcamentos.filter((o) => o.alteracao_pendente).length,
+    todos:        orcamentos.length,
+    rascunho:     orcamentos.filter((o) => o.status === "rascunho").length,
+    enviado:      orcamentos.filter((o) => o.status === "enviado").length,
+    em_separacao: orcamentos.filter((o) => o.status === "em_separacao").length,
+    aprovado:     orcamentos.filter((o) => o.status === "aprovado").length,
+    recusado:     orcamentos.filter((o) => o.status === "recusado").length,
+    finalizado:   orcamentos.filter((o) => o.status === "finalizado").length,
+    alteracao:    orcamentos.filter((o) => o.alteracao_pendente).length,
   };
+
+  const selectedEmSeparacao = [...selected].filter((id) => {
+    const o = orcamentos.find((x) => x.id === id);
+    return o?.status === "em_separacao";
+  });
 
   const filtered = useMemo(
     () => filtro === "todos" ? orcamentos : orcamentos.filter((o) => o.status === filtro),
@@ -195,6 +224,16 @@ export default function AdminOrcamentosPage() {
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           {selected.size > 0 && (
             <>
+              {selectedEmSeparacao.length > 0 && (
+                <button
+                  onClick={() => enviarExpedicao(selectedEmSeparacao)}
+                  disabled={expedicaoSending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {expedicaoSending ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
+                  Enviar para expedição ({selectedEmSeparacao.length})
+                </button>
+              )}
               <button onClick={() => openPrint(Array.from(selected))}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand-hover text-white text-xs font-bold rounded-xl transition-all"
               >
@@ -228,12 +267,13 @@ export default function AdminOrcamentosPage() {
       <div className="flex gap-2 flex-wrap mb-5">
         {(
           [
-            { key: "todos",     label: "Todos",      count: counts.todos },
-            { key: "enviado",   label: "Enviados",   count: counts.enviado },
-            { key: "aprovado",  label: "Aprovados",  count: counts.aprovado },
-            { key: "rascunho",  label: "Rascunhos",  count: counts.rascunho },
-            { key: "recusado",  label: "Cancelados", count: counts.recusado },
-            { key: "finalizado",label: "Finalizados",count: counts.finalizado },
+            { key: "todos",        label: "Todos",         count: counts.todos },
+            { key: "enviado",      label: "Enviados",      count: counts.enviado },
+            { key: "em_separacao", label: "Em Separação",  count: counts.em_separacao },
+            { key: "aprovado",     label: "Aprovados",     count: counts.aprovado },
+            { key: "rascunho",     label: "Rascunhos",     count: counts.rascunho },
+            { key: "recusado",     label: "Cancelados",    count: counts.recusado },
+            { key: "finalizado",   label: "Finalizados",   count: counts.finalizado },
           ] as { key: Filtro; label: string; count: number }[]
         ).map(({ key, label, count }) => (
           <button key={key} onClick={() => setFiltro(key)}
@@ -319,8 +359,18 @@ export default function AdminOrcamentosPage() {
                 {isOpen && (
                   <div className="border-t border-white/8 px-5 pb-5 pt-4 space-y-4">
 
-                    {/* Botão imprimir individual */}
-                    <div className="flex justify-end">
+                    {/* Ações rápidas do topo */}
+                    <div className="flex justify-end gap-2 flex-wrap">
+                      {o.status === "em_separacao" && (
+                        <button
+                          onClick={() => enviarExpedicao([o.id])}
+                          disabled={expedicaoSending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
+                        >
+                          {expedicaoSending ? <Loader2 size={12} className="animate-spin" /> : <Truck size={12} />}
+                          Enviar para expedição
+                        </button>
+                      )}
                       <button onClick={() => openPrint([o.id])}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-700 border border-white/10 hover:border-white/20 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all"
                       >

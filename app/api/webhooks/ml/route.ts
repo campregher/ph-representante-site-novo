@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getValidPortalToken } from "@/lib/portal-ml-auth";
 import { ML_APP_ID } from "@/lib/ml-auth";
-import { sendExpedicaoEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -193,27 +192,6 @@ export async function POST(request: Request) {
         });
       }
 
-      /* Email de expedição para a marca (sem valores, com etiqueta) */
-      ;(async () => {
-        try {
-          const { data: marcaRow } = await db.from("marcas").select("name, email_expedicao").eq("slug", marcaSlug).single();
-          if (!marcaRow?.email_expedicao) return;
-          const { data: orcItemsData } = await db.from("orcamento_itens").select("produto_sku, produto_nome, quantidade").eq("orcamento_id", orcamento.id);
-          const enderecoStr = destination
-            ? `${destination.street_name ?? ""} ${destination.street_number ?? ""}, ${destination.city?.name ?? ""} / ${destination.state?.name ?? ""} — CEP: ${destination.zip_code ?? ""}`
-            : undefined;
-          await sendExpedicaoEmail({
-            expedicaoEmail:  marcaRow.email_expedicao,
-            numero:          orcamento.numero ?? 0,
-            marcaNome:       marcaRow.name ?? marcaSlug,
-            clienteNome:     buyer?.nickname ?? `ML #${orderId}`,
-            clienteEndereco: enderecoStr,
-            isDrop:          true,
-            items:           (orcItemsData ?? []).map(i => ({ sku: i.produto_sku ?? "", nome: i.produto_nome ?? "", quantidade: Number(i.quantidade) })),
-            labels:          labelUrl ? [{ nome: `Etiqueta ML #${orderId}`, url: labelUrl }] : [],
-          });
-        } catch {}
-      })();
     }
   } catch (err) {
     console.error("ML webhook error:", err);

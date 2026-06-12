@@ -117,29 +117,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (clienteWpp) sendText(clienteWpp, `✅ *Pedido #${existing.numero} aprovado!*\n\nSeu pedido foi recebido e está em separação.`).catch(() => {});
 
-    // Envia via de expedição sem valores
-    ;(async () => {
-      try {
-        const { data: marcaFull } = await db.from("marcas").select("name, email_expedicao").eq("slug", ctx.marcaSlug).single();
-        if (!marcaFull?.email_expedicao) return;
-        const [{ data: itemsData }, { data: labelsData }, { data: orcData }] = await Promise.all([
-          db.from("orcamento_itens").select("produto_sku, produto_nome, quantidade").eq("orcamento_id", id),
-          db.from("orcamento_etiquetas").select("nome, url").eq("orcamento_id", id),
-          db.from("orcamentos").select("observacoes").eq("id", id).single(),
-        ]);
-        await sendExpedicaoEmail({
-          expedicaoEmail: marcaFull.email_expedicao,
-          numero:         existing.numero,
-          marcaNome:      marcaFull.name ?? ctx.marcaSlug,
-          clienteNome:    cliente?.razao_social ?? "",
-          isDrop:         existing.tipo_pedido === "dropshipping",
-          items:          (itemsData ?? []).map(i => ({ sku: i.produto_sku ?? "", nome: i.produto_nome ?? "", quantidade: Number(i.quantidade) })),
-          labels:         (labelsData ?? []).map(l => ({ nome: l.nome, url: l.url })),
-          observacoes:    orcData?.observacoes ?? null,
-        });
-      } catch {}
-    })();
-
     return NextResponse.json({ ok: true });
   }
 

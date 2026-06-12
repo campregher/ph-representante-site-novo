@@ -73,10 +73,21 @@ export async function POST(request: Request) {
 
     if (!tokenRow) return NextResponse.json({ ok: true }); /* não é cliente nosso */
 
-    const clienteId = tokenRow.cliente_id;
+    const authUserId = tokenRow.cliente_id; /* auth user UUID */
+
+    /* Resolve clientes.id (FK de orcamentos) */
+    const { data: clienteRow } = await db
+      .from("clientes")
+      .select("id")
+      .eq("user_id", authUserId)
+      .single();
+
+    if (!clienteRow) return NextResponse.json({ ok: true });
+
+    const clienteId = clienteRow.id; /* clientes.id para FK */
 
     /* Busca token válido do cliente */
-    const token = await getValidPortalToken(clienteId).catch(() => null);
+    const token = await getValidPortalToken(authUserId).catch(() => null);
     if (!token) return NextResponse.json({ ok: true });
 
     /* Busca detalhes do pedido no ML */
@@ -101,7 +112,7 @@ export async function POST(request: Request) {
       .from("portal_ml_anuncios")
       .select("produto_id, marca_slug, ml_item_id, preco_revenda")
       .in("ml_item_id", mlItemIds)
-      .eq("cliente_id", clienteId);
+      .eq("cliente_id", authUserId); /* portal_ml_anuncios usa auth UUID */
 
     if (!anuncios || anuncios.length === 0) return NextResponse.json({ ok: true });
 

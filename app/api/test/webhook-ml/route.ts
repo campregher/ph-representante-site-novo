@@ -46,6 +46,17 @@ export async function POST(request: Request) {
     );
   }
 
+  /* Resolve clientes.id a partir do auth user UUID */
+  const { data: clienteRow } = await db
+    .from("clientes")
+    .select("id")
+    .eq("user_id", anuncio.cliente_id)
+    .single();
+
+  if (!clienteRow) {
+    return NextResponse.json({ error: "Cliente não encontrado na tabela clientes" }, { status: 404 });
+  }
+
   /* Busca dados do produto */
   const { data: produto } = await db
     .from("produtos")
@@ -66,7 +77,7 @@ export async function POST(request: Request) {
   const { data: orcamento, error } = await db
     .from("orcamentos")
     .insert({
-      cliente_id:          anuncio.cliente_id,
+      cliente_id:          clienteRow.id,
       marca:               anuncio.marca_slug,
       tipo_pedido:         "dropshipping",
       condicao_pagamento:  "semanal",

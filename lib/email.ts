@@ -580,6 +580,106 @@ export async function sendShippingEmail({ numero, clienteEmail, clienteNome, bra
   });
 }
 
+// ── Via de expedição (sem valores) para o email da expedição da marca ────────
+
+interface SendExpedicaoEmailParams {
+  expedicaoEmail: string;
+  numero:         number;
+  marcaNome:      string;
+  clienteNome:    string;
+  clienteEndereco?: string;
+  isDrop:         boolean;
+  items:          { sku: string; nome: string; quantidade: number }[];
+  labels:         { nome: string; url: string }[];
+  observacoes?:   string | null;
+}
+
+export async function sendExpedicaoEmail({
+  expedicaoEmail, numero, marcaNome, clienteNome, clienteEndereco,
+  isDrop, items, labels, observacoes,
+}: SendExpedicaoEmailParams) {
+  const rows = items.map((it, i) => `
+    <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"}">
+      <td style="padding:8px 10px;font-size:11px;font-weight:700;color:#c0392b;border-bottom:1px solid #f3f4f6;white-space:nowrap">${it.sku}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#111;border-bottom:1px solid #f3f4f6">${it.nome}</td>
+      <td style="padding:8px 10px;font-size:13px;font-weight:900;color:#111;border-bottom:1px solid #f3f4f6;text-align:center">${it.quantidade}</td>
+    </tr>`).join("");
+
+  const labelsHtml = labels.length > 0 ? `
+    <tr><td colspan="3" style="padding:0">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border-top:1px solid #fde68a">
+        <tr><td style="padding:14px 16px">
+          <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.6px">📦 Etiquetas de envio (Dropshipping)</p>
+          ${labels.map(l => `<p style="margin:4px 0"><a href="${l.url}" style="font-size:12px;color:#1d4ed8;font-weight:600;text-decoration:underline">${l.nome}</a></p>`).join("")}
+        </td></tr>
+      </table>
+    </td></tr>` : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+
+  <tr><td style="background:#c0392b;padding:16px 24px">
+    <span style="font-size:11px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase">EXPEDIÇÃO — ${marcaNome}</span>
+  </td></tr>
+
+  <tr><td style="padding:20px 24px;border-bottom:1px solid #f3f4f6">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td valign="top">
+          <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px">Pedido</p>
+          <p style="margin:4px 0 0;font-size:28px;font-weight:900;color:#111;line-height:1">#${numero}</p>
+          ${isDrop ? '<span style="display:inline-block;margin-top:6px;padding:2px 8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;font-size:10px;font-weight:700;color:#1d4ed8">Dropshipping</span>' : ""}
+        </td>
+        <td valign="top" align="right">
+          <p style="margin:0;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px">Destino</p>
+          <p style="margin:4px 0 0;font-size:13px;font-weight:700;color:#111">${clienteNome}</p>
+          ${clienteEndereco ? `<p style="margin:3px 0 0;font-size:11px;color:#6b7280">${clienteEndereco}</p>` : ""}
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="padding:0">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="padding:8px 10px;font-size:10px;font-weight:700;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb;border-top:1px solid #e5e7eb;white-space:nowrap">SKU</th>
+          <th style="padding:8px 10px;font-size:10px;font-weight:700;color:#6b7280;text-align:left;border-bottom:1px solid #e5e7eb;border-top:1px solid #e5e7eb">Produto</th>
+          <th style="padding:8px 10px;font-size:10px;font-weight:700;color:#6b7280;text-align:center;border-bottom:1px solid #e5e7eb;border-top:1px solid #e5e7eb;width:60px">Qtd</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      ${labelsHtml}
+    </table>
+  </td></tr>
+
+  ${observacoes ? `
+  <tr><td style="padding:14px 24px;border-top:1px solid #f3f4f6;background:#fffbeb">
+    <p style="margin:0 0 4px;font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.6px">Observações</p>
+    <p style="margin:0;font-size:12px;color:#78350f;font-style:italic">${observacoes}</p>
+  </td></tr>` : ""}
+
+  <tr><td style="padding:14px 24px;background:#f9fafb;border-top:1px solid #e5e7eb">
+    <p style="margin:0;font-size:10px;color:#9ca3af">PH Representante — uso interno, sem valores comerciais.</p>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
+
+  const badge = isDrop ? " [DROP]" : "";
+  await resend.emails.send({
+    from:    FROM,
+    to:      [expedicaoEmail],
+    subject: `📦 Expedição — Pedido #${numero}${badge} · ${clienteNome}`,
+    html,
+  });
+}
+
 // ── Confirmação para o cliente drop quando marca confirma o despacho ─────────
 
 interface SendDropshippingDispatchedParams {

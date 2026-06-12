@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMarcaUser } from "@/lib/marca-auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendPaymentConfirmationEmail, sendOrderReceivedEmail, sendShippingEmail, sendDropshippingDispatchedEmail } from "@/lib/email";
+import { sendPaymentConfirmationEmail, sendOrderReceivedEmail, sendShippingEmail, sendDropshippingDispatchedEmail, sendExpedicaoEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -77,6 +77,8 @@ export async function POST(request: Request) {
         .eq("cliente_id", cid);
     }
 
+    const { data: marcaFull } = await db.from("marcas").select("name, email_expedicao").eq("slug", ctx.marcaSlug).single();
+
     for (const p of pedidos) {
       const cli = p.clientes as unknown as { razao_social: string; email: string } | null;
       const total = Number(p.total) || (p.orcamento_itens ?? []).reduce((s: number, i: { valor_total: number }) => s + Number(i.valor_total ?? 0), 0);
@@ -85,6 +87,29 @@ export async function POST(request: Request) {
           numero: p.numero, clienteEmail: cli.email, clienteNome: cli.razao_social,
           brandName, tipoPedido: "estoque", total,
         }).catch(() => {});
+      }
+
+      // Expedicao email
+      if (marcaFull?.email_expedicao) {
+        ;(async (pedidoId: string, numero: number, clienteNome: string) => {
+          try {
+            const [{ data: itemsData }, { data: labelsData }, { data: orcData }] = await Promise.all([
+              db.from("orcamento_itens").select("produto_sku, produto_nome, quantidade").eq("orcamento_id", pedidoId),
+              db.from("orcamento_etiquetas").select("nome, url").eq("orcamento_id", pedidoId),
+              db.from("orcamentos").select("observacoes").eq("id", pedidoId).single(),
+            ]);
+            await sendExpedicaoEmail({
+              expedicaoEmail: marcaFull.email_expedicao!,
+              numero,
+              marcaNome:   marcaFull.name ?? ctx.marcaSlug,
+              clienteNome,
+              isDrop:      false,
+              items:       (itemsData ?? []).map(i => ({ sku: i.produto_sku ?? "", nome: i.produto_nome ?? "", quantidade: Number(i.quantidade) })),
+              labels:      (labelsData ?? []).map(l => ({ nome: l.nome, url: l.url })),
+              observacoes: orcData?.observacoes ?? null,
+            });
+          } catch {}
+        })(p.id, p.numero, cli?.razao_social ?? "");
       }
     }
     return NextResponse.json({ ok: true, updated: eligibleIds.length });

@@ -11,19 +11,19 @@ import { createClient } from "@/lib/supabase/client";
 
 interface PerfilData {
   slug: string; name: string; razao_social: string | null;
-  cnpj: string | null; email: string | null; telefone: string | null;
-  contato: string | null; cep: string | null; logradouro: string | null;
-  numero: string | null; complemento: string | null; bairro: string | null;
-  cidade: string | null; estado: string | null; logo_url: string | null;
-  segment: string | null;
+  cnpj: string | null; email: string | null; email_expedicao: string | null;
+  telefone: string | null; contato: string | null; cep: string | null;
+  logradouro: string | null; numero: string | null; complemento: string | null;
+  bairro: string | null; cidade: string | null; estado: string | null;
+  logo_url: string | null; segment: string | null;
   ml_user_id: string | null; ml_token_expires_at: string | null; ml_nickname: string | null;
 }
 
 type FormData = {
   name: string; razao_social: string; cnpj: string; email: string;
-  telefone: string; contato: string; cep: string; logradouro: string;
-  numero: string; complemento: string; bairro: string; cidade: string;
-  estado: string;
+  email_expedicao: string; telefone: string; contato: string; cep: string;
+  logradouro: string; numero: string; complemento: string; bairro: string;
+  cidade: string; estado: string;
 };
 
 const inp = "w-full px-3 py-2.5 bg-dark-950 border border-white/10 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand/50 transition-all";
@@ -73,9 +73,9 @@ export default function MarcaPerfilPage() {
   const [showSenhaNova,   setShowSenhaNova]   = useState(false);
 
   const [form, setForm] = useState<FormData>({
-    name: "", razao_social: "", cnpj: "", email: "", telefone: "",
-    contato: "", cep: "", logradouro: "", numero: "", complemento: "",
-    bairro: "", cidade: "", estado: "",
+    name: "", razao_social: "", cnpj: "", email: "", email_expedicao: "",
+    telefone: "", contato: "", cep: "", logradouro: "", numero: "",
+    complemento: "", bairro: "", cidade: "", estado: "",
   });
 
   async function handleMlDisconnect() {
@@ -142,19 +142,20 @@ export default function MarcaPerfilPage() {
         }).catch(() => {});
       }
       setForm({
-        name:        data.name         ?? "",
-        razao_social:data.razao_social  ?? "",
-        cnpj:        data.cnpj          ?? "",
-        email:       data.email         ?? "",
-        telefone:    data.telefone      ?? "",
-        contato:     data.contato       ?? "",
-        cep:         data.cep           ?? "",
-        logradouro:  data.logradouro    ?? "",
-        numero:      data.numero        ?? "",
-        complemento: data.complemento   ?? "",
-        bairro:      data.bairro        ?? "",
-        cidade:      data.cidade        ?? "",
-        estado:      data.estado        ?? "",
+        name:            data.name            ?? "",
+        razao_social:    data.razao_social     ?? "",
+        cnpj:            data.cnpj             ?? "",
+        email:           data.email            ?? "",
+        email_expedicao: data.email_expedicao  ?? "",
+        telefone:        data.telefone         ?? "",
+        contato:         data.contato          ?? "",
+        cep:             data.cep              ?? "",
+        logradouro:      data.logradouro       ?? "",
+        numero:          data.numero           ?? "",
+        complemento:     data.complemento      ?? "",
+        bairro:          data.bairro           ?? "",
+        cidade:          data.cidade           ?? "",
+        estado:          data.estado           ?? "",
       });
       const { data: { user } } = await supabase.auth.getUser();
       setAuthEmail(user?.email ?? "");
@@ -248,19 +249,20 @@ export default function MarcaPerfilPage() {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name:        form.name.trim()        || null,
-          razao_social:form.razao_social.trim()|| null,
-          cnpj:        form.cnpj.trim()        || null,
-          email:       form.email.trim()       || null,
-          telefone:    form.telefone.trim()    || null,
-          contato:     form.contato.trim()     || null,
-          cep:         form.cep.trim()         || null,
-          logradouro:  form.logradouro.trim()  || null,
-          numero:      form.numero.trim()      || null,
-          complemento: form.complemento.trim() || null,
-          bairro:      form.bairro.trim()      || null,
-          cidade:      form.cidade.trim()      || null,
-          estado:      form.estado.trim()      || null,
+          name:            form.name.trim()            || null,
+          razao_social:    form.razao_social.trim()    || null,
+          cnpj:            form.cnpj.trim()            || null,
+          email:           form.email.trim()           || null,
+          email_expedicao: form.email_expedicao.trim() || null,
+          telefone:        form.telefone.trim()        || null,
+          contato:         form.contato.trim()         || null,
+          cep:             form.cep.trim()             || null,
+          logradouro:      form.logradouro.trim()      || null,
+          numero:          form.numero.trim()          || null,
+          complemento:     form.complemento.trim()     || null,
+          bairro:          form.bairro.trim()          || null,
+          cidade:          form.cidade.trim()          || null,
+          estado:          form.estado.trim()          || null,
         }),
       });
       const data = await res.json();
@@ -406,6 +408,13 @@ export default function MarcaPerfilPage() {
                 <label className={lbl}>Telefone</label>
                 <input value={form.telefone} onChange={field("telefone")} placeholder="(00) 00000-0000" className={inp} />
               </div>
+            </div>
+            <div>
+              <label className={lbl}>
+                E-mail da expedição
+                <span className="ml-1.5 text-[10px] text-gray-600 font-normal normal-case">recebe via do pedido sem valores + etiquetas</span>
+              </label>
+              <input type="email" value={form.email_expedicao} onChange={field("email_expedicao")} placeholder="expedicao@marca.com" className={inp} />
             </div>
             <div>
               <label className={lbl}>Responsável Comercial</label>

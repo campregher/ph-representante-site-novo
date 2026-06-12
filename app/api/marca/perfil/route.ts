@@ -11,7 +11,7 @@ export async function GET() {
   const db = await createAdminClient();
   const { data, error } = await db
     .from("marcas")
-    .select("slug, name, razao_social, cnpj, email, telefone, contato, cep, logradouro, numero, complemento, bairro, cidade, estado, logo_url, segment, ml_user_id, ml_token_expires_at, ml_nickname")
+    .select("slug, name, razao_social, cnpj, email, email_expedicao, telefone, contato, cep, logradouro, numero, complemento, bairro, cidade, estado, logo_url, segment, ml_user_id, ml_token_expires_at, ml_nickname")
     .eq("slug", ctx.marcaSlug)
     .single();
 
@@ -24,26 +24,27 @@ export async function PATCH(request: Request) {
   if (!ctx) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await request.json();
-  const { name, razao_social, cnpj, email, telefone, contato, cep, logradouro, numero, complemento, bairro, cidade, estado, logo_url } = body;
+  const { name, razao_social, cnpj, email, email_expedicao, telefone, contato, cep, logradouro, numero, complemento, bairro, cidade, estado, logo_url } = body;
 
   const db = await createAdminClient();
   const { error } = await db
     .from("marcas")
     .update({
-      name:        name        || null,
-      razao_social:razao_social|| null,
-      cnpj:        cnpj        || null,
-      email:       email       || null,
-      telefone:    telefone    || null,
-      contato:     contato     || null,
-      cep:         cep         || null,
-      logradouro:  logradouro  || null,
-      numero:      numero      || null,
-      complemento: complemento || null,
-      bairro:      bairro      || null,
-      cidade:      cidade      || null,
-      estado:      estado      || null,
-      logo_url:    logo_url    || null,
+      name:             name             || null,
+      razao_social:     razao_social     || null,
+      cnpj:             cnpj             || null,
+      email:            email            || null,
+      email_expedicao:  email_expedicao  || null,
+      telefone:         telefone         || null,
+      contato:          contato          || null,
+      cep:              cep              || null,
+      logradouro:       logradouro       || null,
+      numero:           numero           || null,
+      complemento:      complemento      || null,
+      bairro:           bairro           || null,
+      cidade:           cidade           || null,
+      estado:           estado           || null,
+      logo_url:         logo_url         || null,
     })
     .eq("slug", ctx.marcaSlug);
 

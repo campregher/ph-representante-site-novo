@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 /**
- * Endpoint de teste: simula um webhook ML orders_v2 para um order_id específico.
+ * Endpoint de teste: cria um pedido dropshipping diretamente a partir de um
+ * anúncio ML vinculado, sem precisar de pedido real no ML.
  * Protegido por CRON_SECRET.
  *
  * Uso:
  *   POST /api/test/webhook-ml
  *   Authorization: Bearer <CRON_SECRET>
- *   Body: { "order_id": "12345678", "ml_user_id": "123456789" }
+ *   Body: { "ml_item_id": "MLB123456789", "quantidade": 1 }
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -20,38 +22,86 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({})) as {
-    order_id:    string;
-    ml_user_id:  string;
+    ml_item_id: string;
+    quantidade?: number;
   };
 
-  if (!body.order_id || !body.ml_user_id) {
+  if (!body.ml_item_id) {
+    return NextResponse.json({ error: "Informe ml_item_id" }, { status: 400 });
+  }
+
+  const db = await createAdminClient();
+
+  /* Encontra o anúncio vinculado */
+  const { data: anuncio } = await db
+    .from("portal_ml_anuncios")
+    .select("cliente_id, produto_id, marca_slug, ml_item_id, preco_revenda")
+    .eq("ml_item_id", body.ml_item_id)
+    .maybeSingle();
+
+  if (!anuncio) {
     return NextResponse.json(
-      { error: "Informe order_id e ml_user_id" },
-      { status: 400 }
+      { error: `Anúncio ${body.ml_item_id} não encontrado na plataforma. Verifique se está vinculado.` },
+      { status: 404 }
     );
   }
 
-  /* Constrói o payload idêntico ao que o ML enviaria */
-  const webhookPayload = {
-    topic:       "orders_v2",
-    resource:    `/orders/${body.order_id}`,
-    user_id:     Number(body.ml_user_id),
-    application_id: Number(process.env.ML_APP_ID ?? "0"),
-  };
+  /* Busca dados do produto */
+  const { data: produto } = await db
+    .from("produtos")
+    .select("id, sku, name, resale_price")
+    .eq("id", anuncio.produto_id)
+    .single();
 
-  /* Chama o próprio webhook handler interno */
-  const origin  = new URL(request.url).origin;
-  const res     = await fetch(`${origin}/api/webhooks/ml`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(webhookPayload),
+  if (!produto) {
+    return NextResponse.json({ error: "Produto vinculado não encontrado" }, { status: 404 });
+  }
+
+  const quantidade     = Math.max(1, Number(body.quantidade ?? 1));
+  const valorUnitario  = anuncio.preco_revenda ?? produto.resale_price ?? 0;
+  const total          = quantidade * valorUnitario;
+  const fakeOrderId    = `TEST-${Date.now()}`;
+
+  /* Cria o pedido diretamente */
+  const { data: orcamento, error } = await db
+    .from("orcamentos")
+    .insert({
+      cliente_id:          anuncio.cliente_id,
+      marca:               anuncio.marca_slug,
+      tipo_pedido:         "dropshipping",
+      condicao_pagamento:  "semanal",
+      status:              "em_separacao",
+      total,
+      ml_order_id:         fakeOrderId,
+      ml_shipping_id:      null,
+      dropship_cliente_id: anuncio.cliente_id,
+      observacoes:         `[TESTE] Pedido simulado para anúncio ${anuncio.ml_item_id}`,
+    })
+    .select("id")
+    .single();
+
+  if (error || !orcamento) {
+    return NextResponse.json({ error: error?.message ?? "Erro ao criar pedido" }, { status: 500 });
+  }
+
+  /* Insere os itens */
+  await db.from("orcamento_itens").insert({
+    orcamento_id:   orcamento.id,
+    produto_sku:    produto.sku,
+    produto_nome:   produto.name,
+    quantidade,
+    valor_unitario: valorUnitario,
   });
 
-  const data = await res.json().catch(() => ({}));
-
   return NextResponse.json({
-    simulado: webhookPayload,
-    resultado: data,
-    status: res.status,
+    ok: true,
+    pedido_id:    orcamento.id,
+    ml_item_id:   anuncio.ml_item_id,
+    produto:      produto.name,
+    marca:        anuncio.marca_slug,
+    quantidade,
+    total,
+    status:       "em_separacao",
+    observacao:   "Pedido de teste criado com sucesso. Verifique no painel da marca.",
   });
 }

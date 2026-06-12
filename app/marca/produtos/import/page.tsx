@@ -6,32 +6,43 @@ import { ArrowLeft, Upload, CheckCircle, AlertCircle, Download, FileSpreadsheet,
 import * as XLSX from "xlsx";
 
 const COLUMNS = [
-  { col: "SKU",       req: "Sim", obs: "Código único do produto" },
-  { col: "Nome",      req: "Sim", obs: "Nome completo do produto" },
-  { col: "Descricao", req: "Não", obs: "Descrição opcional" },
-  { col: "Preco",     req: "Não", obs: "Valor numérico (ex: 29.90)" },
-  { col: "Imagem1",   req: "Não", obs: "URL da imagem principal" },
-  { col: "Imagem2",   req: "Não", obs: "URL da segunda imagem" },
-  { col: "Imagem3",   req: "Não", obs: "URL da terceira imagem" },
-  { col: "Imagem4",   req: "Não", obs: "URL da quarta imagem" },
-  { col: "Imagem5",   req: "Não", obs: "URL da quinta imagem" },
-  { col: "Ativo",     req: "Não", obs: "TRUE ou FALSE (padrão: TRUE)" },
+  { col: "SKU",                  req: "Sim", obs: "Código único do produto" },
+  { col: "Nome",                 req: "Sim", obs: "Nome completo do produto" },
+  { col: "Preco de custo (R$)",  req: "Não", obs: "Custo interno (ex: 89.90)" },
+  { col: "Preco de revenda (R$)",req: "Não", obs: "Preço para o cliente (ex: 149.90)" },
+  { col: "Descricao",            req: "Não", obs: "Descrição opcional" },
+  { col: "Imagem1",              req: "Não", obs: "URL da imagem principal" },
+  { col: "Imagem2",              req: "Não", obs: "URL da segunda imagem" },
+  { col: "Imagem3",              req: "Não", obs: "URL da terceira imagem" },
+  { col: "Imagem4",              req: "Não", obs: "URL da quarta imagem" },
+  { col: "Imagem5",              req: "Não", obs: "URL da quinta imagem" },
+  { col: "Ativo",                req: "Não", obs: "SIM ou NÃO (padrão: SIM)" },
 ];
 
 function downloadTemplate() {
-  const headers = ["SKU", "Nome", "Descricao", "Preco", "Imagem1", "Imagem2", "Imagem3", "Imagem4", "Imagem5", "Ativo"];
+  const headers = [
+    "SKU", "Nome", "Preco de custo (R$)", "Preco de revenda (R$)",
+    "Descricao", "Imagem1", "Imagem2", "Imagem3", "Imagem4", "Imagem5", "Ativo",
+  ];
+  const hints = [
+    "Ex: TAP-001", "Ex: Tapete Automotivo Universal",
+    "Ex: 89.90 (custo interno)", "Ex: 149.90 (preço para o cliente)",
+    "Descrição detalhada do produto",
+    "URL da imagem principal", "", "", "", "", "SIM  |  NÃO",
+  ];
   const examples = [
-    ["001", "Produto Exemplo A", "Descrição do produto A", "29.90", "https://...", "", "", "", "", "TRUE"],
-    ["002", "Produto Exemplo B", "",                        "59.00", "",           "", "", "", "", "TRUE"],
+    ["001", "Produto Exemplo A", "89.90", "149.90", "Descrição do produto A", "https://...", "", "", "", "", "SIM"],
+    ["002", "Produto Exemplo B", "50.00", "99.90",  "",                        "",            "", "", "", "", "SIM"],
   ];
 
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...examples]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, hints, ...examples]);
   ws["!cols"] = [
     { wch: 14 }, // SKU
     { wch: 36 }, // Nome
+    { wch: 22 }, // Preco de custo
+    { wch: 24 }, // Preco de revenda
     { wch: 36 }, // Descricao
-    { wch: 10 }, // Preco
     { wch: 40 }, // Imagem1
     { wch: 40 }, // Imagem2
     { wch: 40 }, // Imagem3

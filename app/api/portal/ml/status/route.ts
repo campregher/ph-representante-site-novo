@@ -24,12 +24,37 @@ export async function GET() {
   ]);
 
   const connected = !!tokenRes.data;
+  const anuncios  = anunciosRes.data ?? [];
+
+  /* enrich with product name + thumbnail */
+  const produtoIds = [...new Set(anuncios.map(a => a.produto_id).filter(Boolean))];
+  let produtoMap: Record<string, { name: string; thumbnail: string | null }> = {};
+
+  if (produtoIds.length > 0) {
+    const { data: prods } = await db
+      .from("produtos")
+      .select("id, name, images")
+      .in("id", produtoIds);
+
+    for (const p of prods ?? []) {
+      produtoMap[p.id] = {
+        name:      p.name,
+        thumbnail: Array.isArray(p.images) && p.images[0] ? p.images[0] : null,
+      };
+    }
+  }
+
+  const anunciosEnriquecidos = anuncios.map(a => ({
+    ...a,
+    produto_name:      produtoMap[a.produto_id]?.name      ?? null,
+    produto_thumbnail: produtoMap[a.produto_id]?.thumbnail ?? null,
+  }));
 
   return NextResponse.json({
     connected,
     ml_user_id:  tokenRes.data?.ml_user_id  ?? null,
     ml_nickname: tokenRes.data?.ml_nickname  ?? null,
     expires_at:  tokenRes.data?.expires_at   ?? null,
-    anuncios:    anunciosRes.data ?? [],
+    anuncios:    anunciosEnriquecidos,
   });
 }

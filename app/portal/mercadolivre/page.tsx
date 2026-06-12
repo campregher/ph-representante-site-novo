@@ -15,6 +15,7 @@ import { toast } from "sonner";
 interface Anuncio {
   id: string; produto_id: string; marca_slug: string;
   ml_item_id: string; ml_status: string; preco_revenda: number | null; created_at: string;
+  produto_name: string | null; produto_thumbnail: string | null;
 }
 
 interface Notificacao {
@@ -222,6 +223,169 @@ function ProdutoPicker({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Anúncios gerenciados pela plataforma ───────────────────── */
+function statusLabel(s: string) {
+  if (s === "active" || s === "approved") return "Ativo";
+  if (s === "paused") return "Pausado";
+  if (s === "closed") return "Encerrado";
+  return s;
+}
+function statusClass(s: string) {
+  if (s === "active" || s === "approved") return "bg-green-400/15 text-green-400 border-green-400/20";
+  if (s === "paused") return "bg-yellow-400/15 text-yellow-400 border-yellow-400/20";
+  return "bg-gray-400/15 text-gray-400 border-gray-400/20";
+}
+
+function AnunciosPlataforma({
+  anuncios, removingId, onRemove,
+}: {
+  anuncios: Anuncio[];
+  removingId: string | null;
+  onRemove: (a: Anuncio) => void;
+}) {
+  const [filterQ,     setFilterQ]     = useState("");
+  const [filterStatus,setFilterStatus]= useState<"all" | "active" | "paused">("all");
+
+  const filtered = anuncios.filter(a => {
+    const matchQ = !filterQ ||
+      (a.produto_name ?? "").toLowerCase().includes(filterQ.toLowerCase()) ||
+      a.ml_item_id.includes(filterQ) ||
+      a.marca_slug.includes(filterQ);
+    const isActive = a.ml_status === "active" || a.ml_status === "approved";
+    const matchS =
+      filterStatus === "all" ? true :
+      filterStatus === "active" ? isActive :
+      !isActive;
+    return matchQ && matchS;
+  });
+
+  const ativos   = anuncios.filter(a => a.ml_status === "active" || a.ml_status === "approved").length;
+  const inativos = anuncios.length - ativos;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-white">
+          Publicados pela plataforma
+          <span className="ml-2 text-xs font-normal text-gray-500">({anuncios.length})</span>
+        </p>
+        <a href="/portal/marcas" className="text-xs text-brand hover:underline">+ Publicar mais</a>
+      </div>
+
+      {anuncios.length === 0 ? (
+        <div className="bg-dark-800 border border-white/8 rounded-2xl py-10 flex flex-col items-center gap-2">
+          <Package size={24} className="text-gray-700" />
+          <p className="text-sm text-gray-500">Nenhum produto publicado pela plataforma</p>
+          <a href="/portal/marcas" className="text-xs text-brand hover:underline">Ir para catálogo →</a>
+        </div>
+      ) : (
+        <>
+          {/* Stats + filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setFilterStatus("all")}
+              className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition-all ${filterStatus === "all" ? "bg-white/10 border-white/20 text-white" : "border-white/8 text-gray-500 hover:text-white"}`}
+            >
+              Todos {anuncios.length}
+            </button>
+            <button
+              onClick={() => setFilterStatus("active")}
+              className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition-all ${filterStatus === "active" ? "bg-green-400/15 border-green-400/30 text-green-400" : "border-white/8 text-gray-500 hover:text-white"}`}
+            >
+              Ativos {ativos}
+            </button>
+            <button
+              onClick={() => setFilterStatus("paused")}
+              className={`text-xs px-3 py-1.5 rounded-xl border font-semibold transition-all ${filterStatus === "paused" ? "bg-yellow-400/15 border-yellow-400/30 text-yellow-400" : "border-white/8 text-gray-500 hover:text-white"}`}
+            >
+              Inativos {inativos}
+            </button>
+            {anuncios.length > 5 && (
+              <div className="relative flex-1 min-w-[160px]">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                <input
+                  value={filterQ}
+                  onChange={e => setFilterQ(e.target.value)}
+                  placeholder="Filtrar..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-dark-800 border border-white/8 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-brand/40"
+                />
+              </div>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="bg-dark-800 border border-white/8 rounded-2xl py-8 text-center text-gray-500 text-sm">
+              Nenhum anúncio encontrado.
+            </div>
+          ) : (
+            <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
+              {filtered.map(a => (
+                <div key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/2 transition-colors">
+                  {/* Thumbnail */}
+                  <div className="w-12 h-12 rounded-xl bg-dark-700 overflow-hidden flex-shrink-0 border border-white/6">
+                    {a.produto_thumbnail ? (
+                      <Image
+                        src={a.produto_thumbnail}
+                        alt={a.produto_name ?? a.ml_item_id}
+                        width={48} height={48}
+                        className="w-full h-full object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package size={16} className="text-gray-600" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate leading-tight">
+                      {a.produto_name ?? a.ml_item_id}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[10px] text-gray-500 font-mono">{a.ml_item_id}</span>
+                      <span className="text-[10px] text-gray-600">{a.marca_slug}</span>
+                    </div>
+                    {a.preco_revenda != null && (
+                      <p className="text-xs font-bold text-brand mt-0.5">{fmt(a.preco_revenda)}</p>
+                    )}
+                  </div>
+
+                  {/* Status badge */}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0 ${statusClass(a.ml_status)}`}>
+                    {statusLabel(a.ml_status)}
+                  </span>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <a
+                      href={`https://www.mercadolivre.com.br/anuncio/${a.ml_item_id}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="p-1.5 text-gray-500 hover:text-white hover:bg-white/8 rounded-lg transition-all"
+                      title="Ver no ML"
+                    >
+                      <ExternalLink size={13} />
+                    </a>
+                    <button
+                      onClick={() => onRemove(a)}
+                      disabled={removingId === a.id}
+                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all disabled:opacity-50"
+                      title="Remover da plataforma"
+                    >
+                      {removingId === a.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -638,58 +802,11 @@ export default function MercadoLivrePage() {
 
       {/* Anúncios gerenciados pela plataforma */}
       {status?.connected && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-white">
-              Publicados pela plataforma
-              <span className="ml-2 text-xs font-normal text-gray-500">({status.anuncios.length})</span>
-            </p>
-            <a href="/portal/marcas" className="text-xs text-brand hover:underline">+ Publicar mais</a>
-          </div>
-
-          {status.anuncios.length === 0 ? (
-            <div className="bg-dark-800 border border-white/8 rounded-2xl py-8 flex flex-col items-center gap-2">
-              <Package size={24} className="text-gray-700" />
-              <p className="text-sm text-gray-500">Nenhum produto publicado pela plataforma</p>
-              <a href="/portal/marcas" className="text-xs text-brand hover:underline">Ir para catálogo →</a>
-            </div>
-          ) : (
-            <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
-              {status.anuncios.map(a => (
-                <div key={a.id} className="flex items-center gap-3 px-5 py-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-mono text-gray-500">{a.ml_item_id}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{a.marca_slug}</p>
-                  </div>
-                  {a.preco_revenda != null && (
-                    <span className="text-sm font-bold text-white flex-shrink-0">{fmt(a.preco_revenda)}</span>
-                  )}
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                    a.ml_status === "active" || a.ml_status === "approved"
-                      ? "bg-green-400/15 text-green-400"
-                      : a.ml_status === "paused"
-                      ? "bg-yellow-400/15 text-yellow-400"
-                      : "bg-gray-400/15 text-gray-400"
-                  }`}>
-                    {a.ml_status === "active" || a.ml_status === "approved" ? "Ativo"
-                      : a.ml_status === "paused" ? "Pausado" : a.ml_status}
-                  </span>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <a href={`https://www.mercadolivre.com.br/anuncio/${a.ml_item_id}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="p-1.5 text-gray-500 hover:text-white hover:bg-white/8 rounded-lg transition-all">
-                      <ExternalLink size={13} />
-                    </a>
-                    <button onClick={() => handleRemoveAnuncio(a)} disabled={removingId === a.id}
-                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all disabled:opacity-50">
-                      {removingId === a.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <AnunciosPlataforma
+          anuncios={status.anuncios}
+          removingId={removingId}
+          onRemove={handleRemoveAnuncio}
+        />
       )}
 
       {/* Todos os anúncios da conta ML */}
@@ -711,6 +828,8 @@ export default function MercadoLivrePage() {
                   ml_status: "active",
                   preco_revenda: produto.resale_price,
                   created_at: new Date().toISOString(),
+                  produto_name: produto.name,
+                  produto_thumbnail: produto.images?.[0] ?? null,
                 }],
               };
             });

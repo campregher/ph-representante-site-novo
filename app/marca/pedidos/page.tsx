@@ -64,9 +64,10 @@ function MarcaPedidosPage() {
   });
   const [selected,     setSelected]     = useState<Set<string>>(new Set());
   const [confirming,   setConfirming]   = useState(false);
-  const [lote,         setLote]         = useState<{ pedidos: LotePedido[]; resumo: LoteResumo[] } | null>(null);
-  const [loadingLote,  setLoadingLote]  = useState(false);
-  const [loteSelected, setLoteSelected] = useState<Set<string>>(new Set());
+  const [lote,             setLote]             = useState<{ pedidos: LotePedido[]; resumo: LoteResumo[] } | null>(null);
+  const [loadingLote,      setLoadingLote]      = useState(false);
+  const [loteSelected,     setLoteSelected]     = useState<Set<string>>(new Set());
+  const [downloadedLabels, setDownloadedLabels] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +84,7 @@ function MarcaPedidosPage() {
   const loadLote = useCallback(async () => {
     setLoadingLote(true);
     setLoteSelected(new Set());
+    setDownloadedLabels(new Set());
     try {
       const res  = await fetch("/api/marca/dropshipping/lote");
       const data = await res.json();
@@ -155,6 +157,35 @@ function MarcaPedidosPage() {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setConfirming(false); }
   }
+
+  function markLabelDownloaded(pedidoId: string) {
+    setDownloadedLabels(prev => new Set([...prev, pedidoId]));
+  }
+
+  function canConfirmPedido(p: LotePedido): boolean {
+    if (p.orcamento_etiquetas.length === 0) return true;
+    return downloadedLabels.has(p.id);
+  }
+
+  function baixarEtiquetasSelecionadas() {
+    const pedidosSelecionados = lote?.pedidos.filter(p => loteSelected.has(p.id)) ?? [];
+    for (const p of pedidosSelecionados) {
+      for (const etq of p.orcamento_etiquetas) {
+        window.open(etq.url, "_blank");
+      }
+    }
+    setDownloadedLabels(prev => new Set([...prev, ...pedidosSelecionados.map(p => p.id)]));
+  }
+
+  const canConfirmLote = loteSelected.size > 0 && [...loteSelected].every(id => {
+    const p = lote?.pedidos.find(x => x.id === id);
+    return !p || canConfirmPedido(p);
+  });
+
+  const needsLabelDownload = loteSelected.size > 0 && [...loteSelected].some(id => {
+    const p = lote?.pedidos.find(x => x.id === id);
+    return p && p.orcamento_etiquetas.length > 0 && !downloadedLabels.has(p.id);
+  });
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -351,12 +382,16 @@ function MarcaPedidosPage() {
                             </Link>
                             <button
                               onClick={() => enviarPedidoUnico(p.id)}
-                              disabled={confirming}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-400 text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
-                              title="Marcar este pedido como enviado"
+                              disabled={confirming || !canConfirmPedido(p)}
+                              title={!canConfirmPedido(p) ? "Baixe a etiqueta antes de confirmar o envio" : "Confirmar envio"}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-semibold rounded-xl transition-all disabled:opacity-40 ${
+                                canConfirmPedido(p)
+                                  ? "bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-400"
+                                  : "bg-dark-700 border-white/8 text-gray-600 cursor-not-allowed"
+                              }`}
                             >
                               {confirming ? <Loader2 size={11} className="animate-spin" /> : <Truck size={11} />}
-                              <span className="hidden sm:inline">Enviado</span>
+                              <span className="hidden sm:inline">{canConfirmPedido(p) ? "Confirmar envio" : "Baixar etiqueta"}</span>
                             </button>
                           </div>
                         </div>
@@ -389,17 +424,26 @@ function MarcaPedidosPage() {
                           {/* Etiquetas */}
                           {p.orcamento_etiquetas.length > 0 && (
                             <div className="flex flex-wrap gap-2 pt-1">
-                              {p.orcamento_etiquetas.map(etq => (
-                                <a
-                                  key={etq.id}
-                                  href={etq.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/25 text-yellow-400 text-xs font-semibold rounded-xl transition-all"
-                                >
-                                  <FileText size={11} /> {etq.nome}
-                                </a>
-                              ))}
+                              {p.orcamento_etiquetas.map(etq => {
+                                const baixada = downloadedLabels.has(p.id);
+                                return (
+                                  <a
+                                    key={etq.id}
+                                    href={etq.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => markLabelDownloaded(p.id)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-semibold rounded-xl transition-all ${
+                                      baixada
+                                        ? "bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-400"
+                                        : "bg-yellow-400/10 hover:bg-yellow-400/20 border-yellow-400/25 text-yellow-400"
+                                    }`}
+                                  >
+                                    <FileText size={11} />
+                                    {baixada ? "✓ " : ""}{etq.nome}
+                                  </a>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -526,21 +570,33 @@ function MarcaPedidosPage() {
       {/* ── Barra de ação em lote dropshipping ── */}
       {tab === "dropshipping" && loteSelected.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 px-4 py-4 bg-dark-900/95 backdrop-blur-md border-t border-white/10">
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 flex-wrap">
             <div>
               <p className="text-sm font-bold text-white">{loteSelected.size} pedido{loteSelected.size !== 1 ? "s" : ""} selecionado{loteSelected.size !== 1 ? "s" : ""}</p>
               <p className="text-xs text-gray-500">
                 Total: {fmt((lote?.pedidos ?? []).filter(p => loteSelected.has(p.id)).reduce((s, p) => s + Number(p.total), 0))}
               </p>
             </div>
-            <button
-              onClick={enviarLoteSelecionado}
-              disabled={confirming}
-              className="flex items-center gap-2 px-5 py-3 bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-bold rounded-xl transition-all disabled:opacity-50"
-            >
-              {confirming ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />}
-              Marcar {loteSelected.size > 1 ? `${loteSelected.size} pedidos` : "pedido"} como enviado
-            </button>
+            <div className="flex items-center gap-2">
+              {needsLabelDownload && (
+                <button
+                  onClick={baixarEtiquetasSelecionadas}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-yellow-400/15 hover:bg-yellow-400/25 border border-yellow-400/40 text-yellow-400 text-sm font-bold rounded-xl transition-all"
+                >
+                  <FileText size={14} />
+                  Baixar etiquetas ({loteSelected.size})
+                </button>
+              )}
+              <button
+                onClick={enviarLoteSelecionado}
+                disabled={confirming || !canConfirmLote}
+                title={!canConfirmLote ? "Baixe todas as etiquetas antes de confirmar" : undefined}
+                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {confirming ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />}
+                Confirmar envio {loteSelected.size > 1 ? `(${loteSelected.size})` : ""}
+              </button>
+            </div>
           </div>
         </div>
       )}

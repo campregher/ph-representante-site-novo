@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMarcaUser } from "@/lib/marca-auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendPaymentConfirmationEmail, sendOrderReceivedEmail, sendShippingEmail } from "@/lib/email";
+import { sendPaymentConfirmationEmail, sendOrderReceivedEmail, sendShippingEmail, sendDropshippingDispatchedEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
   if (action === "marcar_enviado") {
     const { data: pedidos, error: fetchErr } = await db
       .from("orcamentos")
-      .select("id, numero, total, transportadora, clientes(razao_social, email), orcamento_itens(valor_total)")
+      .select("id, numero, total, tipo_pedido, transportadora, clientes(razao_social, email), orcamento_itens(valor_total)")
       .eq("marca", ctx.marcaSlug)
       .eq("status", "em_separacao")
       .in("id", ids);
@@ -112,7 +112,14 @@ export async function POST(request: Request) {
     for (const p of pedidos) {
       const cli = p.clientes as unknown as { razao_social: string; email: string } | null;
       const total = Number(p.total) || (p.orcamento_itens ?? []).reduce((s: number, i: { valor_total: number }) => s + Number(i.valor_total ?? 0), 0);
-      if (cli?.email) {
+      if (!cli?.email) continue;
+
+      if (p.tipo_pedido === "dropshipping") {
+        sendDropshippingDispatchedEmail({
+          numero: p.numero, clienteEmail: cli.email, clienteNome: cli.razao_social,
+          brandName, total,
+        }).catch(() => {});
+      } else {
         sendShippingEmail({
           numero: p.numero, clienteEmail: cli.email, clienteNome: cli.razao_social,
           brandName, total, transportadora: p.transportadora as string | null,

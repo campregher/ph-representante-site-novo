@@ -580,6 +580,81 @@ export async function sendShippingEmail({ numero, clienteEmail, clienteNome, bra
   });
 }
 
+// ── Confirmação para o cliente drop quando marca confirma o despacho ─────────
+
+interface SendDropshippingDispatchedParams {
+  numero:       number;
+  clienteEmail: string;
+  clienteNome:  string;
+  brandName:    string;
+  total:        number;
+}
+
+export async function sendDropshippingDispatchedEmail({ numero, clienteEmail, clienteNome, brandName, total }: SendDropshippingDispatchedParams) {
+  const adminEmail = process.env.EMAIL_ADMIN;
+  const portalUrl  = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const cc         = adminEmail && adminEmail !== clienteEmail ? [adminEmail] : undefined;
+  const fmt        = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+
+  <tr><td style="background:#111;padding:24px 32px">
+    <span style="font-size:18px;font-weight:900;color:#e63946;letter-spacing:1px">PH REPRESENTANTE</span>
+    <p style="margin:4px 0 0;font-size:11px;color:#6b7280">Representação Comercial Automotiva</p>
+  </td></tr>
+
+  <tr><td style="padding:28px 32px;border-bottom:1px solid #f3f4f6;text-align:center">
+    <p style="margin:0;font-size:40px">📦</p>
+    <p style="margin:10px 0 0;font-size:22px;font-weight:900;color:#111">Pedido Despachado!</p>
+    <p style="margin:8px 0 0;font-size:13px;color:#6b7280">Olá, <strong>${clienteNome}</strong>. Seu pedido dropshipping <strong>#${numero}</strong> foi despachado ao comprador.</p>
+  </td></tr>
+
+  <tr><td style="padding:24px 32px;border-bottom:1px solid #f3f4f6">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="50%" valign="top" style="padding-right:16px">
+          <p style="margin:0 0 4px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px">Fornecedor</p>
+          <p style="margin:0;font-size:14px;font-weight:700;color:#111">${brandName}</p>
+        </td>
+        <td width="50%" valign="top">
+          <p style="margin:0 0 4px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px">Valor a cobrar</p>
+          <p style="margin:0;font-size:18px;font-weight:900;color:#e65100">${total > 0 ? fmt(total) : "A definir"}</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="padding:20px 32px;border-bottom:1px solid #f3f4f6;background:#eff6ff">
+    <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#1d4ed8">Dropshipping — O que acontece agora?</p>
+    <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.6">
+      O produto foi enviado diretamente ao comprador do Mercado Livre. O valor de <strong>${total > 0 ? fmt(total) : "—"}</strong> será incluído na sua próxima cobrança semanal.
+    </p>
+    ${portalUrl ? `<p style="margin:12px 0 0"><a href="${portalUrl}/portal/orcamentos" style="display:inline-block;padding:8px 18px;background:#2563eb;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">Ver no portal</a></p>` : ""}
+  </td></tr>
+
+  <tr><td style="padding:20px 32px;background:#f9fafb">
+    <p style="margin:0;font-size:11px;color:#9ca3af">Em caso de dúvidas entre em contato com a PH Representante.</p>
+    <p style="margin:8px 0 0;font-size:10px;color:#d1d5db">PH Representante · Representação Comercial Automotiva</p>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
+
+  await resend.emails.send({
+    from:    FROM,
+    to:      [clienteEmail],
+    cc,
+    subject: `📦 Dropshipping #${numero} despachado ao comprador — ${brandName}`,
+    html,
+  });
+}
+
 // ── Notificação do fornecedor (via admin) para o cliente ──────────────────────
 
 interface SendSupplierNotificationParams {

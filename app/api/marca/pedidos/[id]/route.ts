@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMarcaUser } from "@/lib/marca-auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendOrderReceivedEmail, sendShippingEmail, sendPaymentConfirmationEmail } from "@/lib/email";
+import { sendOrderReceivedEmail, sendShippingEmail, sendPaymentConfirmationEmail, sendSupplierNotification } from "@/lib/email";
 import { criarNotificacao, getClienteUserId } from "@/lib/notificacoes";
 import { sendText } from "@/lib/evolution";
 
@@ -48,10 +48,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     : ((existing.orcamento_itens ?? []) as { valor_total: number }[])
         .reduce((s, i) => s + Number(i.valor_total ?? 0), 0);
 
-  const { action, motivo, etiquetas_confirmadas } = body as {
-    action: "confirmar_recebimento" | "marcar_enviado" | "confirmar_pagamento" | "recusar";
+  const { action, motivo, etiquetas_confirmadas, mensagem } = body as {
+    action: "confirmar_recebimento" | "marcar_enviado" | "confirmar_pagamento" | "recusar" | "alertar_cliente";
     motivo?: string;
     etiquetas_confirmadas?: boolean;
+    mensagem?: string;
   };
 
   const cliente = existing.clientes as unknown as { razao_social: string; email: string; whatsapp?: string | null } | null;
@@ -232,6 +233,45 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }).catch(() => {});
     }
     if (clienteWpp) sendText(clienteWpp, `❌ *Pedido #${existing.numero} recusado.*\n\n${motivo ?? "Entre em contato com a marca para mais informações."}`).catch(() => {});
+
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Alertar cliente (mensagem livre em qualquer status) ─────────────────────
+  if (action === "alertar_cliente") {
+    const msg = (mensagem ?? "").trim();
+    if (!msg) return NextResponse.json({ error: "Mensagem não pode ser vazia" }, { status: 400 });
+
+    await db.from("orcamentos").update({ observacao_admin: msg }).eq("id", id);
+
+    const { data: marcaData } = await db.from("marcas").select("name").eq("slug", ctx.marcaSlug).single();
+    const brandName = marcaData?.name ?? ctx.marcaSlug;
+
+    if (cliente?.email) {
+      sendSupplierNotification({
+        numero:       existing.numero,
+        clienteEmail: cliente.email,
+        clienteNome:  cliente.razao_social,
+        brandName,
+        tipo:         "alteracao",
+        mensagem:     msg,
+      }).catch(() => {});
+    }
+
+    if (existing.cliente_id) {
+      getClienteUserId(existing.cliente_id as string).then((uid) => {
+        if (uid) criarNotificacao({
+          destinatarioTipo: "portal",
+          destinatarioId:   uid,
+          tipo:             "mensagem_marca",
+          titulo:           `Mensagem sobre o pedido #${existing.numero}`,
+          mensagem:         msg,
+          link:             `/portal/orcamentos/${id}`,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
+    if (clienteWpp) sendText(clienteWpp, `📢 *${brandName} — Pedido #${existing.numero}*\n\n${msg}`).catch(() => {});
 
     return NextResponse.json({ ok: true });
   }

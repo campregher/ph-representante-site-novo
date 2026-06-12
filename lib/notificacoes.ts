@@ -8,7 +8,9 @@ export type TipoNotificacao =
   | "pedido_recusado"
   | "acesso_solicitado"
   | "acesso_aprovado"
-  | "acesso_recusado";
+  | "acesso_recusado"
+  | "mensagem_marca"
+  | "mensagem_portal";
 
 interface NotificacaoParams {
   destinatarioTipo: "marca" | "portal";

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { sendChangeAlert } from "@/lib/email";
+import { sendChangeAlert, sendNewOrderAlert } from "@/lib/email";
+import { criarNotificacao, getMarcaUserId } from "@/lib/notificacoes";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,45 @@ export async function PATCH(
 
     const ownerUserId = (orc.clientes as unknown as { user_id: string } | null)?.user_id;
     if (ownerUserId !== user.id) return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+
+    // ── Enviar observação para a marca (qualquer status) ──
+    if (body.action === "enviar_observacao") {
+      const obs = (body.observacao ?? "").trim();
+      if (!obs) return NextResponse.json({ error: "Observação vazia" }, { status: 400 });
+
+      const { error: updErr } = await db.from("orcamentos").update({ observacoes: obs }).eq("id", id);
+      if (updErr) throw new Error(updErr.message);
+
+      const clienteRow = orc.clientes as unknown as { razao_social: string; email: string } | null;
+      const { data: brand } = orc.marca
+        ? await db.from("marcas").select("name, email").eq("slug", orc.marca).single()
+        : { data: null };
+
+      if (brand?.email && clienteRow) {
+        sendChangeAlert({
+          numero:      orc.numero,
+          brandEmail:  brand.email,
+          brandName:   brand.name ?? orc.marca ?? "",
+          clienteNome: clienteRow.razao_social,
+          motivo:      obs,
+        }).catch(() => {});
+      }
+
+      if (orc.marca) {
+        getMarcaUserId(orc.marca).then((uid) => {
+          if (uid) criarNotificacao({
+            destinatarioTipo: "marca",
+            destinatarioId:   uid,
+            tipo:             "mensagem_portal",
+            titulo:           `Observação no pedido #${orc.numero}`,
+            mensagem:         obs,
+            link:             `/marca/pedidos/${id}`,
+          }).catch(() => {});
+        }).catch(() => {});
+      }
+
+      return NextResponse.json({ ok: true });
+    }
 
     // ── Horário de postagem (permitido para orçamentos aprovados) ──
     if (body.action === "postagem") {

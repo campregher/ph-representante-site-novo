@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Phone, Mail, CreditCard, Truck, MessageSquare, Build
 import OrcamentoActions from "./OrcamentoActions";
 import PrintButton from "./PrintButton";
 import PostagemField from "./PostagemField";
+import PortalOrderTools from "./PortalOrderTools";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   rascunho:     { label: "Rascunho",              color: "text-gray-400   bg-gray-400/10   border-gray-400/20"   },
@@ -432,13 +433,26 @@ export default async function OrcamentoDetailPage({ params }: { params: Promise<
           </div>
         )}
 
-        {/* Recusa */}
-        {orcamento.status === "recusado" && orcamento.observacao_admin && (
-          <div className="print:hidden bg-red-400/5 border border-red-400/20 rounded-2xl p-5">
-            <p className="text-xs font-semibold text-red-400 mb-1">Motivo da recusa</p>
+        {/* Mensagem/recusa da marca — visível em qualquer status */}
+        {orcamento.observacao_admin && (
+          <div className={`print:hidden border rounded-2xl p-5 ${
+            orcamento.status === "recusado"
+              ? "bg-red-400/5 border-red-400/20"
+              : "bg-orange-400/5 border-orange-400/20"
+          }`}>
+            <p className={`text-xs font-semibold mb-1 ${orcamento.status === "recusado" ? "text-red-400" : "text-orange-400"}`}>
+              {orcamento.status === "recusado" ? "Motivo da recusa" : "Mensagem da marca"}
+            </p>
             <p className="text-sm text-gray-300">{orcamento.observacao_admin}</p>
           </div>
         )}
+
+        {/* Ações do pedido (imprimir + observação) */}
+        <PortalOrderTools
+          orcamentoId={id}
+          printApiPath={`/api/portal/imprimir?ids=${id}`}
+          observacoesAtuais={(orcamento as { observacoes?: string | null }).observacoes ?? null}
+        />
 
         {canEdit && (
           <div className="print:hidden">

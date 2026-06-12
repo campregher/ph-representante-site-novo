@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Printer, Loader2, Package, MapPin, Mail, Phone, CreditCard,
   Download, Clock, CheckCircle, XCircle, Truck, BadgeCheck, AlertTriangle,
+  Bell, MessageSquare, Send,
 } from "lucide-react";
 
 interface Item { id: string; produto_sku: string; produto_nome: string; quantidade: number; valor_unitario: number; valor_total: number }
@@ -44,6 +45,9 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   const [motivo,          setMotivo]          = useState("");
   const [showRecusar,     setShowRecusar]     = useState(false);
   const [downloaded,      setDownloaded]      = useState<Set<string>>(new Set());
+  const [showAlerta,      setShowAlerta]      = useState(false);
+  const [mensagemAlerta,  setMensagemAlerta]  = useState("");
+  const [enviandoAlerta,  setEnviandoAlerta]  = useState(false);
   const confirmedRef = useRef(false);
 
   async function load() {
@@ -82,6 +86,32 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
       await load();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setActing(false); }
+  }
+
+  const QUICK_MSGS = [
+    "Seu pedido não será enviado hoje. Em breve enviaremos uma atualização.",
+    "Produto com estoque reduzido — pode haver ajuste na quantidade.",
+    "Aguardando confirmação de pagamento para liberar o envio.",
+    "Pedido em separação — previsão de envio em 1 dia útil.",
+  ];
+
+  async function enviarAlerta() {
+    if (!mensagemAlerta.trim()) return;
+    setEnviandoAlerta(true);
+    try {
+      const res = await fetch(`/api/marca/pedidos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "alertar_cliente", mensagem: mensagemAlerta.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success("Alerta enviado ao cliente!");
+      setMensagemAlerta("");
+      setShowAlerta(false);
+      await load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setEnviandoAlerta(false); }
   }
 
   if (loading) return (
@@ -414,12 +444,96 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
             )}
             {pedido.observacao_admin && (
               <div className="bg-dark-900/60 rounded-xl px-3 py-2">
-                <p className="text-[10px] text-gray-500 mb-0.5">Motivo da recusa</p>
+                <p className="text-[10px] text-gray-500 mb-0.5">
+                  {pedido.status === "recusado" ? "Motivo da recusa" : "Mensagem enviada ao cliente"}
+                </p>
                 <p className="text-xs text-gray-300 italic">{pedido.observacao_admin}</p>
               </div>
             )}
           </div>
         )}
+        {/* ── Ferramentas ── */}
+        {pedido.status !== "recusado" && (
+          <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
+              <Bell size={13} className="text-gray-500" />
+              <h2 className="text-sm font-bold text-white">Ferramentas</h2>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Imprimir */}
+              <button
+                onClick={() => window.open(`/api/marca/imprimir?ids=${pedido.id}`, "_blank")}
+                className="flex items-center gap-2 px-4 py-2.5 bg-dark-700 hover:bg-dark-600 border border-white/10 hover:border-white/20 text-gray-300 hover:text-white text-sm font-semibold rounded-xl transition-all"
+              >
+                <Printer size={13} /> Imprimir pedido
+              </button>
+
+              {/* Alertar cliente */}
+              <div className="border-t border-white/6 pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-white">Alertar cliente</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Envia email, WhatsApp e notificação in-app</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowAlerta(!showAlerta); setMensagemAlerta(""); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all ${
+                      showAlerta
+                        ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
+                        : "bg-dark-700 border-white/10 text-gray-400 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    <MessageSquare size={11} />
+                    {showAlerta ? "Cancelar" : "Nova mensagem"}
+                  </button>
+                </div>
+
+                {showAlerta && (
+                  <div className="space-y-3">
+                    {/* Atalhos rápidos */}
+                    <div className="flex flex-wrap gap-2">
+                      {QUICK_MSGS.map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setMensagemAlerta(m)}
+                          className={`px-2.5 py-1 text-[11px] rounded-lg border transition-all ${
+                            mensagemAlerta === m
+                              ? "bg-orange-500/20 border-orange-500/40 text-orange-400"
+                              : "bg-dark-700 border-white/8 text-gray-500 hover:text-gray-300 hover:border-white/15"
+                          }`}
+                        >
+                          {m.length > 42 ? `${m.slice(0, 42)}…` : m}
+                        </button>
+                      ))}
+                    </div>
+
+                    <textarea
+                      value={mensagemAlerta}
+                      onChange={(e) => setMensagemAlerta(e.target.value)}
+                      placeholder="Escreva a mensagem para o cliente…"
+                      rows={3}
+                      className="w-full px-3 py-2.5 bg-dark-900 border border-white/10 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:border-orange-500/50 resize-none"
+                    />
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={enviarAlerta}
+                        disabled={enviandoAlerta || !mensagemAlerta.trim()}
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-40"
+                      >
+                        {enviandoAlerta ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                        Enviar alerta
+                      </button>
+                      <p className="text-[11px] text-gray-600">{mensagemAlerta.length}/500 caracteres</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
     </div>

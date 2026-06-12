@@ -64,6 +64,8 @@ export async function POST(request: Request) {
             col(r, "imagem1", "imagem 1", "image1"),
             col(r, "imagem2", "imagem 2", "image2"),
             col(r, "imagem3", "imagem 3", "image3"),
+            col(r, "imagem4", "imagem 4", "image4"),
+            col(r, "imagem5", "imagem 5", "image5"),
           ].filter(Boolean),
           active: col(r, "ativo", "active").toUpperCase() !== "FALSE",
         };

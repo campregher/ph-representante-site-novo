@@ -11,7 +11,7 @@ export async function GET() {
   const db = await createAdminClient();
   const { data, error } = await db
     .from("marcas")
-    .select("slug, name, razao_social, cnpj, email, telefone, contato, cep, logradouro, numero, complemento, bairro, cidade, estado, logo_url, segment")
+    .select("slug, name, razao_social, cnpj, email, telefone, contato, cep, logradouro, numero, complemento, bairro, cidade, estado, logo_url, segment, ml_user_id, ml_token_expires_at, ml_nickname")
     .eq("slug", ctx.marcaSlug)
     .single();
 

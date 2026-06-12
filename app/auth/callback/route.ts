@@ -13,17 +13,15 @@ export async function GET(request: NextRequest) {
     ? `${origin}/marca/login?error=link_expired`
     : `${origin}/portal/login?error=link_expired`;
 
-  // Debug: mostra todos os params recebidos
   if (!tokenHash || !type) {
-    const allParams = searchParams.toString();
-    return NextResponse.redirect(`${errorUrl}&debug=missing_params&params=${encodeURIComponent(allParams)}`);
+    return NextResponse.redirect(errorUrl);
   }
 
   const response = NextResponse.redirect(`${origin}${next}`);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
@@ -38,8 +36,7 @@ export async function GET(request: NextRequest) {
 
   const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
   if (error) {
-    const debug = `${errorUrl}&msg=${encodeURIComponent(error.message)}&th=${tokenHash.slice(0,8)}&t=${type}`;
-    return NextResponse.redirect(debug);
+    return NextResponse.redirect(errorUrl);
   }
 
   return response;

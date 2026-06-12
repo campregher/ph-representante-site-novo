@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, ShoppingBag, BarChart3, User, LogOut, Building2, CalendarDays, Store, HeadphonesIcon } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, BarChart3, User, LogOut, Building2, CalendarDays, Store, HeadphonesIcon, Tag } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import SinoNotificacoes from "@/components/shared/SinoNotificacoes";
@@ -13,8 +13,9 @@ const links = [
   { href: "/portal/marcas",     label: "Marcas",            icon: Store           },
   { href: "/portal/orcamentos", label: "Pedidos",           icon: ShoppingBag     },
   { href: "/portal/cobrancas",  label: "Faturamento",       icon: CalendarDays    },
-  { href: "/portal/valores",    label: "Valores por Marca", icon: BarChart3       },
-  { href: "/portal/perfil",     label: "Perfil",            icon: User            },
+  { href: "/portal/valores",       label: "Valores por Marca", icon: BarChart3  },
+  { href: "/portal/mercadolivre", label: "Mercado Livre",     icon: Tag         },
+  { href: "/portal/perfil",       label: "Perfil",            icon: User        },
 ];
 
 export default function ClienteMenuLateral() {

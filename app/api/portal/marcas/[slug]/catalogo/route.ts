@@ -48,7 +48,8 @@ export async function GET(
       }
     }
 
-    const produtos = await getProducts({ brand: slug, activeOnly: true });
+    const aprovado = acesso?.status === "aprovado" && !acesso.bloqueado;
+    const produtos = aprovado ? await getProducts({ brand: slug, activeOnly: true }) : [];
 
     return NextResponse.json({ marca, acesso, produtos });
   } catch (e) {

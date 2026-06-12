@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 export const runtime = "nodejs";
 
 function verifyToken(id: string, action: string, brandSlug: string, exp: string, sig: string): boolean {
   const secret = process.env.EMAIL_ACTION_SECRET;
-  if (!secret) return false;
+  if (!secret || !sig) return false;
   const expected = createHmac("sha256", secret)
     .update(`${id}:${action}:${brandSlug}:${exp}`)
     .digest("hex");
-  return expected === sig;
+
+  try {
+    return timingSafeEqual(Buffer.from(expected, "utf8"), Buffer.from(sig, "utf8"));
+  } catch {
+    return false;
+  }
 }
 
 function htmlPage(ok: boolean, message: string, portalUrl?: string) {

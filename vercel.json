@@ -4,5 +4,16 @@
       "path": "/api/cron/cobranca-semanal",
       "schedule": "0 12 * * 5"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/catalogo/pdf/route.ts":              { "maxDuration": 30 },
+    "app/api/admin/imprimir/route.ts":            { "maxDuration": 30 },
+    "app/api/marca/imprimir/route.ts":            { "maxDuration": 30 },
+    "app/api/portal/imprimir/route.ts":           { "maxDuration": 30 },
+    "app/api/portal/ml/publicar/route.ts":        { "maxDuration": 30 },
+    "app/api/marca/produtos/[id]/ml-publish/route.ts": { "maxDuration": 30 },
+    "app/api/marca/produtos/import/route.ts":     { "maxDuration": 60 },
+    "app/api/portal/ml/callback/route.ts":        { "maxDuration": 15 },
+    "app/api/webhooks/ml/route.ts":               { "maxDuration": 30 }
+  }
 }

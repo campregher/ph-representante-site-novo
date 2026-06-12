@@ -157,6 +157,8 @@ export default function ImportPage() {
                   ["Imagem1", "Não", "URL da imagem principal"],
                   ["Imagem2", "Não", "URL da segunda imagem"],
                   ["Imagem3", "Não", "URL da terceira imagem"],
+                  ["Imagem4", "Não", "URL da quarta imagem"],
+                  ["Imagem5", "Não", "URL da quinta imagem"],
                   ["Ativo", "Não", "TRUE ou FALSE (padrão: TRUE)"],
                 ].map(([col, req, obs]) => (
                   <tr key={col} className="hover:bg-white/3">

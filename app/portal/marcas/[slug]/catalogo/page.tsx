@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Search, Package, Loader2, Building2,
   CheckCircle, Clock, XCircle, ShieldAlert, RefreshCw, X, ChevronLeft, ChevronRight,
+  ShoppingBag, CheckCircle2, ExternalLink,
 } from "lucide-react";
 
 interface Marca {
@@ -16,7 +17,8 @@ interface Acesso {
   status: string; bloqueado: boolean;
 }
 interface Product {
-  id: string; sku: string; name: string; description: string; price?: number; images: string[];
+  id: string; sku: string; name: string; description: string;
+  price?: number; resale_price?: number; images: string[];
 }
 
 function fmt(v: number) {
@@ -36,12 +38,48 @@ function StatusBadge({ acesso }: { acesso: Acesso | null }) {
   return null;
 }
 
-function ProductModal({ product, onClose }: { product: Product; onClose: () => void }) {
-  const [imgIndex, setImgIndex] = useState(0);
+function ProductModal({
+  product, onClose, mlConnected, publishedItemId, onPublished,
+}: {
+  product:        Product;
+  onClose:        () => void;
+  mlConnected:    boolean;
+  publishedItemId?: string;
+  onPublished:    (productId: string, mlItemId: string) => void;
+}) {
+  const [imgIndex,     setImgIndex]     = useState(0);
+  const [publishing,   setPublishing]   = useState(false);
+  const [priceInput,   setPriceInput]   = useState(
+    product.resale_price ? String(product.resale_price) : ""
+  );
+  const [showPriceForm,setShowPriceForm]= useState(false);
+
   const imgs = product.images.filter(Boolean);
 
   function prev() { setImgIndex(i => (i - 1 + imgs.length) % imgs.length); }
   function next() { setImgIndex(i => (i + 1) % imgs.length); }
+
+  async function handlePublish() {
+    const preco = Number(priceInput.replace(",", "."));
+    if (!preco || preco <= 0) { toast.error("Informe um preço válido"); return; }
+    setPublishing(true);
+    try {
+      const res  = await fetch("/api/portal/ml/publicar", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ produto_id: product.id, preco_revenda: preco }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro ao publicar");
+      toast.success("Produto publicado no Mercado Livre!");
+      onPublished(product.id, data.ml_item_id);
+      setShowPriceForm(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao publicar");
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   return (
     <div
@@ -119,7 +157,12 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
 
           {/* Info */}
           <div className="px-5 py-5 space-y-4">
-            {product.price != null ? (
+            {product.resale_price != null ? (
+              <div>
+                <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Preço de revenda</p>
+                <p className="text-2xl font-black text-white">{fmt(product.resale_price)}</p>
+              </div>
+            ) : product.price != null ? (
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Preço</p>
                 <p className="text-2xl font-black text-white">{fmt(product.price)}</p>
@@ -139,6 +182,69 @@ function ProductModal({ product, onClose }: { product: Product; onClose: () => v
               <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">SKU</p>
               <p className="text-sm font-mono text-gray-400">{product.sku}</p>
             </div>
+
+            {/* ── Publicar no ML ── */}
+            {mlConnected && (
+              <div className="pt-2 border-t border-white/6">
+                {publishedItemId ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={13} className="text-green-400" />
+                      <span className="text-xs text-green-400 font-semibold">Publicado no Mercado Livre</span>
+                    </div>
+                    <a
+                      href={`https://www.mercadolivre.com.br/anuncio/${publishedItemId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
+                    >
+                      Ver anúncio <ExternalLink size={10} />
+                    </a>
+                  </div>
+                ) : showPriceForm ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-400">Defina seu preço de venda no ML</p>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={priceInput}
+                          onChange={e => setPriceInput(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && handlePublish()}
+                          placeholder="0,00"
+                          className="w-full pl-10 pr-3 py-2 bg-dark-700 border border-white/10 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:border-yellow-400/40"
+                          autoFocus
+                        />
+                      </div>
+                      <button
+                        onClick={handlePublish}
+                        disabled={publishing}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold text-sm rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+                      >
+                        {publishing ? <Loader2 size={13} className="animate-spin" /> : <ShoppingBag size={13} />}
+                        {publishing ? "Publicando..." : "Publicar"}
+                      </button>
+                      <button
+                        onClick={() => setShowPriceForm(false)}
+                        className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/8 transition-all"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowPriceForm(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 border border-yellow-400/30 hover:bg-yellow-400/10 text-yellow-400 text-sm font-semibold rounded-xl transition-all"
+                  >
+                    <ShoppingBag size={13} /> Publicar no Mercado Livre
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -159,6 +265,11 @@ export default function CatalogoMarcaPage() {
   const [solicitando, setSolicitando] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
 
+  /* ML dropshipping */
+  const [mlConnected,   setMlConnected]   = useState(false);
+  /* produto_id → ml_item_id */
+  const [publishedMap,  setPublishedMap]  = useState<Record<string, string>>({});
+
   async function load() {
     setLoading(true);
     try {
@@ -175,7 +286,20 @@ export default function CatalogoMarcaPage() {
     }
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+    /* carrega status ML em paralelo */
+    fetch("/api/portal/ml/status")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        setMlConnected(d.connected);
+        const map: Record<string, string> = {};
+        for (const a of (d.anuncios ?? [])) map[a.produto_id] = a.ml_item_id;
+        setPublishedMap(map);
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function solicitarAcesso() {
     setSolicitando(true);
@@ -278,6 +402,30 @@ export default function CatalogoMarcaPage() {
           <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center text-gray-500 text-sm flex items-center justify-center gap-2">
             <Loader2 size={16} className="animate-spin" /> Carregando catálogo...
           </div>
+        ) : acesso?.bloqueado ? (
+          <div className="bg-dark-800 border border-orange-400/20 rounded-2xl p-12 text-center space-y-2">
+            <ShieldAlert size={28} className="text-orange-400 mx-auto" />
+            <p className="text-white font-bold text-sm">Acesso bloqueado</p>
+            <p className="text-gray-500 text-xs">Entre em contato com a marca para regularizar sua situação.</p>
+          </div>
+        ) : acesso?.status === "recusado" ? (
+          <div className="bg-dark-800 border border-red-400/15 rounded-2xl p-12 text-center space-y-2">
+            <XCircle size={28} className="text-red-400 mx-auto" />
+            <p className="text-white font-bold text-sm">Acesso recusado</p>
+            <p className="text-gray-500 text-xs">Sua solicitação foi recusada por esta marca.</p>
+          </div>
+        ) : acesso?.status === "pendente" ? (
+          <div className="bg-dark-800 border border-yellow-400/15 rounded-2xl p-12 text-center space-y-2">
+            <Clock size={28} className="text-yellow-400 mx-auto" />
+            <p className="text-white font-bold text-sm">Aguardando aprovação</p>
+            <p className="text-gray-500 text-xs">Sua solicitação está em análise. Os produtos ficarão disponíveis após a aprovação.</p>
+          </div>
+        ) : !acesso ? (
+          <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center space-y-3">
+            <Package size={28} className="text-gray-700 mx-auto" />
+            <p className="text-white font-bold text-sm">Solicite acesso para ver o catálogo</p>
+            <p className="text-gray-500 text-xs">Clique em "Solicitar acesso" para enviar uma solicitação à marca.</p>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="bg-dark-800 border border-white/8 rounded-2xl p-12 text-center">
             <Package size={28} className="text-gray-700 mx-auto mb-2" />
@@ -314,8 +462,8 @@ export default function CatalogoMarcaPage() {
                       <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{p.description}</p>
                     )}
                     <div className="mt-auto pt-2">
-                      {p.price != null ? (
-                        <p className="text-sm font-black text-white">{fmt(p.price)}</p>
+                      {(p.resale_price ?? p.price) != null ? (
+                        <p className="text-sm font-black text-white">{fmt(p.resale_price ?? p.price!)}</p>
                       ) : (
                         <p className="text-xs text-gray-600">Sob consulta</p>
                       )}
@@ -329,7 +477,17 @@ export default function CatalogoMarcaPage() {
       </div>
 
       {/* Product detail modal */}
-      {selected && <ProductModal product={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <ProductModal
+          product={selected}
+          onClose={() => setSelected(null)}
+          mlConnected={mlConnected}
+          publishedItemId={publishedMap[selected.id]}
+          onPublished={(prodId, mlItemId) =>
+            setPublishedMap(prev => ({ ...prev, [prodId]: mlItemId }))
+          }
+        />
+      )}
     </div>
   );
 }

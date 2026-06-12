@@ -58,6 +58,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  icons: {
+    icon: "/images/ph.png",
+    shortcut: "/images/ph.png",
+  },
   alternates: {
     canonical: siteUrl,
   },

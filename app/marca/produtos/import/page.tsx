@@ -13,14 +13,16 @@ const COLUMNS = [
   { col: "Imagem1",   req: "Não", obs: "URL da imagem principal" },
   { col: "Imagem2",   req: "Não", obs: "URL da segunda imagem" },
   { col: "Imagem3",   req: "Não", obs: "URL da terceira imagem" },
+  { col: "Imagem4",   req: "Não", obs: "URL da quarta imagem" },
+  { col: "Imagem5",   req: "Não", obs: "URL da quinta imagem" },
   { col: "Ativo",     req: "Não", obs: "TRUE ou FALSE (padrão: TRUE)" },
 ];
 
 function downloadTemplate() {
-  const headers = ["SKU", "Nome", "Descricao", "Preco", "Imagem1", "Imagem2", "Imagem3", "Ativo"];
+  const headers = ["SKU", "Nome", "Descricao", "Preco", "Imagem1", "Imagem2", "Imagem3", "Imagem4", "Imagem5", "Ativo"];
   const examples = [
-    ["001", "Produto Exemplo A", "Descrição do produto A", "29.90", "https://...", "", "", "TRUE"],
-    ["002", "Produto Exemplo B", "",                        "59.00", "",           "", "", "TRUE"],
+    ["001", "Produto Exemplo A", "Descrição do produto A", "29.90", "https://...", "", "", "", "", "TRUE"],
+    ["002", "Produto Exemplo B", "",                        "59.00", "",           "", "", "", "", "TRUE"],
   ];
 
   const wb = XLSX.utils.book_new();
@@ -33,6 +35,8 @@ function downloadTemplate() {
     { wch: 40 }, // Imagem1
     { wch: 40 }, // Imagem2
     { wch: 40 }, // Imagem3
+    { wch: 40 }, // Imagem4
+    { wch: 40 }, // Imagem5
     { wch: 8  }, // Ativo
   ];
   XLSX.utils.book_append_sheet(wb, ws, "Produtos");

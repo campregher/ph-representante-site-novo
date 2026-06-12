@@ -6,25 +6,54 @@ export interface Product {
   name: string;
   brand: string;
   description: string;
-  price?: number;
+  price?: number;         // preço de custo
+  resale_price?: number;  // preço de revenda
   images: string[];
   active: boolean;
   createdAt: string;
+  ml_category_id?: string;
+  ml_category_name?: string;
+  ml_category_path?: string[];
+  attributes?: Record<string, string>;
+  compatibilidades?: Compatibilidade[];
+  ml_item_id?: string;
+  ml_status?: string;
+  ml_error?: unknown;
+  ml_published_at?: string;
+}
+
+export interface Compatibilidade {
+  marcaCodigo: string;
+  marcaNome: string;
+  modeloCodigo: string;
+  modeloNome: string;
+  anoCodigo: string;
+  anoNome: string;
 }
 
 type DbRow = Record<string, unknown>;
 
 function rowToProduct(row: DbRow): Product {
   return {
-    id:          row.id as string,
-    sku:         row.sku as string,
-    name:        row.name as string,
-    brand:       row.brand as string,
-    description: (row.description as string) ?? "",
-    price:       row.price != null ? Number(row.price) : undefined,
-    images:      (row.images as string[]) ?? [],
-    active:      row.active as boolean,
-    createdAt:   row.created_at as string,
+    id:                 row.id as string,
+    sku:                row.sku as string,
+    name:               row.name as string,
+    brand:              row.brand as string,
+    description:        (row.description as string) ?? "",
+    price:              row.price        != null ? Number(row.price)        : undefined,
+    resale_price:       row.resale_price != null ? Number(row.resale_price) : undefined,
+    images:             (row.images as string[]) ?? [],
+    active:             row.active as boolean,
+    createdAt:          row.created_at as string,
+    ml_category_id:     (row.ml_category_id as string) ?? undefined,
+    ml_category_name:   (row.ml_category_name as string) ?? undefined,
+    ml_category_path:   (row.ml_category_path as string[]) ?? undefined,
+    attributes:         (row.attributes as Record<string, string>) ?? {},
+    compatibilidades:   (row.compatibilidades as Compatibilidade[]) ?? [],
+    ml_item_id:         (row.ml_item_id as string)    ?? undefined,
+    ml_status:          (row.ml_status as string)     ?? undefined,
+    ml_error:           row.ml_error                  ?? undefined,
+    ml_published_at:    (row.ml_published_at as string) ?? undefined,
   };
 }
 
@@ -32,13 +61,15 @@ export async function getProducts(filters?: {
   brand?: string;
   q?: string;
   activeOnly?: boolean;
+  ml_category_id?: string;
 }): Promise<Product[]> {
   const db = await createAdminClient();
 
   let query = db.from("produtos").select("*").order("name", { ascending: true });
 
-  if (filters?.brand)      query = query.eq("brand", filters.brand);
-  if (filters?.activeOnly) query = query.eq("active", true);
+  if (filters?.brand)           query = query.eq("brand", filters.brand);
+  if (filters?.activeOnly)      query = query.eq("active", true);
+  if (filters?.ml_category_id)  query = query.eq("ml_category_id", filters.ml_category_id);
   if (filters?.q) {
     const q = filters.q.replace(/[%_]/g, "\\$&");
     query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
@@ -63,13 +94,19 @@ export async function createProduct(
   const { data: row, error } = await db
     .from("produtos")
     .insert({
-      sku:         data.sku.trim(),
-      name:        data.name.trim(),
-      brand:       data.brand,
-      description: data.description?.trim() ?? "",
-      price:       data.price != null ? Number(data.price) : null,
-      images:      data.images ?? [],
-      active:      data.active !== false,
+      sku:               data.sku.trim(),
+      name:              data.name.trim(),
+      brand:             data.brand,
+      description:       data.description?.trim() ?? "",
+      price:             data.price        != null ? Number(data.price)        : null,
+      resale_price:      data.resale_price  != null ? Number(data.resale_price) : null,
+      images:            data.images ?? [],
+      active:            data.active !== false,
+      ml_category_id:    data.ml_category_id ?? null,
+      ml_category_name:  data.ml_category_name ?? null,
+      ml_category_path:  data.ml_category_path ?? null,
+      attributes:        data.attributes ?? {},
+      compatibilidades:  data.compatibilidades ?? [],
     })
     .select()
     .single();
@@ -89,9 +126,15 @@ export async function updateProduct(
   if (data.name        !== undefined) patch.name        = data.name.trim();
   if (data.brand       !== undefined) patch.brand       = data.brand;
   if (data.description !== undefined) patch.description = data.description.trim();
-  if (data.price       !== undefined) patch.price       = data.price != null ? Number(data.price) : null;
-  if (data.images      !== undefined) patch.images      = data.images;
-  if (data.active      !== undefined) patch.active      = data.active;
+  if (data.price        !== undefined) patch.price        = data.price        != null ? Number(data.price)        : null;
+  if (data.resale_price !== undefined) patch.resale_price = data.resale_price != null ? Number(data.resale_price) : null;
+  if (data.images            !== undefined) patch.images            = data.images;
+  if (data.active            !== undefined) patch.active            = data.active;
+  if (data.ml_category_id   !== undefined) patch.ml_category_id   = data.ml_category_id;
+  if (data.ml_category_name !== undefined) patch.ml_category_name = data.ml_category_name;
+  if (data.ml_category_path !== undefined) patch.ml_category_path = data.ml_category_path;
+  if (data.attributes        !== undefined) patch.attributes        = data.attributes;
+  if (data.compatibilidades  !== undefined) patch.compatibilidades  = data.compatibilidades;
 
   const { data: row, error } = await db
     .from("produtos")
@@ -117,13 +160,19 @@ export async function importProducts(
   const db = await createAdminClient();
   const { error } = await db.from("produtos").insert(
     rows.map(r => ({
-      sku:         r.sku.trim(),
-      name:        r.name.trim(),
-      brand:       r.brand,
-      description: r.description?.trim() ?? "",
-      price:       r.price != null ? Number(r.price) : null,
-      images:      r.images ?? [],
-      active:      r.active !== false,
+      sku:              r.sku.trim(),
+      name:             r.name.trim(),
+      brand:            r.brand,
+      description:      r.description?.trim() ?? "",
+      price:            r.price        != null ? Number(r.price)        : null,
+      resale_price:     r.resale_price != null ? Number(r.resale_price) : null,
+      images:           r.images ?? [],
+      active:           r.active !== false,
+      ml_category_id:   r.ml_category_id   ?? null,
+      ml_category_name: r.ml_category_name ?? null,
+      ml_category_path: r.ml_category_path ?? null,
+      attributes:       r.attributes       ?? {},
+      compatibilidades: r.compatibilidades  ?? [],
     }))
   );
   if (error) throw new Error(error.message);

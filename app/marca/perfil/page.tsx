@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Save, Search, Building2, Upload, Lock, Mail, Eye, EyeOff,
-  CheckCircle, ImageIcon,
+  CheckCircle, ImageIcon, ShoppingBag, LinkIcon, Unlink, RefreshCw, User,
 } from "lucide-react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
@@ -16,6 +16,7 @@ interface PerfilData {
   numero: string | null; complemento: string | null; bairro: string | null;
   cidade: string | null; estado: string | null; logo_url: string | null;
   segment: string | null;
+  ml_user_id: string | null; ml_token_expires_at: string | null; ml_nickname: string | null;
 }
 
 type FormData = {
@@ -52,6 +53,11 @@ export default function MarcaPerfilPage() {
   const [logoUrl,     setLogoUrl]     = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [authEmail,   setAuthEmail]   = useState("");
+  const [mlUserId,    setMlUserId]    = useState<string | null>(null);
+  const [mlExpiresAt, setMlExpiresAt] = useState<string | null>(null);
+  const [mlNickname,  setMlNickname]  = useState<string | null>(null);
+  const [mlSyncing,   setMlSyncing]   = useState(false);
+  const [mlDisconnecting, setMlDisconnecting] = useState(false);
 
   // Segurança
   const [emailNovo,       setEmailNovo]       = useState("");
@@ -72,6 +78,47 @@ export default function MarcaPerfilPage() {
     bairro: "", cidade: "", estado: "",
   });
 
+  async function handleMlDisconnect() {
+    setMlDisconnecting(true);
+    try {
+      const res = await fetch("/api/ml/auth", { method: "DELETE" });
+      if (!res.ok) throw new Error("Erro ao desconectar");
+      setMlUserId(null);
+      setMlExpiresAt(null);
+      setMlNickname(null);
+      toast.success("Conta do Mercado Livre desconectada.");
+    } catch { toast.error("Erro ao desconectar do Mercado Livre"); }
+    finally { setMlDisconnecting(false); }
+  }
+
+  const [mlConnecting, setMlConnecting] = useState(false);
+
+  function handleMlConnect() {
+    const marcaSlug   = slug || (document.cookie.match(/marca_slug=([^;]+)/)?.[1] ?? "");
+    const redirectUri = window.location.origin + "/api/ml/callback";
+    setMlConnecting(true);
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id:     "3882432669886480",
+      redirect_uri:  redirectUri,
+      state:         marcaSlug,
+    });
+    window.location.href = `https://auth.mercadolivre.com.br/authorization?${params}`;
+  }
+
+  async function handleMlSync() {
+    setMlSyncing(true);
+    try {
+      const res  = await fetch("/api/ml/me");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMlNickname(data.nickname ?? data.name ?? null);
+      toast.success("Dados do ML atualizados!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao sincronizar");
+    } finally { setMlSyncing(false); }
+  }
+
   const cnpjRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cepRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
@@ -85,6 +132,15 @@ export default function MarcaPerfilPage() {
       if (!res.ok) throw new Error((data as unknown as { error: string }).error);
       setSlug(data.slug);
       setLogoUrl(data.logo_url);
+      setMlUserId(data.ml_user_id ?? null);
+      setMlExpiresAt(data.ml_token_expires_at ?? null);
+      setMlNickname(data.ml_nickname ?? null);
+      /* auto-sync nickname se conta conectada mas nickname vazio */
+      if (data.ml_user_id && !data.ml_nickname) {
+        fetch("/api/ml/me").then(r => r.json()).then(d => {
+          if (d.nickname || d.name) setMlNickname(d.nickname ?? d.name ?? null);
+        }).catch(() => {});
+      }
       setForm({
         name:        data.name         ?? "",
         razao_social:data.razao_social  ?? "",
@@ -497,6 +553,77 @@ export default function MarcaPerfilPage() {
                 {senhaSaving ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
                 {senhaSaving ? "Alterando..." : "Alterar senha"}
               </button>
+            </div>
+          </div>
+
+          {/* ── Mercado Livre ── */}
+          <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 flex items-center gap-3 border-b border-white/5">
+              <ShoppingBag size={14} className="text-yellow-400" />
+              <p className="text-xs font-bold text-white">Integração Mercado Livre</p>
+            </div>
+            <div className="px-5 py-4">
+              {mlUserId ? (
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <User size={14} className="text-yellow-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
+                        <p className="text-sm font-semibold text-white">
+                          {mlNickname ?? "Conta conectada"}
+                        </p>
+                        <button
+                          onClick={handleMlSync}
+                          disabled={mlSyncing}
+                          title="Atualizar dados da conta"
+                          className="text-gray-500 hover:text-gray-300 disabled:opacity-50 transition-colors"
+                        >
+                          <RefreshCw size={11} className={mlSyncing ? "animate-spin" : ""} />
+                        </button>
+                      </div>
+                      {mlNickname && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          ID: <span className="font-mono text-gray-400">{mlUserId}</span>
+                        </p>
+                      )}
+                      {mlExpiresAt && (
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Token expira em: {new Date(mlExpiresAt).toLocaleString("pt-BR")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleMlDisconnect}
+                    disabled={mlDisconnecting}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 border border-white/10 hover:border-red-400/30 hover:text-red-400 text-gray-400 text-xs font-semibold rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+                  >
+                    {mlDisconnecting ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
+                    Desconectar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-gray-600 inline-block" />
+                      <p className="text-sm font-semibold text-gray-300">Não conectado</p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">Conecte sua conta para publicar anúncios no ML</p>
+                  </div>
+                  <button
+                    onClick={handleMlConnect}
+                    disabled={mlConnecting}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold rounded-xl transition-all disabled:opacity-60"
+                  >
+                    {mlConnecting ? <Loader2 size={12} className="animate-spin" /> : <LinkIcon size={12} />}
+                    {mlConnecting ? "Redirecionando..." : "Conectar ao ML"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

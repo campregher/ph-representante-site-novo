@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, ShoppingBag, CalendarDays, User } from "lucide-react";
+import { LayoutDashboard, Store, ShoppingBag, Tag, User } from "lucide-react";
 
 const links = [
-  { href: "/portal/dashboard",  label: "Início",     icon: LayoutDashboard },
-  { href: "/portal/marcas",     label: "Marcas",     icon: Store           },
-  { href: "/portal/orcamentos", label: "Pedidos",    icon: ShoppingBag     },
-  { href: "/portal/cobrancas",  label: "Faturas",    icon: CalendarDays    },
-  { href: "/portal/perfil",     label: "Perfil",     icon: User            },
+  { href: "/portal/dashboard",     label: "Início",  icon: LayoutDashboard },
+  { href: "/portal/marcas",        label: "Marcas",  icon: Store           },
+  { href: "/portal/orcamentos",    label: "Pedidos", icon: ShoppingBag     },
+  { href: "/portal/mercadolivre",  label: "ML",      icon: Tag             },
+  { href: "/portal/perfil",        label: "Perfil",  icon: User            },
 ];
 
 export default function ClienteBottomNav() {

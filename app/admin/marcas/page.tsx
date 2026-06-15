@@ -83,12 +83,22 @@ export default function AdminMarcasPage() {
         fetch("/api/admin/marcas"),
         fetch("/api/admin/marca-users"),
       ]);
-      const [mData, uData] = await Promise.all([mRes.json(), uRes.json()]);
-      if (!mRes.ok) throw new Error(mData.error);
+
+      // Parseia marcas — erro aqui é crítico
+      const mData = await mRes.json().catch(() => null);
+      if (!mRes.ok) {
+        throw new Error(mData?.error ?? `Erro ${mRes.status} ao carregar marcas`);
+      }
       setMarcas(Array.isArray(mData) ? mData : []);
+
+      // Parseia usuários — falha aqui não bloqueia a listagem de marcas
+      const uData = await uRes.json().catch(() => []);
       setMarcaUsers(Array.isArray(uData) ? uData : []);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro ao carregar marcas"); }
-    finally { setLoading(false); }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao carregar marcas");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);

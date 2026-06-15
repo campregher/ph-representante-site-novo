@@ -26,8 +26,11 @@ export async function exchangePortalCodeForToken(code: string) {
     }),
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error_description ?? "Falha ao trocar code por token");
+    let err: Record<string, string> = {};
+    try { err = await res.json(); } catch { /* noop */ }
+    const msg = err.error_description ?? err.message ?? err.error ?? `HTTP ${res.status}`;
+    console.error("[portal-ml] token exchange failed:", res.status, JSON.stringify(err));
+    throw new Error(msg);
   }
   return res.json() as Promise<MLTokenResponse>;
 }

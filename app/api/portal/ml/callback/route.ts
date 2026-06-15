@@ -59,7 +59,11 @@ export async function GET(request: Request) {
 
     return NextResponse.redirect(new URL("/portal/mercadolivre?connected=1", request.url));
   } catch (e) {
-    console.error("[ml/callback] erro ao trocar token:", e);
-    return NextResponse.redirect(new URL("/portal/mercadolivre?error=token", request.url));
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[ml/callback] erro ao trocar token:", msg);
+    const dest = new URL("/portal/mercadolivre", request.url);
+    dest.searchParams.set("error", "token");
+    dest.searchParams.set("detail", msg.slice(0, 120));
+    return NextResponse.redirect(dest);
   }
 }

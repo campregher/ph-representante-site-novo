@@ -1085,11 +1085,12 @@ export default function MercadoLivrePage() {
   useEffect(() => {
     load();
     if (searchParams.get("connected") === "1") toast.success("Conta do Mercado Livre conectada!");
-    const err = searchParams.get("error");
-    if (err === "auth")    toast.error("Sessão expirada durante a autorização. Tente novamente.");
-    else if (err === "token") toast.error("Erro ao obter token do ML. Verifique as configurações do app.");
+    const err    = searchParams.get("error");
+    const detail = searchParams.get("detail");
+    if (err === "auth")     toast.error("Sessão expirada durante a autorização. Tente novamente.");
+    else if (err === "token") toast.error(`Erro ao obter token do ML${detail ? `: ${detail}` : ""}. Verifique as configurações do app.`);
     else if (err === "no_code") toast.error("ML não retornou código de autorização. Tente novamente.");
-    else if (err)          toast.error("Erro ao conectar conta ML. Tente novamente.");
+    else if (err)           toast.error("Erro ao conectar conta ML. Tente novamente.");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

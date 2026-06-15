@@ -390,19 +390,110 @@ function AnunciosPlataforma({
   );
 }
 
+/* ── Inline product picker (batch mode) ─────────────────────── */
+type PendingLink = { produto_id: string; produto_name: string; preco_revenda: number | null };
+
+function InlineProdutoPicker({
+  value, onChange,
+}: {
+  value: PendingLink | null;
+  onChange: (p: PendingLink | null) => void;
+}) {
+  const [q,       setQ]       = useState(value?.produto_name ?? "");
+  const [results, setResults] = useState<Produto[]>([]);
+  const [open,    setOpen]    = useState(false);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    if (value) return;
+    clearTimeout(timerRef.current);
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res  = await fetch(`/api/portal/produtos/buscar?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        setResults(data.produtos ?? []);
+        setOpen(true);
+      } finally { setLoading(false); }
+    }, 300);
+    return () => clearTimeout(timerRef.current);
+  }, [q, value]);
+
+  if (value) {
+    return (
+      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-brand/10 border border-brand/25 rounded-xl min-w-0 max-w-[220px]">
+        <CheckCircle2 size={10} className="text-brand flex-shrink-0" />
+        <span className="text-[11px] text-brand font-semibold truncate flex-1">{value.produto_name}</span>
+        <button onClick={() => { onChange(null); setQ(""); }} className="text-gray-500 hover:text-white flex-shrink-0">
+          <X size={10} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="relative w-[200px]">
+      <input
+        value={q}
+        onChange={e => { setQ(e.target.value); onChange(null); }}
+        onFocus={() => { if (results.length) setOpen(true); }}
+        placeholder="Buscar produto..."
+        className="w-full px-3 py-1.5 bg-dark-700 border border-white/10 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-brand/40 transition-all"
+      />
+      {loading && <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />}
+      {open && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-dark-800 border border-white/12 rounded-xl overflow-hidden shadow-2xl z-50 max-h-52 overflow-y-auto">
+          {results.slice(0, 8).map(p => (
+            <button
+              key={p.id}
+              onClick={() => { onChange({ produto_id: p.id, produto_name: p.name, preco_revenda: p.resale_price }); setQ(p.name); setOpen(false); }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors text-left"
+            >
+              <div className="w-7 h-7 rounded-lg bg-dark-600 overflow-hidden flex-shrink-0">
+                {p.images?.[0]
+                  ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center"><Package size={10} className="text-gray-600" /></div>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white font-medium truncate">{p.name}</p>
+                <p className="text-[10px] text-gray-500 font-mono">{p.sku}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── ML Listings section ────────────────────────────────────── */
 function MeusAnunciosML({
   onVinculou,
 }: {
   onVinculou: (mlItemId: string, produto: Produto) => void;
 }) {
-  const [anuncios,   setAnuncios]   = useState<MLItem[]>([]);
-  const [loading,    setLoading]    = useState(false);
-  const [loaded,     setLoaded]     = useState(false);
-  const [paging,     setPaging]     = useState<{ total: number; offset: number; limit: number } | null>(null);
-  const [picker,     setPicker]     = useState<string | null>(null); // ml_item_id
-  const [expanded,   setExpanded]   = useState(true);
-  const [filterQ,    setFilterQ]    = useState("");
+  const [anuncios,     setAnuncios]     = useState<MLItem[]>([]);
+  const [loading,      setLoading]      = useState(false);
+  const [loaded,       setLoaded]       = useState(false);
+  const [paging,       setPaging]       = useState<{ total: number; offset: number; limit: number } | null>(null);
+  const [picker,       setPicker]       = useState<string | null>(null);
+  const [expanded,     setExpanded]     = useState(true);
+  const [filterQ,      setFilterQ]      = useState("");
+  const [batchMode,    setBatchMode]    = useState(false);
+  const [pendingLinks, setPendingLinks] = useState<Record<string, PendingLink>>({});
+  const [savingBatch,  setSavingBatch]  = useState(false);
 
   async function fetchAnuncios(offset = 0) {
     setLoading(true);
@@ -410,40 +501,76 @@ function MeusAnunciosML({
       const res  = await fetch(`/api/portal/ml/meus-anuncios?limit=50&offset=${offset}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erro");
-      if (offset === 0) {
-        setAnuncios(data.anuncios ?? []);
-      } else {
-        setAnuncios(prev => [...prev, ...(data.anuncios ?? [])]);
-      }
+      if (offset === 0) setAnuncios(data.anuncios ?? []);
+      else setAnuncios(prev => [...prev, ...(data.anuncios ?? [])]);
       setPaging(data.paging);
       setLoaded(true);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao buscar anúncios");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function handleLink(produto: Produto, mlItemId: string) {
-    const res = await fetch("/api/portal/ml/vincular", {
+    const res  = await fetch("/api/portal/ml/vincular", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ produto_id: produto.id, ml_item_id: mlItemId }),
     });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error ?? "Erro ao vincular"); return; }
-
     toast.success("Anúncio vinculado! Vendas deste anúncio gerarão pedidos automáticos.");
     setAnuncios(prev => prev.map(a =>
-      a.id === mlItemId
-        ? { ...a, vinculado: true, produto_id: produto.id, marca_slug: produto.brand }
-        : a
+      a.id === mlItemId ? { ...a, vinculado: true, produto_id: produto.id, marca_slug: produto.brand } : a
     ));
     setPicker(null);
     onVinculou(mlItemId, produto);
   }
 
-  const filtered = anuncios.filter(a =>
+  async function handleBatchSave() {
+    const items = Object.entries(pendingLinks).map(([ml_item_id, l]) => ({ ml_item_id, produto_id: l.produto_id }));
+    if (!items.length) return;
+    setSavingBatch(true);
+    try {
+      const res  = await fetch("/api/portal/ml/vincular", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro");
+
+      const results: { ok: boolean; ml_item_id: string }[] = data.results ?? [];
+      const ok  = results.filter(r => r.ok);
+      const err = results.filter(r => !r.ok);
+
+      if (ok.length) {
+        toast.success(`${ok.length} anúncio${ok.length !== 1 ? "s" : ""} vinculado${ok.length !== 1 ? "s" : ""}!`);
+        setAnuncios(prev => prev.map(a => {
+          const link = pendingLinks[a.id];
+          if (link && ok.some(r => r.ml_item_id === a.id))
+            return { ...a, vinculado: true, produto_id: link.produto_id, marca_slug: link.produto_id };
+          return a;
+        }));
+        ok.forEach(r => {
+          const link = pendingLinks[r.ml_item_id];
+          if (link) onVinculou(r.ml_item_id, { id: link.produto_id, name: link.produto_name, brand: "", sku: "", resale_price: link.preco_revenda, price: null, images: [], ml_category_name: null });
+        });
+      }
+      if (err.length) toast.error(`${err.length} anúncio${err.length !== 1 ? "s" : ""} não vinculados.`);
+
+      const remaining = { ...pendingLinks };
+      ok.forEach(r => delete remaining[r.ml_item_id]);
+      setPendingLinks(remaining);
+      if (!Object.keys(remaining).length) setBatchMode(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar vínculos");
+    } finally { setSavingBatch(false); }
+  }
+
+  const unlinkedCount = anuncios.filter(a => !a.vinculado).length;
+  const pendingCount  = Object.keys(pendingLinks).length;
+
+  const filtered = (batchMode ? anuncios.filter(a => !a.vinculado) : anuncios).filter(a =>
     !filterQ || a.title.toLowerCase().includes(filterQ.toLowerCase()) || a.id.includes(filterQ)
   );
 
@@ -451,39 +578,66 @@ function MeusAnunciosML({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
         <button
           onClick={() => setExpanded(e => !e)}
           className="flex items-center gap-2 text-sm font-bold text-white"
         >
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           Anúncios no Mercado Livre
-          {loaded && (
-            <span className="text-xs font-normal text-gray-500">
-              ({paging?.total ?? anuncios.length})
-            </span>
+          {loaded && <span className="text-xs font-normal text-gray-500">({paging?.total ?? anuncios.length})</span>}
+        </button>
+        <div className="flex items-center gap-2">
+          {loaded && unlinkedCount > 0 && !batchMode && (
+            <button
+              onClick={() => { setBatchMode(true); setPendingLinks({}); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand/10 hover:bg-brand/20 border border-brand/25 text-brand text-xs font-bold rounded-xl transition-all"
+            >
+              <Link2 size={12} /> Vincular em massa ({unlinkedCount})
+            </button>
           )}
-        </button>
-        <button
-          onClick={() => fetchAnuncios(0)}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-700 hover:bg-dark-600 border border-white/8 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
-        >
-          {loading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-          {loaded ? "Atualizar" : "Carregar do ML"}
-        </button>
+          {batchMode && (
+            <button
+              onClick={() => { setBatchMode(false); setPendingLinks({}); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-700 border border-white/10 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all"
+            >
+              <X size={12} /> Cancelar
+            </button>
+          )}
+          <button
+            onClick={() => fetchAnuncios(0)}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-700 hover:bg-dark-600 border border-white/8 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            {loaded ? "Atualizar" : "Carregar do ML"}
+          </button>
+        </div>
       </div>
+
+      {/* Batch mode banner */}
+      {batchMode && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-brand/8 border border-brand/20 rounded-xl">
+          <Link2 size={13} className="text-brand flex-shrink-0" />
+          <p className="text-xs text-gray-300 flex-1">
+            Selecione o produto correspondente para cada anúncio. Clique em <span className="text-white font-semibold">Salvar vínculos</span> quando terminar.
+          </p>
+          {pendingCount > 0 && (
+            <span className="text-xs font-bold text-brand flex-shrink-0">{pendingCount} pendente{pendingCount !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+      )}
 
       {expanded && loaded && (
         <>
-          {/* Filter */}
           {anuncios.length > 5 && (
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               <input
                 value={filterQ}
                 onChange={e => setFilterQ(e.target.value)}
-                placeholder="Filtrar anúncios..."
+                placeholder={batchMode ? "Filtrar anúncios sem vínculo..." : "Filtrar anúncios..."}
                 className="w-full pl-8 pr-3 py-2 bg-dark-800 border border-white/8 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand/40"
               />
             </div>
@@ -491,26 +645,18 @@ function MeusAnunciosML({
 
           {filtered.length === 0 ? (
             <div className="bg-dark-800 border border-white/8 rounded-2xl py-8 text-center text-gray-500 text-sm">
-              {filterQ ? "Nenhum anúncio encontrado." : "Nenhum anúncio ativo na sua conta ML."}
+              {batchMode ? "Todos os anúncios já estão vinculados." : filterQ ? "Nenhum anúncio encontrado." : "Nenhum anúncio ativo na sua conta ML."}
             </div>
           ) : (
             <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
               {filtered.map(a => (
-                <div key={a.id} className="flex items-center gap-3 px-4 py-3">
+                <div key={a.id} className={`flex items-center gap-3 px-4 py-3 transition-colors ${pendingLinks[a.id] ? "bg-brand/4" : ""}`}>
                   {/* Thumbnail */}
                   <div className="w-10 h-10 rounded-xl bg-dark-700 overflow-hidden flex-shrink-0">
                     {a.thumbnail ? (
-                      <Image
-                        src={a.thumbnail.replace("http://", "https://")}
-                        alt={a.title}
-                        width={40} height={40}
-                        className="w-full h-full object-cover"
-                        unoptimized
-                      />
+                      <Image src={a.thumbnail.replace("http://", "https://")} alt={a.title} width={40} height={40} className="w-full h-full object-cover" unoptimized />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package size={14} className="text-gray-600" />
-                      </div>
+                      <div className="w-full h-full flex items-center justify-center"><Package size={14} className="text-gray-600" /></div>
                     )}
                   </div>
 
@@ -519,11 +665,9 @@ function MeusAnunciosML({
                     <p className="text-xs font-semibold text-white truncate">{a.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <p className="text-[10px] text-gray-500 font-mono">{a.id}</p>
-                      {a.price > 0 && (
-                        <p className="text-[10px] text-gray-400">{fmt(a.price)}</p>
-                      )}
+                      {a.price > 0 && <p className="text-[10px] text-gray-400">{fmt(a.price)}</p>}
                     </div>
-                    {a.vinculado && a.marca_slug && (
+                    {!batchMode && a.vinculado && a.marca_slug && (
                       <p className="text-[10px] text-green-400 mt-0.5 flex items-center gap-1">
                         <CheckCircle2 size={9} /> Vinculado · {a.marca_slug}
                       </p>
@@ -532,32 +676,30 @@ function MeusAnunciosML({
 
                   {/* Status + actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                      a.status === "active" || a.status === "approved"
-                        ? "bg-green-400/15 text-green-400"
-                        : "bg-gray-400/15 text-gray-400"
-                    }`}>
-                      {a.status === "active" || a.status === "approved" ? "Ativo" : a.status}
-                    </span>
-
-                    <a
-                      href={a.permalink}
-                      target="_blank" rel="noopener noreferrer"
-                      className="p-1.5 text-gray-500 hover:text-white hover:bg-white/8 rounded-lg transition-all"
-                      title="Ver no ML"
-                    >
+                    {!batchMode && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${a.status === "active" || a.status === "approved" ? "bg-green-400/15 text-green-400" : "bg-gray-400/15 text-gray-400"}`}>
+                        {a.status === "active" || a.status === "approved" ? "Ativo" : a.status}
+                      </span>
+                    )}
+                    <a href={a.permalink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-500 hover:text-white hover:bg-white/8 rounded-lg transition-all" title="Ver no ML">
                       <ExternalLink size={12} />
                     </a>
 
-                    {a.vinculado ? (
-                      <span className="p-1.5 text-green-400" title="Vinculado">
-                        <CheckCircle2 size={12} />
-                      </span>
+                    {batchMode ? (
+                      <InlineProdutoPicker
+                        value={pendingLinks[a.id] ?? null}
+                        onChange={p => setPendingLinks(prev => {
+                          const next = { ...prev };
+                          if (p) next[a.id] = p; else delete next[a.id];
+                          return next;
+                        })}
+                      />
+                    ) : a.vinculado ? (
+                      <span className="p-1.5 text-green-400" title="Vinculado"><CheckCircle2 size={12} /></span>
                     ) : (
                       <button
                         onClick={() => setPicker(a.id)}
                         className="flex items-center gap-1 px-2.5 py-1.5 bg-brand/10 hover:bg-brand/20 border border-brand/25 text-brand text-[10px] font-bold rounded-lg transition-all"
-                        title="Vincular a produto da marca"
                       >
                         <Link2 size={10} /> Vincular
                       </button>
@@ -588,12 +730,27 @@ function MeusAnunciosML({
         </div>
       )}
 
+      {/* Floating save bar (batch mode) */}
+      {batchMode && pendingCount > 0 && (
+        <div className="sticky bottom-4 z-30">
+          <div className="flex items-center justify-between gap-4 px-5 py-3.5 bg-dark-800 border border-brand/30 rounded-2xl shadow-2xl shadow-black/60 backdrop-blur-sm">
+            <div>
+              <p className="text-sm font-bold text-white">{pendingCount} vínculo{pendingCount !== 1 ? "s" : ""} pendente{pendingCount !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-gray-500">Clique em salvar para confirmar todos</p>
+            </div>
+            <button
+              onClick={handleBatchSave}
+              disabled={savingBatch}
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white font-bold text-sm rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+            >
+              {savingBatch ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : <><CheckCircle2 size={14} /> Salvar vínculos</>}
+            </button>
+          </div>
+        </div>
+      )}
+
       {picker && (
-        <ProdutoPicker
-          mlItemId={picker}
-          onLink={handleLink}
-          onClose={() => setPicker(null)}
-        />
+        <ProdutoPicker mlItemId={picker} onLink={handleLink} onClose={() => setPicker(null)} />
       )}
     </div>
   );

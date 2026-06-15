@@ -39,7 +39,7 @@ async function fetchOrders(mlUserId: string, token: string): Promise<{ results: 
   ];
 
   for (const { url, useHeader } of attempts) {
-    const headers = useHeader ? { Authorization: `Bearer ${token}` } : {};
+    const headers: Record<string, string> = useHeader ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(url, { headers });
     if (res.ok) return res.json();
     const body = await res.text().catch(() => "");

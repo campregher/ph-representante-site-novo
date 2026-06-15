@@ -165,8 +165,11 @@ export async function importProducts(
     return isNaN(n) ? null : n;
   };
 
+  /* remove SKUs duplicados dentro do próprio lote — mantém a última ocorrência */
+  const deduped = [...new Map(rows.map(r => [`${r.sku.trim()}|${r.brand}`, r])).values()];
+
   const { error } = await db.from("produtos").upsert(
-    rows.map(r => ({
+    deduped.map(r => ({
       sku:              r.sku.trim(),
       name:             r.name.trim(),
       brand:            r.brand,
@@ -184,5 +187,5 @@ export async function importProducts(
     { onConflict: "sku,brand" }
   );
   if (error) throw new Error(error.message);
-  return rows.length;
+  return deduped.length;
 }

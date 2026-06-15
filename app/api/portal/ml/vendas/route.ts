@@ -29,6 +29,24 @@ function periodoMs(periodo: string): number {
   return now.getTime() - new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 }
 
+async function fetchOrders(mlUserId: string, token: string): Promise<{ results: MLOrder[]; paging: { total: number } } | null> {
+  /* tenta endpoint principal */
+  const urls = [
+    `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc&limit=100`,
+    `${ML_BASE}/users/${mlUserId}/orders/search?sort=date_desc&limit=100`,
+  ];
+
+  for (const url of urls) {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) return res.json();
+    const body = await res.text().catch(() => "");
+    console.error("[ml/vendas] failed", url, res.status, body);
+    if (res.status !== 403) return null; /* outro erro — para */
+    /* 403 → tenta próximo endpoint */
+  }
+  return null; /* ambos falharam com 403 */
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -51,30 +69,23 @@ export async function GET(request: Request) {
   const url     = new URL(request.url);
   const periodo = url.searchParams.get("periodo") ?? "mes";
 
-  /* tenta buscar pedidos diretamente na API do ML */
-  const mlUrl = `${ML_BASE}/orders/search?seller=${tokenRow.ml_user_id}&order.status=paid&sort=date_desc&limit=100`;
-  const searchRes = await fetch(mlUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const searchData = await fetchOrders(tokenRow.ml_user_id, token);
 
-  /* se 403 (sem permissão de orders no app ML) retorna sinalização específica */
-  if (searchRes.status === 403) {
+  if (!searchData) {
     return NextResponse.json({
       sem_permissao: true,
-      error: "O aplicativo ML não tem permissão para acessar pedidos. Habilite a permissão 'Pedidos' no ML Developers para seu app.",
+      error: "O aplicativo ML não tem permissão para acessar pedidos. Habilite Orders_v2 no ML Developers e reconecte a conta.",
     }, { status: 403 });
   }
 
-  if (!searchRes.ok) {
-    const errBody = await searchRes.text().catch(() => "");
-    console.error("[ml/vendas] ML API error", searchRes.status, errBody);
-    return NextResponse.json({ error: `Erro ao buscar pedidos no ML (status ${searchRes.status})` }, { status: 502 });
-  }
-
-  const searchData: { results: MLOrder[]; paging: { total: number } } = await searchRes.json();
   const allOrders = searchData.results ?? [];
 
-  /* filtra pelo período */
+  /* filtra pelo período e só pedidos pagos */
   const cutoff = Date.now() - periodoMs(periodo);
-  const orders = allOrders.filter(o => new Date(o.date_created).getTime() >= cutoff);
+  const orders = allOrders.filter(o =>
+    new Date(o.date_created).getTime() >= cutoff &&
+    (o.status === "paid" || o.status === "payment_required" || o.status === "partially_paid")
+  );
 
   /* anúncios vinculados */
   const { data: vinculados } = await db

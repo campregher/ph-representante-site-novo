@@ -30,21 +30,23 @@ function periodoMs(periodo: string): number {
 }
 
 async function fetchOrders(mlUserId: string, token: string): Promise<{ results: MLOrder[]; paging: { total: number } } | null> {
-  /* tenta endpoint principal */
-  const urls = [
-    `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc&limit=100`,
-    `${ML_BASE}/users/${mlUserId}/orders/search?sort=date_desc&limit=100`,
+  const attempts = [
+    /* Authorization header — endpoints modernos */
+    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc&limit=100`, useHeader: true },
+    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&limit=50`,                useHeader: true },
+    /* access_token como query param — forma legada mas aceita pelo ML */
+    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&access_token=${token}&limit=50`, useHeader: false },
   ];
 
-  for (const url of urls) {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  for (const { url, useHeader } of attempts) {
+    const headers = useHeader ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(url, { headers });
     if (res.ok) return res.json();
     const body = await res.text().catch(() => "");
-    console.error("[ml/vendas] failed", url, res.status, body);
-    if (res.status !== 403) return null; /* outro erro — para */
-    /* 403 → tenta próximo endpoint */
+    console.error("[ml/vendas] failed", url.replace(token, "***"), res.status, body.slice(0, 200));
+    if (res.status !== 403 && res.status !== 401) return null;
   }
-  return null; /* ambos falharam com 403 */
+  return null;
 }
 
 export async function GET(request: Request) {

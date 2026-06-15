@@ -9,6 +9,7 @@ export function getPortalMlAuthUrl(clienteId: string) {
     client_id:     ML_APP_ID,
     redirect_uri:  ML_PORTAL_REDIRECT_URI,
     state:         clienteId,
+    scope:         "offline_access read write orders",
   });
   return `https://auth.mercadolivre.com.br/authorization?${params}`;
 }

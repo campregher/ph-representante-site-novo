@@ -85,12 +85,14 @@ export async function POST(request: Request) {
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheet    = workbook.Sheets[workbook.SheetNames[0]];
   const rows     = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
-  console.log(`[import] total rows: ${rows.length}, first row keys:`, rows[0] ? Object.keys(rows[0]) : "(none)");
+
+  const allCols = rows[0] ? Object.keys(rows[0]).map(k => `"${k}"`).join(", ") : "(nenhuma)";
+  console.log(`[import] total rows: ${rows.length}, cols:`, allCols);
 
   /* remove linhas sem SKU nem Nome (dicas, instruções e exemplos sem dados reais) */
   const dataRows = rows.filter(r => {
-    const sku  = col(r, "sku", "sku *");
-    const name = col(r, "nome", "name", "nome *");
+    const sku  = col(r, "sku", "sku *", "codigo", "cod", "ref", "referencia", "code");
+    const name = col(r, "nome", "name", "nome *", "produto", "descricao", "description", "nome do produto", "titulo", "title");
     /* descarta linhas de exemplo/dica geradas pelo template */
     if (sku.startsWith("Ex:") || name.startsWith("Ex:")) return false;
     if (["Produto Exemplo A", "Produto Exemplo B"].includes(name)) return false;
@@ -99,7 +101,7 @@ export async function POST(request: Request) {
 
   if (dataRows.length === 0)
     return NextResponse.json({
-      error: "Nenhum produto válido encontrado na planilha. Verifique se as colunas 'SKU' e 'Nome' estão preenchidas e se está usando o modelo correto.",
+      error: `Nenhum produto válido encontrado na planilha. Colunas encontradas: ${allCols}. Verifique se as colunas 'SKU' e 'Nome' estão preenchidas e se está usando o modelo correto.`,
     }, { status: 400 });
 
   const products = dataRows.map(r => {
@@ -120,24 +122,25 @@ export async function POST(request: Request) {
     const active   = rawAtivo !== "NÃO" && rawAtivo !== "NAO" && rawAtivo !== "FALSE" && rawAtivo !== "0";
 
     return {
-      sku:          col(r, "sku", "sku *") || `SKU-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name:         col(r, "nome", "name", "nome *"),
+      sku:  col(r, "sku", "sku *", "codigo", "cod", "ref", "referencia", "code")
+              || `SKU-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: col(r, "nome", "name", "nome *", "produto", "nome do produto", "titulo", "title"),
       brand:        ctx.marcaSlug,
-      description:  col(r, "descricao", "description"),
+      description:  col(r, "descricao", "description", "descricao do produto"),
       price: (() => {
-        const v = col(r, "preco", "price", "preco de custo (r$)", "preco de custo");
+        const v = col(r, "preco", "price", "preco de custo (r$)", "preco de custo", "custo", "custo (r$)");
         return v ? Number(v.replace(",", ".")) : undefined;
       })(),
       resale_price: (() => {
-        const v = col(r, "preco de revenda (r$) *", "preco de revenda (r$)", "preco de revenda *", "preco de revenda", "resale_price");
+        const v = col(r, "preco de revenda (r$) *", "preco de revenda (r$)", "preco de revenda *", "preco de revenda", "resale_price", "revenda", "preco venda", "valor venda");
         return v ? Number(v.replace(",", ".")) : undefined;
       })(),
       images: [
-        col(r, "imagem1", "imagem 1", "image1"),
-        col(r, "imagem2", "imagem 2", "image2"),
-        col(r, "imagem3", "imagem 3", "image3"),
-        col(r, "imagem4", "imagem 4", "image4"),
-        col(r, "imagem5", "imagem 5", "image5"),
+        col(r, "imagem1", "imagem 1", "image1", "foto1", "foto 1"),
+        col(r, "imagem2", "imagem 2", "image2", "foto2", "foto 2"),
+        col(r, "imagem3", "imagem 3", "image3", "foto3", "foto 3"),
+        col(r, "imagem4", "imagem 4", "image4", "foto4", "foto 4"),
+        col(r, "imagem5", "imagem 5", "image5", "foto5", "foto 5"),
       ].filter(Boolean),
       active,
       ml_category_id:   mlCategoryId,
@@ -149,11 +152,10 @@ export async function POST(request: Request) {
   }).filter(p => p.name);
 
   if (products.length === 0) {
-    /* diagnóstico: descobre quais colunas foram encontradas */
     const sample = dataRows[0] ?? {};
     const foundCols = Object.keys(sample).map(k => `"${k}"`).join(", ");
     return NextResponse.json({
-      error: `Nenhum produto com Nome preenchido. Colunas encontradas na planilha: ${foundCols || "(nenhuma)"}. Certifique-se de que o cabeçalho da coluna seja exatamente "Nome".`,
+      error: `Nenhum produto com Nome preenchido. Colunas encontradas: ${foundCols || "(nenhuma)"}. O cabeçalho da coluna de nome deve ser "Nome".`,
     }, { status: 400 });
   }
 

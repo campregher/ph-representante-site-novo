@@ -66,13 +66,15 @@ export async function POST(request: Request) {
 
       const preco = item.preco_revenda ?? product?.resale_price ?? product?.price ?? mlPrice ?? 0;
 
-      /* remove qualquer vínculo anterior deste ml_item_id OU produto para este cliente */
+      /* remove vínculo anterior APENAS deste ml_item_id (não por produto_id —
+         isso causaria deleção em cascata quando o mesmo produto é vinculado
+         a múltiplos anúncios num batch) */
       await db.from("portal_ml_anuncios")
         .delete()
         .eq("cliente_id", user.id)
-        .or(`ml_item_id.eq.${item.ml_item_id},produto_id.eq.${item.produto_id}`);
+        .eq("ml_item_id", item.ml_item_id);
 
-      await db.from("portal_ml_anuncios").insert({
+      const { error: insertErr } = await db.from("portal_ml_anuncios").insert({
         cliente_id:    user.id,
         produto_id:    item.produto_id,
         marca_slug:    product?.brand ?? "",
@@ -81,6 +83,8 @@ export async function POST(request: Request) {
         preco_revenda: preco,
         updated_at:    new Date().toISOString(),
       });
+
+      if (insertErr) throw new Error(insertErr.message);
 
       results.push({ ...item, ok: true });
     } catch (e) {

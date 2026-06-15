@@ -1,31 +1,19 @@
-import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { ML_APP_ID, ML_SECRET, refreshAccessToken, MLTokenResponse } from "@/lib/ml-auth";
 
 const ML_PORTAL_REDIRECT_URI = process.env.ML_PORTAL_REDIRECT_URI!;
 
-/* ── PKCE helpers ─────────────────────────────────────────────── */
-export function generateCodeVerifier(): string {
-  return crypto.randomBytes(32).toString("base64url");
-}
-
-export function generateCodeChallenge(verifier: string): string {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
-}
-
-export function getPortalMlAuthUrl(clienteId: string, codeChallenge: string) {
+export function getPortalMlAuthUrl(clienteId: string) {
   const params = new URLSearchParams({
-    response_type:          "code",
-    client_id:              ML_APP_ID,
-    redirect_uri:           ML_PORTAL_REDIRECT_URI,
-    state:                  clienteId,
-    code_challenge:         codeChallenge,
-    code_challenge_method:  "S256",
+    response_type: "code",
+    client_id:     ML_APP_ID,
+    redirect_uri:  ML_PORTAL_REDIRECT_URI,
+    state:         clienteId,
   });
   return `https://auth.mercadolivre.com.br/authorization?${params}`;
 }
 
-export async function exchangePortalCodeForToken(code: string, codeVerifier: string) {
+export async function exchangePortalCodeForToken(code: string) {
   const res = await fetch("https://api.mercadolibre.com/oauth/token", {
     method:  "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -35,7 +23,6 @@ export async function exchangePortalCodeForToken(code: string, codeVerifier: str
       client_secret: ML_SECRET,
       code,
       redirect_uri:  ML_PORTAL_REDIRECT_URI,
-      code_verifier: codeVerifier,
     }),
   });
   if (!res.ok) {

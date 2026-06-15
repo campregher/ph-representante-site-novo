@@ -1137,11 +1137,12 @@ export async function sendAccessStatusEmail({ clienteEmail, clienteNome, marcaNo
 </td></tr></table>
 </body></html>`;
 
+  const isPH = marcaNome === "PH Representante";
   const subjects: Record<string, string> = {
-    aprovado:    `✅ Acesso aprovado — ${marcaNome} | PH Representante`,
-    recusado:    `❌ Solicitação recusada — ${marcaNome} | PH Representante`,
-    bloqueado:   `🔒 Acesso suspenso — ${marcaNome} | PH Representante`,
-    desbloquear: `🔓 Acesso reativado — ${marcaNome} | PH Representante`,
+    aprovado:    isPH ? `✅ Cadastro aprovado — PH Representante`         : `✅ Acesso aprovado — ${marcaNome} | PH Representante`,
+    recusado:    isPH ? `❌ Cadastro recusado — PH Representante`         : `❌ Solicitação recusada — ${marcaNome} | PH Representante`,
+    bloqueado:   isPH ? `🔒 Acesso suspenso — PH Representante`           : `🔒 Acesso suspenso — ${marcaNome} | PH Representante`,
+    desbloquear: isPH ? `🔓 Acesso reativado — PH Representante`          : `🔓 Acesso reativado — ${marcaNome} | PH Representante`,
   };
 
   await resend.emails.send({

@@ -103,12 +103,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
   /* ── linha de exemplo ── */
   const example: string[] = [
-    "TAP-001",
-    `Tapete ${cat.nome} Universal 5 peças`,
+    "Ex: SEU-SKU-001",
+    `Ex: Tapete ${cat.nome} Universal 5 peças`,
     "89.90",
     "149.90",
-    `Tapete de alta qualidade para ${cat.nome}`,
-    "https://exemplo.com/imagem.jpg",
+    `Ex: Tapete de alta qualidade para ${cat.nome}`,
+    "https://sua-url-de-imagem.jpg",
     "",
     "",
     "",

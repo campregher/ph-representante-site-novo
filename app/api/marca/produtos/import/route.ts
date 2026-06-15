@@ -110,6 +110,7 @@ export async function POST(request: Request) {
     const name = col(r, "nome", "name", "nome *", "produto", "descricao", "description", "nome do produto", "titulo", "title");
     /* descarta linhas de exemplo/dica geradas pelo template */
     if (sku.startsWith("Ex:") || name.startsWith("Ex:")) return false;
+    if (sku === "TAP-001") return false;  // exemplo do template de categoria
     if (["Produto Exemplo A", "Produto Exemplo B"].includes(name)) return false;
     return sku || name;
   });

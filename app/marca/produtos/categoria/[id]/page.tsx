@@ -599,12 +599,24 @@ export default function CategoriaDetailPage({ params }: { params: Promise<{ id: 
                           {/* Thumbnail */}
                           <td className="px-4 py-3">
                             {p.images?.[0] ? (
-                              <img src={p.images[0]} alt="" className="w-9 h-9 rounded-lg object-cover bg-dark-700 flex-shrink-0" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-lg bg-dark-700 flex items-center justify-center">
-                                <Package size={13} className="text-gray-600" />
-                              </div>
-                            )}
+                              <img
+                                src={p.images[0]}
+                                alt=""
+                                className="w-10 h-10 rounded-lg object-cover bg-dark-700 flex-shrink-0"
+                                onError={e => {
+                                  const t = e.currentTarget;
+                                  t.style.display = "none";
+                                  const ph = t.nextElementSibling as HTMLElement | null;
+                                  if (ph) ph.style.display = "flex";
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="w-10 h-10 rounded-lg bg-dark-700 flex items-center justify-center flex-shrink-0"
+                              style={{ display: p.images?.[0] ? "none" : "flex" }}
+                            >
+                              <Package size={13} className="text-gray-600" />
+                            </div>
                           </td>
 
                           {/* Nome */}

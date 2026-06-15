@@ -39,19 +39,24 @@ export async function POST(request: Request) {
     }
 
     try {
-      const mlRes = await fetch(`${ML_BASE}/items/${item.ml_item_id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!mlRes.ok) {
-        results.push({ ...item, ok: false, error: "Anúncio não encontrado no ML" });
-        continue;
-      }
-      const mlItem = await mlRes.json();
-
-      if (String(mlItem.seller_id) !== String(tokenRow?.ml_user_id)) {
-        results.push({ ...item, ok: false, error: "Anúncio não pertence à sua conta" });
-        continue;
-      }
+      /* busca detalhes do anúncio no ML (best-effort — não bloqueia se falhar) */
+      let mlStatus = "active";
+      let mlPrice  = 0;
+      try {
+        const mlRes = await fetch(`${ML_BASE}/items/${item.ml_item_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (mlRes.ok) {
+          const mlItem = await mlRes.json();
+          /* valida que o anúncio pertence à conta */
+          if (tokenRow?.ml_user_id && String(mlItem.seller_id) !== String(tokenRow.ml_user_id)) {
+            results.push({ ...item, ok: false, error: "Anúncio não pertence à sua conta ML" });
+            continue;
+          }
+          mlStatus = mlItem.status ?? "active";
+          mlPrice  = mlItem.price ?? 0;
+        }
+      } catch { /* ignora erro de rede — salva o vínculo mesmo assim */ }
 
       const { data: product } = await db
         .from("produtos")
@@ -59,26 +64,27 @@ export async function POST(request: Request) {
         .eq("id", item.produto_id)
         .single();
 
-      const preco = item.preco_revenda ?? product?.resale_price ?? product?.price ?? mlItem.price ?? 0;
+      const preco = item.preco_revenda ?? product?.resale_price ?? product?.price ?? mlPrice ?? 0;
 
-      /* remove entrada anterior do mesmo produto para este cliente */
+      /* remove qualquer vínculo anterior deste ml_item_id OU produto para este cliente */
       await db.from("portal_ml_anuncios")
         .delete()
         .eq("cliente_id", user.id)
-        .eq("produto_id", item.produto_id);
+        .or(`ml_item_id.eq.${item.ml_item_id},produto_id.eq.${item.produto_id}`);
 
       await db.from("portal_ml_anuncios").insert({
         cliente_id:    user.id,
         produto_id:    item.produto_id,
         marca_slug:    product?.brand ?? "",
         ml_item_id:    item.ml_item_id,
-        ml_status:     mlItem.status ?? "active",
+        ml_status:     mlStatus,
         preco_revenda: preco,
         updated_at:    new Date().toISOString(),
       });
 
       results.push({ ...item, ok: true });
     } catch (e) {
+      console.error("[vincular]", item.ml_item_id, e);
       results.push({ ...item, ok: false, error: e instanceof Error ? e.message : "Erro" });
     }
   }

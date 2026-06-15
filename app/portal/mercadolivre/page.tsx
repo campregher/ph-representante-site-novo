@@ -7,7 +7,7 @@ import {
   ShoppingBag, Loader2, CheckCircle2, AlertCircle, X,
   ExternalLink, Unlink, Package, Zap, ArrowRight,
   RefreshCw, AlertTriangle, Pause, Trash2, RotateCcw, Bell,
-  Download, Link2, Search, ChevronDown, ChevronUp,
+  Download, Link2, Search, ChevronDown, ChevronUp, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -494,6 +494,7 @@ function MeusAnunciosML({
   const [batchMode,    setBatchMode]    = useState(false);
   const [pendingLinks, setPendingLinks] = useState<Record<string, PendingLink>>({});
   const [savingBatch,  setSavingBatch]  = useState(false);
+  const [suggesting,   setSuggesting]   = useState(false);
 
   async function fetchAnuncios(offset = 0) {
     setLoading(true);
@@ -567,6 +568,43 @@ function MeusAnunciosML({
     } finally { setSavingBatch(false); }
   }
 
+  async function handleSuggest() {
+    const unlinked = anuncios.filter(a => !a.vinculado);
+    if (!unlinked.length) return;
+    setSuggesting(true);
+    try {
+      const res  = await fetch("/api/portal/ml/sugerir-vinculos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: unlinked.map(a => ({ id: a.id, title: a.title })) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro");
+
+      type Sug = { ml_item_id: string; produto_id: string; produto_name: string; preco_revenda: number | null; confidence: string };
+      const suggestions: Sug[] = data.suggestions ?? [];
+      if (!suggestions.length) { toast.info("Nenhuma sugestão encontrada. Vincule manualmente."); return; }
+
+      const next: Record<string, PendingLink> = { ...pendingLinks };
+      for (const s of suggestions) {
+        if (!next[s.ml_item_id]) {
+          next[s.ml_item_id] = { produto_id: s.produto_id, produto_name: s.produto_name, preco_revenda: s.preco_revenda };
+        }
+      }
+      setPendingLinks(next);
+      const skuCount   = suggestions.filter(s => s.confidence === "sku").length;
+      const titleCount = suggestions.filter(s => s.confidence === "titulo").length;
+      const parts = [];
+      if (skuCount)   parts.push(`${skuCount} por SKU`);
+      if (titleCount) parts.push(`${titleCount} por palavras-chave`);
+      toast.success(`${suggestions.length} sugestão(ões) encontradas (${parts.join(", ")}). Revise e salve.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao sugerir vínculos");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
   const unlinkedCount = anuncios.filter(a => !a.vinculado).length;
   const pendingCount  = Object.keys(pendingLinks).length;
 
@@ -618,13 +656,24 @@ function MeusAnunciosML({
 
       {/* Batch mode banner */}
       {batchMode && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-brand/8 border border-brand/20 rounded-xl">
-          <Link2 size={13} className="text-brand flex-shrink-0" />
-          <p className="text-xs text-gray-300 flex-1">
-            Selecione o produto correspondente para cada anúncio. Clique em <span className="text-white font-semibold">Salvar vínculos</span> quando terminar.
-          </p>
+        <div className="flex items-start gap-3 px-4 py-3 bg-brand/8 border border-brand/20 rounded-xl">
+          <Link2 size={13} className="text-brand flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-300">
+              Selecione o produto para cada anúncio. Clique em <span className="text-white font-semibold">Salvar vínculos</span> quando terminar.
+            </p>
+            <button
+              onClick={handleSuggest}
+              disabled={suggesting}
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-400 text-[11px] font-semibold rounded-lg transition-all disabled:opacity-50"
+            >
+              {suggesting
+                ? <><Loader2 size={11} className="animate-spin" /> Buscando sugestões...</>
+                : <><Sparkles size={11} /> Sugerir vínculos automaticamente</>}
+            </button>
+          </div>
           {pendingCount > 0 && (
-            <span className="text-xs font-bold text-brand flex-shrink-0">{pendingCount} pendente{pendingCount !== 1 ? "s" : ""}</span>
+            <span className="text-xs font-bold text-brand flex-shrink-0 mt-0.5">{pendingCount} pendente{pendingCount !== 1 ? "s" : ""}</span>
           )}
         </div>
       )}

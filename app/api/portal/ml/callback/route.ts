@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import {
   exchangePortalCodeForToken,
@@ -40,8 +41,15 @@ export async function GET(request: Request) {
   /* clienteId: prefere sessão ativa, cai no state se sessão expirou durante o redirect */
   const clienteId = user?.id ?? state;
 
+  /* lê o code_verifier PKCE salvo pelo /connect */
+  const cookieStore = await cookies();
+  const codeVerifier = cookieStore.get("ml_pkce_verifier")?.value ?? "";
+  if (!codeVerifier) {
+    console.error("[ml/callback] code_verifier cookie ausente");
+  }
+
   try {
-    const token = await exchangePortalCodeForToken(code);
+    const token = await exchangePortalCodeForToken(code, codeVerifier);
 
     /* busca nickname do vendedor */
     let nickname: string | undefined;
@@ -57,7 +65,9 @@ export async function GET(request: Request) {
 
     await savePortalMlToken(clienteId, token, nickname);
 
-    return NextResponse.redirect(new URL("/portal/mercadolivre?connected=1", request.url));
+    const successRes = NextResponse.redirect(new URL("/portal/mercadolivre?connected=1", request.url));
+    successRes.cookies.delete("ml_pkce_verifier");
+    return successRes;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[ml/callback] erro ao trocar token:", msg);

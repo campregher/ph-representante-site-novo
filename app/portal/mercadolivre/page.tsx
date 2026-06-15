@@ -847,16 +847,19 @@ interface VendasData {
 }
 
 function VendasML() {
-  const [periodo,  setPeriodo]  = useState<Periodo>("mes");
-  const [data,     setData]     = useState<VendasData | null>(null);
-  const [loading,  setLoading]  = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [periodo,       setPeriodo]       = useState<Periodo>("mes");
+  const [data,          setData]          = useState<VendasData | null>(null);
+  const [loading,       setLoading]       = useState(false);
+  const [semPermissao,  setSemPermissao]  = useState(false);
+  const [expanded,      setExpanded]      = useState<string | null>(null);
 
   async function fetchVendas(p: Periodo) {
     setLoading(true);
+    setSemPermissao(false);
     try {
-      const res = await fetch(`/api/portal/ml/vendas?periodo=${p}`);
+      const res  = await fetch(`/api/portal/ml/vendas?periodo=${p}`);
       const json = await res.json();
+      if (res.status === 403 && json.sem_permissao) { setSemPermissao(true); return; }
       if (!res.ok) throw new Error(json.error ?? "Erro");
       setData(json);
     } catch (e) {
@@ -895,11 +898,36 @@ function VendasML() {
         </button>
       </div>
 
+      {semPermissao && (
+        <div className="bg-dark-800 border border-yellow-400/20 rounded-2xl p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-white">Permissão de pedidos não habilitada</p>
+              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                O aplicativo ML não tem acesso à API de pedidos. Para habilitar, acesse o{" "}
+                <span className="text-yellow-400 font-semibold">ML Developers</span> e ative a permissão{" "}
+                <span className="text-white font-semibold">Pedidos (Orders)</span> para o seu app.
+              </p>
+            </div>
+          </div>
+          <div className="ml-7 space-y-2 text-xs text-gray-500">
+            <p className="font-semibold text-gray-400">Como corrigir:</p>
+            <ol className="list-decimal list-inside space-y-1 leading-relaxed">
+              <li>Acesse <span className="text-brand font-mono">developers.mercadolivre.com.br</span></li>
+              <li>Selecione seu aplicativo</li>
+              <li>Vá em <span className="text-white">Permissões</span> e habilite <span className="text-white">Pedidos</span></li>
+              <li>Salve e reconecte sua conta ML aqui na plataforma</li>
+            </ol>
+          </div>
+        </div>
+      )}
+
       {loading && !data ? (
         <div className="flex items-center justify-center py-16 gap-2 text-gray-500 text-sm">
           <Loader2 size={16} className="animate-spin" /> Buscando vendas no Mercado Livre...
         </div>
-      ) : !data ? null : (
+      ) : !data || semPermissao ? null : (
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-3">

@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Search, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, PencilLine, MapPin } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 // ── Máscaras ──────────────────────────────────────────────
 function maskCNPJ(v: string) {
@@ -217,42 +216,34 @@ export default function RegistroPage() {
 
     setSubmitting(true); setFormErr("");
     try {
-      const supabase = createClient();
-      const { data: auth, error: authErr } = await supabase.auth.signUp({
-        email, password,
-        options: { emailRedirectTo: `${location.origin}/portal/login` },
+      const res = await fetch("/api/portal/registro", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          cnpj:               cnpj.replace(/\D/g, ""),
+          razao_social:       rfData?.razao_social ?? razaoSocial.trim(),
+          nome_fantasia:      nomeFantasia.trim()  || null,
+          cnae_codigo:        rfData?.cnae_codigo    ?? null,
+          cnae_descricao:     rfData?.cnae_descricao ?? null,
+          inscricao_estadual: ie.trim(),
+          cep:                addr.cep,
+          logradouro:         addr.logradouro,
+          numero:             addr.numero,
+          complemento:        addr.complemento || null,
+          bairro:             addr.bairro      || null,
+          cidade:             addr.cidade,
+          estado:             addr.estado,
+          whatsapp,
+        }),
       });
-      if (authErr) throw authErr;
-      if (!auth.user) throw new Error("Erro ao criar conta");
-
-      const { error: dbErr } = await supabase.from("clientes").insert({
-        user_id:            auth.user.id,
-        cnpj:               cnpj.replace(/\D/g, ""),
-        razao_social:       rfData?.razao_social ?? razaoSocial.trim(),
-        nome_fantasia:      nomeFantasia.trim()  || null,
-        cnae_codigo:        rfData?.cnae_codigo    ?? null,
-        cnae_descricao:     rfData?.cnae_descricao ?? null,
-        inscricao_estadual: ie.trim(),
-        cep:                addr.cep.replace(/\D/g, ""),
-        logradouro:         addr.logradouro,
-        numero:             addr.numero,
-        complemento:        addr.complemento || null,
-        bairro:             addr.bairro      || null,
-        cidade:             addr.cidade,
-        estado:             addr.estado,
-        whatsapp,
-        email,
-        status: "pendente",
-      });
-      if (dbErr) throw dbErr;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro ao cadastrar");
       setSuccess(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao cadastrar";
-      setFormErr(
-        msg.includes("already registered") ? "Este email já está cadastrado. Tente fazer login." :
-        msg.includes("relation")           ? "Banco não configurado. Fale com o administrador." :
-        msg
-      );
+      setFormErr(msg);
     } finally { setSubmitting(false); }
   }
 

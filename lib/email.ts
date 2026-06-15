@@ -1226,3 +1226,107 @@ export async function sendBrandInviteEmail({ marcaEmail, marcaNome, resetLink, i
     html,
   });
 }
+
+// ── Notificação de novo cadastro para o admin ─────────────────────────────────
+
+export async function sendNewRegistrationAdminEmail({
+  adminEmail, razaoSocial, cnpj, email, cidade, estado, whatsapp,
+}: {
+  adminEmail: string; razaoSocial: string; cnpj: string;
+  email: string; cidade: string; estado: string; whatsapp: string;
+}) {
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px">
+<tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+  <tr><td style="background:#111827;padding:16px 24px">
+    <span style="font-size:11px;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase">PH Representante — Novo Cadastro</span>
+  </td></tr>
+  <tr><td style="padding:24px">
+    <p style="margin:0 0 16px;font-size:14px;color:#374151">Um novo cliente solicitou acesso ao portal:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+      ${[
+        ["Razão Social", razaoSocial],
+        ["CNPJ", cnpj],
+        ["E-mail", email],
+        ["WhatsApp", whatsapp],
+        ["Cidade/UF", `${cidade}/${estado}`],
+      ].map(([k, v], i) => `
+      <tr style="background:${i % 2 === 0 ? "#f9fafb" : "#fff"}">
+        <td style="padding:9px 14px;font-size:11px;font-weight:700;color:#6b7280;width:130px">${k}</td>
+        <td style="padding:9px 14px;font-size:12px;color:#111827;font-weight:600">${v}</td>
+      </tr>`).join("")}
+    </table>
+    <div style="margin-top:20px;padding:12px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
+      <p style="margin:0;font-size:12px;color:#92400e">Status: <strong>Pendente de análise</strong> — acesse o painel admin para aprovar ou recusar.</p>
+    </div>
+  </td></tr>
+  <tr><td style="padding:12px 24px;background:#f9fafb;border-top:1px solid #e5e7eb">
+    <p style="margin:0;font-size:10px;color:#9ca3af">PH Representante — notificação automática</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+  await resend.emails.send({
+    from:    FROM,
+    to:      [adminEmail],
+    subject: `🆕 Novo cadastro: ${razaoSocial} | PH Representante`,
+    html,
+  });
+}
+
+// ── Confirmação de cadastro recebido para o cliente ───────────────────────────
+
+export async function sendRegistrationReceivedEmail({
+  clienteEmail, razaoSocial,
+}: {
+  clienteEmail: string; razaoSocial: string;
+}) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://phrepresentante.com.br";
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px">
+<tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+  <tr><td style="background:#c0392b;padding:20px 24px;text-align:center">
+    <span style="font-size:22px;font-weight:900;color:#fff;letter-spacing:1px">PH Representante</span>
+  </td></tr>
+  <tr><td style="padding:32px 24px;text-align:center">
+    <div style="width:56px;height:56px;background:#d1fae5;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+      <span style="font-size:28px">✅</span>
+    </div>
+    <h1 style="margin:0 0 8px;font-size:20px;font-weight:900;color:#111827">Cadastro recebido!</h1>
+    <p style="margin:0 0 20px;font-size:14px;color:#6b7280;line-height:1.6">
+      Olá, <strong style="color:#111827">${razaoSocial}</strong>!<br>
+      Seu cadastro foi recebido e está em análise pela nossa equipe.<br>
+      Você receberá um e-mail assim que o acesso for liberado.
+    </p>
+    <div style="padding:14px 20px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin:0 0 24px">
+      <p style="margin:0;font-size:12px;color:#374151">
+        Enquanto isso, você já pode acessar nosso portal com as credenciais cadastradas
+        após a aprovação.
+      </p>
+    </div>
+    <a href="${siteUrl}/portal/login"
+       style="display:inline-block;padding:12px 28px;background:#c0392b;color:#fff;font-weight:700;font-size:14px;border-radius:10px;text-decoration:none">
+      Acessar o Portal
+    </a>
+  </td></tr>
+  <tr><td style="padding:12px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;text-align:center">
+    <p style="margin:0;font-size:10px;color:#9ca3af">PH Representante · Peças e acessórios automotivos</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+
+  await resend.emails.send({
+    from:    FROM,
+    to:      [clienteEmail],
+    subject: "✅ Cadastro recebido — PH Representante",
+    html,
+  });
+}

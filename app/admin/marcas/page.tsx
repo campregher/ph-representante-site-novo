@@ -84,6 +84,11 @@ export default function AdminMarcasPage() {
         fetch("/api/admin/marca-users"),
       ]);
 
+      if (mRes.status === 401 || uRes.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
       // Parseia marcas — erro aqui é crítico
       const mData = await mRes.json().catch(() => null);
       if (!mRes.ok) {

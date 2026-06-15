@@ -72,9 +72,21 @@ export async function GET(request: Request) {
   const searchData = await fetchOrders(tokenRow.ml_user_id, token);
 
   if (!searchData) {
+    /* diagnóstico: verifica escopos do token atual */
+    let scopes = "desconhecido";
+    try {
+      const checkRes = await fetch(`${ML_BASE}/oauth/check_token?token=${token}`);
+      if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        scopes = checkData.scope ?? JSON.stringify(checkData);
+      }
+    } catch { /* noop */ }
+    console.error("[ml/vendas] token scopes:", scopes);
+
     return NextResponse.json({
       sem_permissao: true,
       error: "O aplicativo ML não tem permissão para acessar pedidos. Habilite Orders_v2 no ML Developers e reconecte a conta.",
+      debug_scopes: scopes,
     }, { status: 403 });
   }
 

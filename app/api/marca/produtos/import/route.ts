@@ -80,14 +80,29 @@ export async function POST(request: Request) {
     }
   }
 
-  /* lê planilha */
+  /* lê planilha — detecta automaticamente a linha de cabeçalho (ignora títulos) */
   const buffer   = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheet    = workbook.Sheets[workbook.SheetNames[0]];
-  const rows     = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+  const rawRows  = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
 
-  const allCols = rows[0] ? Object.keys(rows[0]).map(k => `"${k}"`).join(", ") : "(nenhuma)";
-  console.log(`[import] total rows: ${rows.length}, cols:`, allCols);
+  /* procura nas primeiras 10 linhas aquela que contém "sku", "nome" ou "name" */
+  const HEADER_MARKERS = new Set(["sku", "nome", "name", "codigo", "cod", "produto", "title", "titulo"]);
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+    const cells = rawRows[i].map(c => normalize(String(c)));
+    if (cells.some(c => HEADER_MARKERS.has(c))) { headerIdx = i; break; }
+  }
+
+  const headerCells = rawRows[headerIdx].map(c => String(c));
+  const rows: Record<string, string>[] = rawRows.slice(headerIdx + 1).map(rawRow => {
+    const obj: Record<string, string> = {};
+    headerCells.forEach((h, i) => { obj[h] = String((rawRow as string[])[i] ?? "").trim(); });
+    return obj;
+  });
+
+  const allCols = headerCells.map(k => `"${k}"`).join(", ");
+  console.log(`[import] headerIdx=${headerIdx}, total rows: ${rows.length}, cols:`, allCols);
 
   /* remove linhas sem SKU nem Nome (dicas, instruções e exemplos sem dados reais) */
   const dataRows = rows.filter(r => {

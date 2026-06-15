@@ -8,6 +8,7 @@ import {
   ExternalLink, Unlink, Package, Zap, ArrowRight,
   RefreshCw, AlertTriangle, Pause, Trash2, RotateCcw, Bell,
   Download, Link2, Search, ChevronDown, ChevronUp, Sparkles,
+  TrendingUp, BarChart2, DollarSign, ShoppingCart, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -812,6 +813,218 @@ function MeusAnunciosML({
   );
 }
 
+/* ── Vendas ML ───────────────────────────────────────────────── */
+type Periodo = "mes" | "7d" | "30d" | "90d";
+
+const PERIODO_LABEL: Record<Periodo, string> = {
+  mes:  "Este mês",
+  "7d":  "7 dias",
+  "30d": "30 dias",
+  "90d": "90 dias",
+};
+
+interface VendaItem {
+  ml_item_id: string; title: string; quantity: number; unit_price: number;
+  vinculado: boolean; produto_id: string | null; marca_slug: string | null;
+}
+
+interface VendaOrder {
+  id: number; date_created: string; status: string;
+  total_amount: number; buyer: string; items: VendaItem[];
+}
+
+interface RankingItem {
+  produto_id: string; marca_slug: string; titulo: string; qtd: number; total: number;
+}
+
+interface VendasData {
+  periodo: Periodo;
+  totalVendido: number;
+  totalPedidos: number;
+  ticketMedio: number;
+  ranking: RankingItem[];
+  orders: VendaOrder[];
+}
+
+function VendasML() {
+  const [periodo,  setPeriodo]  = useState<Periodo>("mes");
+  const [data,     setData]     = useState<VendasData | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  async function fetchVendas(p: Periodo) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/portal/ml/vendas?periodo=${p}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro");
+      setData(json);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao buscar vendas");
+    } finally { setLoading(false); }
+  }
+
+  useEffect(() => { fetchVendas(periodo); }, [periodo]);
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Period selector */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 p-1 bg-dark-800 border border-white/8 rounded-xl">
+          {(Object.keys(PERIODO_LABEL) as Periodo[]).map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriodo(p)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${periodo === p ? "bg-brand text-white shadow-sm" : "text-gray-400 hover:text-white"}`}
+            >
+              {PERIODO_LABEL[p]}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => fetchVendas(periodo)}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-700 border border-white/8 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          Atualizar
+        </button>
+      </div>
+
+      {loading && !data ? (
+        <div className="flex items-center justify-center py-16 gap-2 text-gray-500 text-sm">
+          <Loader2 size={16} className="animate-spin" /> Buscando vendas no Mercado Livre...
+        </div>
+      ) : !data ? null : (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-dark-800 border border-white/8 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-1.5 text-green-400 mb-2">
+                <DollarSign size={14} />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">Total vendido</span>
+              </div>
+              <p className="text-xl font-bold text-white">{fmt(data.totalVendido)}</p>
+              <p className="text-[10px] text-gray-500">{PERIODO_LABEL[data.periodo]}</p>
+            </div>
+            <div className="bg-dark-800 border border-white/8 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-1.5 text-blue-400 mb-2">
+                <ShoppingCart size={14} />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">Pedidos</span>
+              </div>
+              <p className="text-xl font-bold text-white">{data.totalPedidos}</p>
+              <p className="text-[10px] text-gray-500">pedidos pagos</p>
+            </div>
+            <div className="bg-dark-800 border border-white/8 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-1.5 text-purple-400 mb-2">
+                <TrendingUp size={14} />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">Ticket médio</span>
+              </div>
+              <p className="text-xl font-bold text-white">{fmt(data.ticketMedio)}</p>
+              <p className="text-[10px] text-gray-500">por pedido</p>
+            </div>
+          </div>
+
+          {data.totalPedidos === 0 ? (
+            <div className="bg-dark-800 border border-white/8 border-dashed rounded-2xl py-12 flex flex-col items-center gap-2">
+              <BarChart2 size={24} className="text-gray-700" />
+              <p className="text-sm text-gray-500">Nenhum pedido pago neste período</p>
+            </div>
+          ) : (
+            <>
+              {/* Ranking de produtos */}
+              {data.ranking.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-white flex items-center gap-2">
+                    <BarChart2 size={14} className="text-brand" />
+                    Produtos mais vendidos
+                    <span className="text-xs font-normal text-gray-500">(anúncios vinculados)</span>
+                  </p>
+                  <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
+                    {data.ranking.map((r, i) => {
+                      const pct = data.ranking[0].total > 0
+                        ? Math.round((r.total / data.ranking[0].total) * 100)
+                        : 0;
+                      return (
+                        <div key={r.produto_id ?? i} className="px-4 py-3 space-y-1.5">
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-gray-600 w-4 text-right flex-shrink-0">#{i + 1}</span>
+                            <p className="text-xs font-semibold text-white flex-1 truncate">{r.titulo}</p>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-xs font-bold text-brand">{fmt(r.total)}</p>
+                              <p className="text-[10px] text-gray-500">{r.qtd} un.</p>
+                            </div>
+                          </div>
+                          <div className="ml-7 h-1 bg-dark-600 rounded-full overflow-hidden">
+                            <div className="h-full bg-brand/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de pedidos */}
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-white flex items-center gap-2">
+                  <Calendar size={14} className="text-gray-400" />
+                  Pedidos recentes
+                  <span className="text-xs font-normal text-gray-500">({data.orders.length})</span>
+                </p>
+                <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
+                  {data.orders.map(o => (
+                    <div key={o.id}>
+                      <button
+                        onClick={() => setExpanded(prev => prev === String(o.id) ? null : String(o.id))}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/2 transition-colors text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-semibold text-white font-mono">#{o.id}</p>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400">
+                              Pago
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{o.buyer} · {fmtDate(o.date_created)}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-white">{fmt(o.total_amount)}</p>
+                          <p className="text-[10px] text-gray-500">{o.items.length} item{o.items.length !== 1 ? "s" : ""}</p>
+                        </div>
+                        {expanded === String(o.id)
+                          ? <ChevronUp size={13} className="text-gray-500 flex-shrink-0" />
+                          : <ChevronDown size={13} className="text-gray-500 flex-shrink-0" />}
+                      </button>
+
+                      {expanded === String(o.id) && (
+                        <div className="border-t border-white/4 bg-dark-900/40 divide-y divide-white/3">
+                          {o.items.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-3 px-5 py-2.5">
+                              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.vinculado ? "bg-green-400" : "bg-gray-600"}`} />
+                              <p className="text-xs text-gray-300 flex-1 truncate">{item.title}</p>
+                              <p className="text-[10px] text-gray-500 flex-shrink-0">{item.quantity}x</p>
+                              <p className="text-xs font-semibold text-white flex-shrink-0">{fmt(item.unit_price * item.quantity)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Page ───────────────────────────────────────────────── */
 export default function MercadoLivrePage() {
   const searchParams = useSearchParams();
@@ -821,6 +1034,7 @@ export default function MercadoLivrePage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [removingId,    setRemovingId]    = useState<string | null>(null);
   const [notificacoes,  setNotificacoes]  = useState<Notificacao[]>([]);
+  const [aba,           setAba]           = useState<"anuncios" | "vendas">("anuncios");
 
   async function load() {
     setLoading(true);
@@ -1013,51 +1227,68 @@ export default function MercadoLivrePage() {
         </div>
       )}
 
-      {/* Anúncios gerenciados pela plataforma */}
+      {/* Abas */}
       {status?.connected && (
-        <AnunciosPlataforma
-          anuncios={status.anuncios}
-          removingId={removingId}
-          onRemove={handleRemoveAnuncio}
-        />
-      )}
-
-      {/* Todos os anúncios da conta ML */}
-      {status?.connected && (
-        <MeusAnunciosML
-          onVinculou={(mlItemId, produto) => {
-            /* atualiza lista de anúncios gerenciados se ainda não estava lá */
-            setStatus(prev => {
-              if (!prev) return prev;
-              const jaExiste = prev.anuncios.some(a => a.ml_item_id === mlItemId);
-              if (jaExiste) return prev;
-              return {
-                ...prev,
-                anuncios: [...prev.anuncios, {
-                  id: mlItemId,
-                  produto_id: produto.id,
-                  marca_slug: produto.brand,
-                  ml_item_id: mlItemId,
-                  ml_status: "active",
-                  preco_revenda: produto.resale_price,
-                  created_at: new Date().toISOString(),
-                  produto_name: produto.name,
-                  produto_thumbnail: produto.images?.[0] ?? null,
-                }],
-              };
-            });
-          }}
-        />
-      )}
-
-      {status?.connected && (
-        <div className="flex items-start gap-3 p-4 bg-brand/5 border border-brand/15 rounded-xl">
-          <Zap size={13} className="text-brand flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-400 leading-relaxed">
-            Somente anúncios <span className="text-white font-semibold">vinculados a um produto</span> geram pedidos automáticos quando há uma venda no ML.
-          </p>
+        <div className="flex items-center gap-1 p-1 bg-dark-800 border border-white/8 rounded-2xl">
+          <button
+            onClick={() => setAba("anuncios")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-xl transition-all ${aba === "anuncios" ? "bg-white/8 text-white shadow-sm" : "text-gray-400 hover:text-white"}`}
+          >
+            <ShoppingBag size={14} /> Anúncios
+          </button>
+          <button
+            onClick={() => setAba("vendas")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-xl transition-all ${aba === "vendas" ? "bg-white/8 text-white shadow-sm" : "text-gray-400 hover:text-white"}`}
+          >
+            <TrendingUp size={14} /> Vendas Mercado Livre
+          </button>
         </div>
       )}
+
+      {/* Aba Anúncios */}
+      {status?.connected && aba === "anuncios" && (
+        <>
+          <AnunciosPlataforma
+            anuncios={status.anuncios}
+            removingId={removingId}
+            onRemove={handleRemoveAnuncio}
+          />
+
+          <MeusAnunciosML
+            onVinculou={(mlItemId, produto) => {
+              setStatus(prev => {
+                if (!prev) return prev;
+                const jaExiste = prev.anuncios.some(a => a.ml_item_id === mlItemId);
+                if (jaExiste) return prev;
+                return {
+                  ...prev,
+                  anuncios: [...prev.anuncios, {
+                    id: mlItemId,
+                    produto_id: produto.id,
+                    marca_slug: produto.brand,
+                    ml_item_id: mlItemId,
+                    ml_status: "active",
+                    preco_revenda: produto.resale_price,
+                    created_at: new Date().toISOString(),
+                    produto_name: produto.name,
+                    produto_thumbnail: produto.images?.[0] ?? null,
+                  }],
+                };
+              });
+            }}
+          />
+
+          <div className="flex items-start gap-3 p-4 bg-brand/5 border border-brand/15 rounded-xl">
+            <Zap size={13} className="text-brand flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Somente anúncios <span className="text-white font-semibold">vinculados a um produto</span> geram pedidos automáticos quando há uma venda no ML.
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Aba Vendas */}
+      {status?.connected && aba === "vendas" && <VendasML />}
     </div>
   );
 }

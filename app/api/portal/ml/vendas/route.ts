@@ -31,19 +31,22 @@ function periodoMs(periodo: string): number {
 
 async function fetchOrders(mlUserId: string, token: string): Promise<{ results: MLOrder[]; paging: { total: number } } | null> {
   const attempts = [
-    /* Authorization header — endpoints modernos */
-    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc&limit=100`, useHeader: true },
-    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&limit=50`,                useHeader: true },
-    /* access_token como query param — forma legada mas aceita pelo ML */
-    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&access_token=${token}&limit=50`, useHeader: false },
+    /* sem seller — ML usa usuário autenticado do token */
+    { url: `${ML_BASE}/orders/search?sort=date_desc&limit=50` },
+    /* com seller explícito */
+    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc&limit=50` },
+    /* forma legada com access_token na query */
+    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&access_token=${token}&limit=50` },
+    /* endpoint alternativo */
+    { url: `${ML_BASE}/orders/search?seller=${mlUserId}` },
   ];
 
-  for (const { url, useHeader } of attempts) {
-    const headers: Record<string, string> = useHeader ? { Authorization: `Bearer ${token}` } : {};
-    const res = await fetch(url, { headers });
-    if (res.ok) return res.json();
+  for (const { url } of attempts) {
+    const safeUrl = url.replace(token, "***");
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) { console.log("[ml/vendas] success:", safeUrl); return res.json(); }
     const body = await res.text().catch(() => "");
-    console.error("[ml/vendas] failed", url.replace(token, "***"), res.status, body.slice(0, 200));
+    console.error("[ml/vendas] failed", safeUrl, res.status, body.slice(0, 300));
     if (res.status !== 403 && res.status !== 401) return null;
   }
   return null;

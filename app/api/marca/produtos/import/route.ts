@@ -85,18 +85,22 @@ export async function POST(request: Request) {
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheet    = workbook.Sheets[workbook.SheetNames[0]];
   const rows     = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
+  console.log(`[import] total rows: ${rows.length}, first row keys:`, rows[0] ? Object.keys(rows[0]) : "(none)");
 
   /* remove linhas sem SKU nem Nome (dicas, instruções e exemplos sem dados reais) */
   const dataRows = rows.filter(r => {
     const sku  = col(r, "sku", "sku *");
     const name = col(r, "nome", "name", "nome *");
-    /* descarta se parecer linha de exemplo/dica */
-    if (sku === "TAP-001" || sku === "Ex: TAP-001") return false;
+    /* descarta linhas de exemplo/dica geradas pelo template */
+    if (sku.startsWith("Ex:") || name.startsWith("Ex:")) return false;
+    if (["Produto Exemplo A", "Produto Exemplo B"].includes(name)) return false;
     return sku || name;
   });
 
   if (dataRows.length === 0)
-    return NextResponse.json({ error: "Nenhum produto válido encontrado na planilha" }, { status: 400 });
+    return NextResponse.json({
+      error: "Nenhum produto válido encontrado na planilha. Verifique se as colunas 'SKU' e 'Nome' estão preenchidas e se está usando o modelo correto.",
+    }, { status: 400 });
 
   const products = dataRows.map(r => {
     /* atributos ML: colunas não-fixas que batem com um atributo da categoria */
@@ -144,9 +148,21 @@ export async function POST(request: Request) {
     };
   }).filter(p => p.name);
 
-  if (products.length === 0)
-    return NextResponse.json({ error: "Nenhum produto com Nome preenchido" }, { status: 400 });
+  if (products.length === 0) {
+    /* diagnóstico: descobre quais colunas foram encontradas */
+    const sample = dataRows[0] ?? {};
+    const foundCols = Object.keys(sample).map(k => `"${k}"`).join(", ");
+    return NextResponse.json({
+      error: `Nenhum produto com Nome preenchido. Colunas encontradas na planilha: ${foundCols || "(nenhuma)"}. Certifique-se de que o cabeçalho da coluna seja exatamente "Nome".`,
+    }, { status: 400 });
+  }
 
-  const count = await importProducts(products);
-  return NextResponse.json({ ok: true, count });
+  try {
+    const count = await importProducts(products);
+    return NextResponse.json({ ok: true, count });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[import-products]", msg);
+    return NextResponse.json({ error: `Erro ao salvar produtos: ${msg}` }, { status: 500 });
+  }
 }

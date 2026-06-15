@@ -5,29 +5,29 @@ export const runtime = "nodejs";
 
 /* palavras irrelevantes para busca por palavras-chave */
 const STOPWORDS = new Set([
-  "para", "com", "sem", "por", "dos", "das", "dos", "del",
+  "para", "com", "sem", "por", "dos", "das", "del",
   "universal", "kit", "peças", "pecas", "conjunto", "par",
   "preto", "preta", "branco", "branca", "cinza", "azul", "vermelho",
   "novo", "nova", "original", "premium", "luxo", "sport",
   "carro", "veiculo", "veículo", "auto", "automotivo",
+  "tapete", "bandeja", "monobloco", "bordas", "elevadas",
 ]);
 
 /* extrai tokens que parecem SKUs do título */
 function extractSkuCandidates(title: string): string[] {
-  // padrões como: TAP-001, ABC123, SKU-1234, MLM123456 (mas não IDs ML)
   const matches = title.match(/\b[A-Z]{2,}[-.]?\d{2,}[-.]?\w*\b/g) ?? [];
-  // exclui padrões ML (MLB/MLA + só dígitos)
   return matches.filter(m => !/^ML[A-Z]\d+$/.test(m));
 }
 
-/* extrai palavras-chave relevantes do título */
+/* extrai palavras-chave relevantes e específicas do título */
 function extractKeywords(title: string): string[] {
   return title
     .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter(w => w.length >= 4 && !STOPWORDS.has(w))
-    .slice(0, 4);
+    .slice(0, 5);
 }
 
 export async function POST(request: Request) {
@@ -60,19 +60,30 @@ export async function POST(request: Request) {
   const slugs = (aprovadas ?? []).map(a => a.marca_slug as string);
   if (!slugs.length) return NextResponse.json({ suggestions: [] });
 
+  /* anúncios já vinculados no banco — exclui da sugestão */
+  const { data: jaVinculados } = await db
+    .from("portal_ml_anuncios")
+    .select("ml_item_id")
+    .eq("cliente_id", user.id);
+
+  const vinculadoSet = new Set((jaVinculados ?? []).map(v => v.ml_item_id as string));
+
+  const itemsToProcess = items.filter(i => !vinculadoSet.has(i.id));
+  if (!itemsToProcess.length) return NextResponse.json({ suggestions: [] });
+
   type Suggestion = {
-    ml_item_id: string;
-    produto_id: string;
-    produto_name: string;
-    produto_sku: string;
+    ml_item_id:    string;
+    produto_id:    string;
+    produto_name:  string;
+    produto_sku:   string;
     preco_revenda: number | null;
-    confidence: "sku" | "titulo";
+    confidence:    "sku" | "titulo";
   };
 
   const suggestions: Suggestion[] = [];
 
-  for (const item of items) {
-    /* 1) tenta por SKU */
+  for (const item of itemsToProcess) {
+    /* 1) tenta por SKU extraído do título */
     const skuCandidates = extractSkuCandidates(item.title);
     let found = false;
 
@@ -88,14 +99,7 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (data) {
-        suggestions.push({
-          ml_item_id:    item.id,
-          produto_id:    data.id,
-          produto_name:  data.name,
-          produto_sku:   data.sku,
-          preco_revenda: data.resale_price ?? data.price ?? null,
-          confidence:    "sku",
-        });
+        suggestions.push({ ml_item_id: item.id, produto_id: data.id, produto_name: data.name, produto_sku: data.sku, preco_revenda: data.resale_price ?? data.price ?? null, confidence: "sku" });
         found = true;
         break;
       }
@@ -103,33 +107,28 @@ export async function POST(request: Request) {
 
     if (found) continue;
 
-    /* 2) fallback: busca por palavras-chave do título */
+    /* 2) fallback: busca combinando múltiplas palavras-chave específicas do título
+       — exige que o produto bata com TODAS as palavras para evitar falsos positivos */
     const keywords = extractKeywords(item.title);
-    if (!keywords.length) continue;
+    if (keywords.length < 2) continue;  // título genérico demais, pula
 
-    /* usa a primeira palavra-chave mais específica */
-    for (const kw of keywords) {
+    /* monta filtro AND com as 3 palavras mais relevantes */
+    const topKw = keywords.slice(0, 3);
+    let query = db
+      .from("produtos")
+      .select("id, sku, name, resale_price, price")
+      .in("brand", slugs)
+      .eq("active", true);
+
+    for (const kw of topKw) {
       const safe = kw.replace(/[%_]/g, "\\$&");
-      const { data } = await db
-        .from("produtos")
-        .select("id, sku, name, resale_price, price")
-        .in("brand", slugs)
-        .eq("active", true)
-        .or(`name.ilike.%${safe}%,sku.ilike.%${safe}%`)
-        .limit(1)
-        .maybeSingle();
+      query = query.ilike("name", `%${safe}%`);
+    }
 
-      if (data) {
-        suggestions.push({
-          ml_item_id:    item.id,
-          produto_id:    data.id,
-          produto_name:  data.name,
-          produto_sku:   data.sku,
-          preco_revenda: data.resale_price ?? data.price ?? null,
-          confidence:    "titulo",
-        });
-        break;
-      }
+    const { data: multiMatch } = await query.limit(1).maybeSingle();
+
+    if (multiMatch) {
+      suggestions.push({ ml_item_id: item.id, produto_id: multiMatch.id, produto_name: multiMatch.name, produto_sku: multiMatch.sku, preco_revenda: multiMatch.resale_price ?? multiMatch.price ?? null, confidence: "titulo" });
     }
   }
 

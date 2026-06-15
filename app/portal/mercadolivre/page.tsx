@@ -391,7 +391,7 @@ function AnunciosPlataforma({
 }
 
 /* ── Inline product picker (batch mode) ─────────────────────── */
-type PendingLink = { produto_id: string; produto_name: string; preco_revenda: number | null };
+type PendingLink = { produto_id: string; produto_name: string; produto_sku?: string; preco_revenda: number | null; auto?: boolean };
 
 function InlineProdutoPicker({
   value, onChange,
@@ -432,10 +432,17 @@ function InlineProdutoPicker({
 
   if (value) {
     return (
-      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-brand/10 border border-brand/25 rounded-xl min-w-0 max-w-[220px]">
-        <CheckCircle2 size={10} className="text-brand flex-shrink-0" />
-        <span className="text-[11px] text-brand font-semibold truncate flex-1">{value.produto_name}</span>
-        <button onClick={() => { onChange(null); setQ(""); }} className="text-gray-500 hover:text-white flex-shrink-0">
+      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-xl min-w-0 max-w-[260px] ${value.auto ? "bg-purple-500/10 border-purple-500/25" : "bg-brand/10 border-brand/25"}`}>
+        {value.auto
+          ? <Sparkles size={10} className="text-purple-400 flex-shrink-0" />
+          : <CheckCircle2 size={10} className="text-brand flex-shrink-0" />}
+        <div className="flex-1 min-w-0">
+          <p className={`text-[11px] font-semibold truncate leading-tight ${value.auto ? "text-purple-300" : "text-brand"}`}>{value.produto_name}</p>
+          {value.produto_sku && (
+            <p className={`text-[9px] font-mono leading-tight ${value.auto ? "text-purple-400/70" : "text-brand/60"}`}>{value.produto_sku}</p>
+          )}
+        </div>
+        <button onClick={() => { onChange(null); setQ(""); }} className="text-gray-500 hover:text-white flex-shrink-0 ml-1">
           <X size={10} />
         </button>
       </div>
@@ -457,7 +464,7 @@ function InlineProdutoPicker({
           {results.slice(0, 8).map(p => (
             <button
               key={p.id}
-              onClick={() => { onChange({ produto_id: p.id, produto_name: p.name, preco_revenda: p.resale_price }); setQ(p.name); setOpen(false); }}
+              onClick={() => { onChange({ produto_id: p.id, produto_name: p.name, produto_sku: p.sku, preco_revenda: p.resale_price, auto: false }); setQ(p.name); setOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors text-left"
             >
               <div className="w-7 h-7 rounded-lg bg-dark-600 overflow-hidden flex-shrink-0">
@@ -581,14 +588,14 @@ function MeusAnunciosML({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erro");
 
-      type Sug = { ml_item_id: string; produto_id: string; produto_name: string; preco_revenda: number | null; confidence: string };
+      type Sug = { ml_item_id: string; produto_id: string; produto_name: string; produto_sku: string; preco_revenda: number | null; confidence: string };
       const suggestions: Sug[] = data.suggestions ?? [];
       if (!suggestions.length) { toast.info("Nenhuma sugestão encontrada. Vincule manualmente."); return; }
 
       const next: Record<string, PendingLink> = { ...pendingLinks };
       for (const s of suggestions) {
         if (!next[s.ml_item_id]) {
-          next[s.ml_item_id] = { produto_id: s.produto_id, produto_name: s.produto_name, preco_revenda: s.preco_revenda };
+          next[s.ml_item_id] = { produto_id: s.produto_id, produto_name: s.produto_name, produto_sku: s.produto_sku, preco_revenda: s.preco_revenda, auto: true };
         }
       }
       setPendingLinks(next);

@@ -21,6 +21,15 @@ interface MLOrder {
   order_items:  MLOrderItem[];
 }
 
+function periodoMs(periodo: string): number {
+  if (periodo === "7d")  return 7  * 24 * 60 * 60 * 1000;
+  if (periodo === "30d") return 30 * 24 * 60 * 60 * 1000;
+  if (periodo === "90d") return 90 * 24 * 60 * 60 * 1000;
+  /* mes: início do mês atual */
+  const now = new Date();
+  return now.getTime() - new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -40,40 +49,32 @@ export async function GET(request: Request) {
   if (!tokenRow?.ml_user_id)
     return NextResponse.json({ error: "Conta ML não encontrada" }, { status: 404 });
 
-  /* período: padrão = mês atual */
-  const url      = new URL(request.url);
-  const periodo  = url.searchParams.get("periodo") ?? "mes";
+  const url     = new URL(request.url);
+  const periodo = url.searchParams.get("periodo") ?? "mes";
 
-  const now   = new Date();
-  let dateFrom: string;
-  if (periodo === "7d") {
-    const d = new Date(now); d.setDate(d.getDate() - 7);
-    dateFrom = d.toISOString();
-  } else if (periodo === "30d") {
-    const d = new Date(now); d.setDate(d.getDate() - 30);
-    dateFrom = d.toISOString();
-  } else if (periodo === "90d") {
-    const d = new Date(now); d.setDate(d.getDate() - 90);
-    dateFrom = d.toISOString();
-  } else {
-    /* mês atual */
-    dateFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  }
+  /* busca pedidos pagos — sem filtro de data na URL para evitar rejeição da API */
+  const mlUrl = `${ML_BASE}/orders/search?seller=${tokenRow.ml_user_id}&order.status=paid&sort=date_desc&limit=100`;
 
-  /* busca pedidos pagos no ML */
-  const searchRes = await fetch(
-    `${ML_BASE}/orders/search?seller=${tokenRow.ml_user_id}&order.status=paid&sort=date_desc&limit=50&date_created.from=${encodeURIComponent(dateFrom)}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  const searchRes = await fetch(mlUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
   if (!searchRes.ok) {
-    const err = await searchRes.text().catch(() => "");
-    console.error("[ml/vendas] ML API error", searchRes.status, err);
-    return NextResponse.json({ error: "Erro ao buscar pedidos no ML" }, { status: 502 });
+    let errBody = "";
+    try { errBody = await searchRes.text(); } catch { /* noop */ }
+    console.error("[ml/vendas] ML API error", searchRes.status, errBody);
+    return NextResponse.json(
+      { error: `Erro ao buscar pedidos no ML (status ${searchRes.status})`, detail: errBody },
+      { status: 502 }
+    );
   }
 
   const searchData: { results: MLOrder[]; paging: { total: number } } = await searchRes.json();
-  const orders = searchData.results ?? [];
+  const allOrders = searchData.results ?? [];
+
+  /* filtra pelo período no lado da aplicação */
+  const cutoff = Date.now() - periodoMs(periodo);
+  const orders = allOrders.filter(o => new Date(o.date_created).getTime() >= cutoff);
 
   /* anúncios vinculados deste cliente */
   const { data: vinculados } = await db
@@ -84,7 +85,6 @@ export async function GET(request: Request) {
   const vinculadoMap: Record<string, { produto_id: string; marca_slug: string; preco_revenda: number | null }> = {};
   for (const v of vinculados ?? []) vinculadoMap[v.ml_item_id] = v;
 
-  /* enrich orders com info do produto vinculado */
   type EnrichedOrder = {
     id:           number;
     date_created: string;
@@ -92,13 +92,8 @@ export async function GET(request: Request) {
     total_amount: number;
     buyer:        string;
     items: {
-      ml_item_id:   string;
-      title:        string;
-      quantity:     number;
-      unit_price:   number;
-      vinculado:    boolean;
-      produto_id:   string | null;
-      marca_slug:   string | null;
+      ml_item_id: string; title: string; quantity: number; unit_price: number;
+      vinculado: boolean; produto_id: string | null; marca_slug: string | null;
     }[];
   };
 
@@ -108,11 +103,11 @@ export async function GET(request: Request) {
     status:       o.status,
     total_amount: o.total_amount,
     buyer:        o.buyer?.nickname ?? "—",
-    items: o.order_items.map(i => {
-      const link = vinculadoMap[i.item.id];
+    items: (o.order_items ?? []).map(i => {
+      const link = vinculadoMap[i.item?.id ?? ""];
       return {
-        ml_item_id:  i.item.id,
-        title:       i.item.title,
+        ml_item_id:  i.item?.id    ?? "",
+        title:       i.item?.title ?? "",
         quantity:    i.quantity,
         unit_price:  i.unit_price,
         vinculado:   !!link,
@@ -122,12 +117,11 @@ export async function GET(request: Request) {
     }),
   }));
 
-  /* totais */
-  const totalVendido    = orders.reduce((s, o) => s + Number(o.total_amount), 0);
-  const totalPedidos    = orders.length;
-  const ticketMedio     = totalPedidos > 0 ? totalVendido / totalPedidos : 0;
+  const totalVendido = enriched.reduce((s, o) => s + Number(o.total_amount), 0);
+  const totalPedidos = enriched.length;
+  const ticketMedio  = totalPedidos > 0 ? totalVendido / totalPedidos : 0;
 
-  /* ranking por produto (somente vinculados) */
+  /* ranking por anúncio vinculado */
   const produtoTotais: Record<string, { produto_id: string; marca_slug: string; titulo: string; qtd: number; total: number }> = {};
   for (const o of enriched) {
     for (const i of o.items) {
@@ -146,7 +140,6 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     periodo,
-    dateFrom,
     totalVendido,
     totalPedidos,
     ticketMedio,

@@ -9,21 +9,36 @@ export const runtime = "nodejs";
 
 const ML_BASE = "https://api.mercadolibre.com";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code  = searchParams.get("code");
-  const state = searchParams.get("state"); // clienteId enviado no /connect
+  const state = searchParams.get("state"); // user.id enviado no /connect
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  if (!code) {
+    console.error("[ml/callback] sem code:", Object.fromEntries(searchParams));
+    return NextResponse.redirect(new URL("/portal/mercadolivre?error=no_code", request.url));
+  }
 
-  if (!user || user.id !== state) {
+  /* state deve ser um UUID válido (user.id) */
+  if (!state || !UUID_RE.test(state)) {
+    console.error("[ml/callback] state inválido:", state);
     return NextResponse.redirect(new URL("/portal/mercadolivre?error=auth", request.url));
   }
 
-  if (!code) {
-    return NextResponse.redirect(new URL("/portal/mercadolivre?error=no_code", request.url));
+  /* valida sessão — mas usa state como fallback se sessão não disponível */
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  /* se sessão existe, garante que é o mesmo usuário */
+  if (user && user.id !== state) {
+    console.error("[ml/callback] user.id !== state", user.id, state);
+    return NextResponse.redirect(new URL("/portal/mercadolivre?error=auth", request.url));
   }
+
+  /* clienteId: prefere sessão ativa, cai no state se sessão expirou durante o redirect */
+  const clienteId = user?.id ?? state;
 
   try {
     const token = await exchangePortalCodeForToken(code);
@@ -40,11 +55,11 @@ export async function GET(request: Request) {
       }
     } catch { /* opcional */ }
 
-    await savePortalMlToken(user.id, token, nickname);
+    await savePortalMlToken(clienteId, token, nickname);
 
     return NextResponse.redirect(new URL("/portal/mercadolivre?connected=1", request.url));
   } catch (e) {
-    console.error("ML portal callback error:", e);
+    console.error("[ml/callback] erro ao trocar token:", e);
     return NextResponse.redirect(new URL("/portal/mercadolivre?error=token", request.url));
   }
 }

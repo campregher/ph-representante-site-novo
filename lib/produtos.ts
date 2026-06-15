@@ -158,14 +158,21 @@ export async function importProducts(
   rows: Omit<Product, "id" | "createdAt">[]
 ): Promise<number> {
   const db = await createAdminClient();
-  const { error } = await db.from("produtos").insert(
+
+  const safeNum = (v: number | undefined): number | null => {
+    if (v == null) return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  };
+
+  const { error } = await db.from("produtos").upsert(
     rows.map(r => ({
       sku:              r.sku.trim(),
       name:             r.name.trim(),
       brand:            r.brand,
       description:      r.description?.trim() ?? "",
-      price:            r.price        != null ? Number(r.price)        : null,
-      resale_price:     r.resale_price != null ? Number(r.resale_price) : null,
+      price:            safeNum(r.price),
+      resale_price:     safeNum(r.resale_price),
       images:           r.images ?? [],
       active:           r.active !== false,
       ml_category_id:   r.ml_category_id   ?? null,
@@ -173,7 +180,8 @@ export async function importProducts(
       ml_category_path: r.ml_category_path ?? null,
       attributes:       r.attributes       ?? {},
       compatibilidades: r.compatibilidades  ?? [],
-    }))
+    })),
+    { onConflict: "sku,brand" }
   );
   if (error) throw new Error(error.message);
   return rows.length;

@@ -72,21 +72,35 @@ export async function GET(request: Request) {
   const searchData = await fetchOrders(tokenRow.ml_user_id, token);
 
   if (!searchData) {
-    /* diagnóstico: verifica escopos do token atual */
-    let scopes = "desconhecido";
+    /* diagnóstico: verifica escopos do token */
+    let scopes     = "desconhecido";
+    let checkRaw   = "";
+    let meStatus   = 0;
+    let meNickname = "";
     try {
       const checkRes = await fetch(`${ML_BASE}/oauth/check_token?token=${token}`);
+      checkRaw = await checkRes.text();
       if (checkRes.ok) {
-        const checkData = await checkRes.json();
-        scopes = checkData.scope ?? JSON.stringify(checkData);
+        const d = JSON.parse(checkRaw);
+        scopes = d.scope ?? JSON.stringify(d);
+      } else {
+        scopes = `HTTP ${checkRes.status}: ${checkRaw.slice(0, 300)}`;
       }
+    } catch (e) { scopes = `erro: ${e}`; }
+
+    try {
+      const meRes = await fetch(`${ML_BASE}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+      meStatus = meRes.status;
+      const meBody = await meRes.json().catch(() => ({}));
+      meNickname = meBody.nickname ?? meBody.first_name ?? JSON.stringify(meBody).slice(0, 100);
     } catch { /* noop */ }
-    console.error("[ml/vendas] token scopes:", scopes);
+
+    console.error("[ml/vendas] diagnóstico:", { scopes, meStatus, meNickname, mlUserId: tokenRow.ml_user_id });
 
     return NextResponse.json({
       sem_permissao: true,
       error: "O aplicativo ML não tem permissão para acessar pedidos. Habilite Orders_v2 no ML Developers e reconecte a conta.",
-      debug_scopes: scopes,
+      debug: { scopes, meStatus, meNickname },
     }, { status: 403 });
   }
 

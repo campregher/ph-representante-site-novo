@@ -998,10 +998,14 @@ function VendasML() {
       triggerBlobDownload(await res.blob(), `etiqueta-${shippingId}.pdf`);
     } else {
       const json = await res.json().catch(() => ({}));
-      if (!json.url) throw new Error("URL da etiqueta não encontrada");
-      /* Abre a página da venda no ML onde o seller pode reimprimir */
-      window.open(json.url, "_blank");
-      toast.info("Abra o ML e clique em 'Reimprimir etiqueta' — depois use o botão de upload para enviar o PDF para a marca.", { duration: 8000 });
+      /* ME2: API não expõe PDF — orienta o usuário a fazer upload manual */
+      toast.warning(
+        "Etiqueta ME2: baixe o PDF no Mercado Livre e use o botão 'Fazer upload' abaixo.",
+        {
+          duration: 10000,
+          action: json.url ? { label: "Abrir ML", onClick: () => window.open(json.url, "_blank") } : undefined,
+        }
+      );
     }
   }
 

@@ -5,97 +5,124 @@ import { getValidPortalToken } from "@/lib/portal-ml-auth";
 
 export const runtime = "nodejs";
 
-const ML_BASE    = "https://api.mercadolibre.com";
+const ML_BASE     = "https://api.mercadolibre.com";
 const ML_WEB_BASE = "https://www.mercadolivre.com.br";
 
 type LabelResult =
-  | { kind: "url";  url: ArrayBuffer | null; value: string }
-  | { kind: "pdf";  data: ArrayBuffer; trackingNumber?: string };
+  | { kind: "pdf"; data: ArrayBuffer; trackingNumber?: string }
+  | { kind: "url"; value: string };
 
-async function resolveLabel(shippingId: string, token: string): Promise<LabelResult | null> {
-  const headers = { Authorization: `Bearer ${token}` };
-
-  /* ── 1. response_type=link (ME1 / alguns ME2) ── */
-  const r1 = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=link`, { headers });
-  if (r1.ok) {
-    const ct = r1.headers.get("content-type") ?? "";
-    if (ct.includes("application/pdf") || ct.includes("octet-stream")) {
-      return { kind: "pdf", data: await r1.arrayBuffer() };
+/* Tenta obter PDF de uma URL; retorna ArrayBuffer ou null */
+async function tryPdf(url: string, hdrs: Record<string, string> = {}): Promise<ArrayBuffer | null> {
+  try {
+    const r = await fetch(url, { headers: { Accept: "application/pdf,*/*", ...hdrs }, redirect: "follow" });
+    if (!r.ok) return null;
+    const ct = r.headers.get("content-type") ?? "";
+    if (ct.includes("pdf") || ct.includes("octet-stream")) return r.arrayBuffer();
+    /* Seguiu redirect para URL diferente com PDF */
+    if (r.url && r.url !== url) {
+      const r2 = await fetch(r.url, { headers: { Accept: "application/pdf,*/*" } });
+      if (r2.ok) {
+        const ct2 = r2.headers.get("content-type") ?? "";
+        if (ct2.includes("pdf") || ct2.includes("octet-stream")) return r2.arrayBuffer();
+      }
     }
+  } catch { /* ignora */ }
+  return null;
+}
+
+/* Tenta obter URL de texto de uma resposta ML */
+async function tryUrl(url: string, hdrs: Record<string, string>): Promise<string | null> {
+  try {
+    const r = await fetch(url, { headers: { Accept: "application/json", ...hdrs } });
+    if (!r.ok) return null;
+    const ct = r.headers.get("content-type") ?? "";
     if (ct.includes("json")) {
-      const data = await r1.json().catch(() => null);
-      const url = typeof data === "string" ? data : (data?.label_url ?? data?.print_url ?? data?.url ?? null);
-      if (url) return { kind: "url", value: url, url: null };
-    } else {
-      const text = await r1.text().catch(() => "");
-      if (text.trim().startsWith("http")) return { kind: "url", value: text.trim(), url: null };
+      const data = await r.json().catch(() => null);
+      if (typeof data === "string" && data.startsWith("http")) return data;
+      return data?.label_url ?? data?.print_url ?? data?.url ?? data?.urls?.[0]?.url ?? null;
     }
-    if (r1.url !== `${ML_BASE}/shipments/${shippingId}/labels?response_type=link`)
-      return { kind: "url", value: r1.url, url: null };
+    if (ct.includes("text")) {
+      const txt = await r.text().catch(() => "");
+      if (txt.trim().startsWith("http")) return txt.trim();
+    }
+    if (r.url && r.url !== url) return r.url;
+  } catch { /* ignora */ }
+  return null;
+}
+
+async function resolveLabel(shippingId: string, token: string, mlUserId?: string): Promise<LabelResult | null> {
+  const auth = { Authorization: `Bearer ${token}` };
+
+  /* ── Tentativas via API ML ── */
+  for (const responseType of ["link", "pdf", "zpl2"] as const) {
+    const pdf = await tryPdf(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${responseType}`, auth);
+    if (pdf) return { kind: "pdf", data: pdf };
+
+    const url = await tryUrl(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${responseType}`, auth);
+    if (url) return { kind: "url", value: url };
   }
 
-  /* ── 2. response_type=pdf (proxy direto) ── */
-  const r2 = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=pdf`, { headers });
-  if (r2.ok) {
-    const ct2 = r2.headers.get("content-type") ?? "";
-    if (ct2.includes("application/pdf") || ct2.includes("octet-stream") || ct2.includes("zip")) {
-      return { kind: "pdf", data: await r2.arrayBuffer() };
+  /* ── POST batch labels ── */
+  try {
+    const r = await fetch(`${ML_BASE}/shipments/labels`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ shipment_ids: [shippingId], response_type: "pdf" }),
+    });
+    if (r.ok) {
+      const ct = r.headers.get("content-type") ?? "";
+      if (ct.includes("pdf") || ct.includes("octet-stream")) return { kind: "pdf", data: await r.arrayBuffer() };
+      if (ct.includes("json")) {
+        const d = await r.json().catch(() => null);
+        const u = d?.label_url ?? d?.url ?? null;
+        if (u) return { kind: "url", value: u };
+      }
     }
-    if (r2.url !== `${ML_BASE}/shipments/${shippingId}/labels?response_type=pdf`)
-      return { kind: "url", value: r2.url, url: null };
-  }
+  } catch { /* ignora */ }
 
-  /* ── 3. response_type=zpl2 (converte ZPL → não disponível, tenta mesmo assim) ── */
-  const r3 = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=zpl2`, { headers });
-  if (r3.ok) {
-    const ct3 = r3.headers.get("content-type") ?? "";
-    if (ct3.includes("pdf") || ct3.includes("octet-stream")) {
-      return { kind: "pdf", data: await r3.arrayBuffer() };
-    }
-  }
+  /* ── Objeto do envio → tracking_number ── */
+  try {
+    const r = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: auth });
+    if (r.ok) {
+      const sh = await r.json().catch(() => null);
 
-  /* ── 4. Objeto do envio → tracking_number para proxy via API ML web ── */
-  const r4 = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers });
-  if (r4.ok) {
-    const sh = await r4.json().catch(() => null);
+      const directUrl = sh?.label_url ?? sh?.shipping_label?.url ?? null;
+      if (directUrl) return { kind: "url", value: directUrl };
 
-    const directUrl = sh?.label_url ?? sh?.shipping_label?.url ?? null;
-    if (directUrl) return { kind: "url", value: directUrl, url: null };
+      const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
 
-    const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
+      if (tracking) {
+        const trackingUrl = `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
 
-    if (tracking) {
-      /* Tenta buscar o PDF direto pela API de impressão ML usando o token OAuth */
-      const pdfUrl = `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
-      const rPdf = await fetch(pdfUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/pdf,*/*",
-        },
-        redirect: "follow",
-      });
+        /* 1. Tenta PDF via URL pública (sem auth) */
+        const pdfPublic = await tryPdf(trackingUrl);
+        if (pdfPublic) return { kind: "pdf", data: pdfPublic, trackingNumber: tracking };
 
-      if (rPdf.ok) {
-        const ct = rPdf.headers.get("content-type") ?? "";
-        if (ct.includes("pdf") || ct.includes("octet-stream")) {
-          return { kind: "pdf", data: await rPdf.arrayBuffer(), trackingNumber: tracking };
+        /* 2. Tenta PDF com token OAuth */
+        const pdfAuth = await tryPdf(trackingUrl, auth);
+        if (pdfAuth) return { kind: "pdf", data: pdfAuth, trackingNumber: tracking };
+
+        /* 3. Tenta URL alternativas de print */
+        for (const altUrl of [
+          `${ML_WEB_BASE}/envios/etiqueta/imprimir/${tracking}`,
+          `${ML_WEB_BASE}/checkout/v1/logistic/print/label/${shippingId}`,
+          `${ML_WEB_BASE}/checkout/v1/logistic/print/pdf/${shippingId}`,
+        ]) {
+          const pdfAlt = await tryPdf(altUrl, auth);
+          if (pdfAlt) return { kind: "pdf", data: pdfAlt, trackingNumber: tracking };
         }
-        /* Seguiu redirect para URL diferente — retorna essa URL */
-        if (rPdf.url && rPdf.url !== pdfUrl) {
-          return { kind: "url", value: rPdf.url, url: null };
-        }
+
+        /* Fallback: retorna URL para abrir no browser */
+        console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — nenhum PDF encontrado, retornando URL`);
+        return { kind: "url", value: trackingUrl };
       }
 
-      /* Nenhum método retornou PDF — devolve URL de fallback para abrir no browser */
-      return { kind: "url", value: pdfUrl, url: null };
+      const logisticType: string = sh?.logistic_type ?? "";
+      console.warn(`[ml/etiqueta] ${shippingId} sem tracking. logistic_type=${logisticType} status=${sh?.status} keys=${JSON.stringify(Object.keys(sh ?? {}))}`);
     }
-
-    const logisticType: string = sh?.logistic_type ?? "";
-    if (logisticType === "fulfillment") {
-      console.info(`[ml/etiqueta] shipment ${shippingId} fulfillment — sem etiqueta do vendedor`);
-    } else {
-      console.warn(`[ml/etiqueta] shipment ${shippingId} sem tracking. logistic_type=${logisticType} status=${sh?.status}`);
-    }
+  } catch (e) {
+    console.error("[ml/etiqueta] shipment fetch error:", e);
   }
 
   return null;
@@ -122,9 +149,7 @@ export async function GET(request: Request) {
     );
   }
 
-  /* ── PDF binário: proxy direto ── */
   if (result.kind === "pdf") {
-    /* Salva tracking URL no orcamento em background */
     if (result.trackingNumber) {
       void saveEtiqueta(shippingId, user.id, `${ML_WEB_BASE}/envios/etiqueta/print/link/${result.trackingNumber}`);
     }
@@ -137,7 +162,6 @@ export async function GET(request: Request) {
     });
   }
 
-  /* ── URL: salva e retorna ── */
   void saveEtiqueta(shippingId, user.id, result.value);
   return NextResponse.json({ url: result.value });
 }
@@ -147,7 +171,6 @@ async function saveEtiqueta(shippingId: string, userId: string, labelUrl: string
     const db = await createAdminClient();
     const { data: cli } = await db.from("clientes").select("id").eq("user_id", userId).single();
     if (!cli) return;
-
     const { data: orc } = await db
       .from("orcamentos")
       .select("id, ml_order_id, orcamento_etiquetas(id)")
@@ -155,15 +178,14 @@ async function saveEtiqueta(shippingId: string, userId: string, labelUrl: string
       .eq("cliente_id", cli.id)
       .maybeSingle();
     if (!orc) return;
-
     const existing = (orc.orcamento_etiquetas ?? []) as { id: string }[];
     if (existing.length > 0) {
       await db.from("orcamento_etiquetas").update({ url: labelUrl }).eq("id", existing[0].id);
     } else {
       await db.from("orcamento_etiquetas").insert({
         orcamento_id: orc.id,
-        nome:         `Etiqueta ML #${orc.ml_order_id ?? shippingId}`,
-        url:          labelUrl,
+        nome: `Etiqueta ML #${orc.ml_order_id ?? shippingId}`,
+        url:  labelUrl,
       });
     }
   } catch { /* não bloqueia */ }

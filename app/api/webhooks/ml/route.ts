@@ -37,20 +37,60 @@ export async function POST(request: Request) {
     application_id?: number;
   };
 
-  /* Só processa notificações de pedidos do nosso app */
-  if (body.topic !== "orders_v2" || !body.resource || !body.user_id) {
+  if (!body.resource || !body.user_id) return NextResponse.json({ ok: true });
+
+  const appId    = String(body.application_id ?? "");
+  const mlUserId = String(body.user_id);
+
+  /* ── Shipments: salva etiqueta quando label fica disponível no ML ── */
+  if (body.topic === "shipments") {
+    const m = body.resource.match(/\/shipments\/(\d+)/);
+    const shippingId = m ? m[1] : null;
+    if (shippingId) {
+      try {
+        const db = await createAdminClient();
+
+        /* Encontra orcamento com esse shipping_id que ainda não tem etiqueta */
+        const { data: orc } = await db
+          .from("orcamentos")
+          .select("id, ml_order_id, orcamento_etiquetas(id)")
+          .eq("ml_shipping_id", shippingId)
+          .maybeSingle();
+
+        if (orc && (orc.orcamento_etiquetas ?? []).length === 0) {
+          const { data: tokenRow } = await db
+            .from("portal_ml_tokens")
+            .select("cliente_id")
+            .eq("ml_user_id", mlUserId)
+            .maybeSingle();
+
+          if (tokenRow) {
+            const token = await getValidPortalToken(tokenRow.cliente_id).catch(() => null);
+            if (token) {
+              const labelUrl = await fetchLabelUrl(shippingId, token);
+              if (labelUrl) {
+                await db.from("orcamento_etiquetas").insert({
+                  orcamento_id: orc.id,
+                  nome:         `Etiqueta ML #${orc.ml_order_id ?? shippingId}`,
+                  url:          labelUrl,
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("ML shipments webhook error:", err);
+      }
+    }
     return NextResponse.json({ ok: true });
   }
 
-  const appId = String(body.application_id ?? "");
-  if (appId && appId !== ML_APP_ID) {
-    return NextResponse.json({ ok: true });
-  }
+  /* ── Orders v2: cria pedido quando venda é confirmada ── */
+  if (body.topic !== "orders_v2") return NextResponse.json({ ok: true });
+  if (appId && appId !== ML_APP_ID)  return NextResponse.json({ ok: true });
 
   const orderId = extractOrderId(body.resource);
   if (!orderId) return NextResponse.json({ ok: true });
-
-  const mlUserId = String(body.user_id);
 
   try {
     const db = await createAdminClient();

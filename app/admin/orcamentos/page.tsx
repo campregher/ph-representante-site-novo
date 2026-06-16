@@ -65,6 +65,7 @@ export default function AdminOrcamentosPage() {
   const [notifSending,    setNotifSending]    = useState(false);
   const [finalizingId,    setFinalizingId]    = useState<string | null>(null);
   const [expedicaoSending,setExpedicaoSending]= useState(false);
+  const [statusEdit,      setStatusEdit]      = useState<Record<string, string>>({});
 
   const [filtro,          setFiltro]          = useState<Filtro>("todos");
 
@@ -157,6 +158,23 @@ export default function AdminOrcamentosPage() {
       toast.success("Notificação enviada ao comprador.");
       setNotifModal(null); setNotifMsg(""); await load();
     } finally { setNotifSending(false); }
+  }
+
+  async function updateStatusManual(id: string, status: string) {
+    setActionId(id);
+    try {
+      const res = await fetch("/api/admin/orcamentos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Erro ao atualizar status"); return; }
+      toast.success("Status atualizado!");
+      setStatusEdit((p) => { const n = { ...p }; delete n[id]; return n; });
+      await load();
+    } catch { toast.error("Erro de conexão"); }
+    finally { setActionId(null); }
   }
 
   async function finalizar(id: string) {
@@ -573,6 +591,33 @@ export default function AdminOrcamentosPage() {
                     {o.observacao_admin && (
                       <p className="text-xs text-gray-500">Obs. admin: <span className="text-gray-400">{o.observacao_admin}</span></p>
                     )}
+
+                    {/* Alterar status manualmente */}
+                    <div className="border-t border-white/8 pt-4 flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-gray-500 flex-shrink-0">Alterar status:</p>
+                      <select
+                        value={statusEdit[o.id] ?? o.status}
+                        onChange={(e) => setStatusEdit((p) => ({ ...p, [o.id]: e.target.value }))}
+                        className="flex-1 min-w-[180px] px-3 py-1.5 bg-dark-900 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-brand/50 transition-all"
+                      >
+                        {[
+                          { v: "enviado",      l: "Aguardando confirmação" },
+                          { v: "em_separacao", l: "Em separação"           },
+                          { v: "a_pagar",      l: "A pagar"                },
+                          { v: "pago",         l: "Pago"                   },
+                          { v: "recusado",     l: "Recusado"               },
+                          { v: "finalizado",   l: "Finalizado"             },
+                        ].map(({ v, l }) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                      <button
+                        onClick={() => updateStatusManual(o.id, statusEdit[o.id] ?? o.status)}
+                        disabled={actionId === o.id || (statusEdit[o.id] === undefined || statusEdit[o.id] === o.status)}
+                        className="px-4 py-1.5 bg-dark-700 border border-white/10 hover:border-white/25 text-gray-300 hover:text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40"
+                      >
+                        {actionId === o.id ? <Loader2 size={11} className="animate-spin" /> : "Salvar"}
+                      </button>
+                    </div>
+
                   </div>
                 )}
               </div>

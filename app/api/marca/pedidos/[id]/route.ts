@@ -48,11 +48,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     : ((existing.orcamento_itens ?? []) as { valor_total: number }[])
         .reduce((s, i) => s + Number(i.valor_total ?? 0), 0);
 
-  const { action, motivo, etiquetas_confirmadas, mensagem } = body as {
-    action: "confirmar_recebimento" | "marcar_enviado" | "confirmar_pagamento" | "recusar" | "alertar_cliente";
+  const { action, motivo, etiquetas_confirmadas, mensagem, novoStatus } = body as {
+    action: "confirmar_recebimento" | "marcar_enviado" | "confirmar_pagamento" | "recusar" | "alertar_cliente" | "mudar_status";
     motivo?: string;
     etiquetas_confirmadas?: boolean;
     mensagem?: string;
+    novoStatus?: string;
   };
 
   const cliente = existing.clientes as unknown as { razao_social: string; email: string; whatsapp?: string | null } | null;
@@ -273,6 +274,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (clienteWpp) sendText(clienteWpp, `📢 *${brandName} — Pedido #${existing.numero}*\n\n${msg}`).catch(() => {});
 
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Alterar status manualmente ───────────────────────────────────────────────
+  if (action === "mudar_status") {
+    const validos = ["enviado", "em_separacao", "a_pagar", "pago", "recusado"];
+    if (!novoStatus || !validos.includes(novoStatus))
+      return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+    const { error } = await db.from("orcamentos").update({ status: novoStatus }).eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 

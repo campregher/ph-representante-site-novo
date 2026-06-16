@@ -48,6 +48,7 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   const [showAlerta,      setShowAlerta]      = useState(false);
   const [mensagemAlerta,  setMensagemAlerta]  = useState("");
   const [enviandoAlerta,  setEnviandoAlerta]  = useState(false);
+  const [novoStatus,      setNovoStatus]      = useState("");
   const confirmedRef = useRef(false);
 
   async function load() {
@@ -62,6 +63,14 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   }
 
   useEffect(() => { load(); }, [id]);
+
+  const STATUS_OPTIONS = [
+    { value: "enviado",      label: "Aguardando confirmação" },
+    { value: "em_separacao", label: "Em separação"           },
+    { value: "a_pagar",      label: "A pagar"                },
+    { value: "pago",         label: "Pago"                   },
+    { value: "recusado",     label: "Recusado"               },
+  ];
 
   function markDownloaded(etqId: string) {
     setDownloaded((prev) => new Set([...prev, etqId]));
@@ -468,6 +477,32 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
               >
                 <Printer size={13} /> Imprimir pedido
               </button>
+
+              {/* Alterar status */}
+              <div className="border-t border-white/6 pt-4 space-y-3">
+                <div>
+                  <p className="text-xs font-bold text-white">Alterar status</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Alteração manual — não envia notificações automáticas</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={novoStatus || pedido.status}
+                    onChange={(e) => setNovoStatus(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-dark-900 border border-white/10 rounded-xl text-white text-xs focus:outline-none focus:border-brand/50 transition-all"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => doAction("mudar_status", { novoStatus: novoStatus || pedido.status })}
+                    disabled={acting || (novoStatus === "" || novoStatus === pedido.status)}
+                    className="px-4 py-2 bg-dark-700 border border-white/10 hover:border-white/25 text-gray-300 hover:text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40"
+                  >
+                    {acting ? <Loader2 size={12} className="animate-spin" /> : "Salvar"}
+                  </button>
+                </div>
+              </div>
 
               {/* Alertar cliente */}
               <div className="border-t border-white/6 pt-4 space-y-3">

@@ -900,13 +900,45 @@ function VendasML() {
     }
   }
 
+  async function fetchEtiqueta(shippingId: string, download: boolean) {
+    const res = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.error ?? "Etiqueta não disponível");
+    }
+    const ct = res.headers.get("content-type") ?? "";
+    if (ct.includes("pdf") || ct.includes("octet-stream")) {
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `etiqueta-${shippingId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else {
+      const json = await res.json().catch(() => ({}));
+      if (!json.url) throw new Error("URL da etiqueta não encontrada");
+      if (download) {
+        const a    = document.createElement("a");
+        a.href     = json.url;
+        a.download = `etiqueta-${shippingId}.pdf`;
+        a.target   = "_blank";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        window.open(json.url, "_blank");
+      }
+    }
+  }
+
   async function handleEnviarEtiquetaMarca(shippingId: string) {
     if (!shippingId) return;
     setEnviandoEtq(prev => new Set([...prev, shippingId]));
     try {
-      const res  = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Etiqueta não disponível");
+      await fetchEtiqueta(shippingId, false);
       toast.success("Etiqueta enviada para a marca!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao enviar etiqueta");
@@ -919,10 +951,7 @@ function VendasML() {
     if (!shippingId) return;
     setEtiquetaLoad(prev => new Set([...prev, shippingId]));
     try {
-      const res  = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Etiqueta não disponível");
-      window.open(json.url, "_blank");
+      await fetchEtiqueta(shippingId, true);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao buscar etiqueta");
     } finally {

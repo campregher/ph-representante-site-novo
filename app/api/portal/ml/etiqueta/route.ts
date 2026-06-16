@@ -12,29 +12,19 @@ type LabelResult =
   | { kind: "pdf"; data: ArrayBuffer; trackingNumber?: string }
   | { kind: "url"; value: string };
 
-/* Tenta obter PDF de uma URL; retorna ArrayBuffer ou null */
 async function tryPdf(url: string, hdrs: Record<string, string> = {}): Promise<ArrayBuffer | null> {
   try {
-    const r = await fetch(url, { headers: { Accept: "application/pdf,*/*", ...hdrs }, redirect: "follow" });
+    const r = await fetch(url, { headers: { ...hdrs }, redirect: "follow" });
     if (!r.ok) return null;
     const ct = r.headers.get("content-type") ?? "";
     if (ct.includes("pdf") || ct.includes("octet-stream")) return r.arrayBuffer();
-    /* Seguiu redirect para URL diferente com PDF */
-    if (r.url && r.url !== url) {
-      const r2 = await fetch(r.url, { headers: { Accept: "application/pdf,*/*" } });
-      if (r2.ok) {
-        const ct2 = r2.headers.get("content-type") ?? "";
-        if (ct2.includes("pdf") || ct2.includes("octet-stream")) return r2.arrayBuffer();
-      }
-    }
   } catch { /* ignora */ }
   return null;
 }
 
-/* Tenta obter URL de texto de uma resposta ML */
-async function tryUrl(url: string, hdrs: Record<string, string>): Promise<string | null> {
+async function tryUrlApi(url: string, hdrs: Record<string, string>): Promise<string | null> {
   try {
-    const r = await fetch(url, { headers: { Accept: "application/json", ...hdrs } });
+    const r = await fetch(url, { headers: hdrs, redirect: "follow" });
     if (!r.ok) return null;
     const ct = r.headers.get("content-type") ?? "";
     if (ct.includes("json")) {
@@ -51,15 +41,15 @@ async function tryUrl(url: string, hdrs: Record<string, string>): Promise<string
   return null;
 }
 
-async function resolveLabel(shippingId: string, token: string, mlUserId?: string): Promise<LabelResult | null> {
+async function resolveLabel(shippingId: string, token: string): Promise<LabelResult | null> {
   const auth = { Authorization: `Bearer ${token}` };
 
   /* ── Tentativas via API ML ── */
-  for (const responseType of ["link", "pdf", "zpl2"] as const) {
-    const pdf = await tryPdf(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${responseType}`, auth);
+  for (const responseType of ["link", "pdf", "zpl2"]) {
+    const u = `${ML_BASE}/shipments/${shippingId}/labels?response_type=${responseType}`;
+    const pdf = await tryPdf(u, auth);
     if (pdf) return { kind: "pdf", data: pdf };
-
-    const url = await tryUrl(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${responseType}`, auth);
+    const url = await tryUrlApi(u, auth);
     if (url) return { kind: "url", value: url };
   }
 
@@ -73,56 +63,86 @@ async function resolveLabel(shippingId: string, token: string, mlUserId?: string
     if (r.ok) {
       const ct = r.headers.get("content-type") ?? "";
       if (ct.includes("pdf") || ct.includes("octet-stream")) return { kind: "pdf", data: await r.arrayBuffer() };
-      if (ct.includes("json")) {
-        const d = await r.json().catch(() => null);
-        const u = d?.label_url ?? d?.url ?? null;
-        if (u) return { kind: "url", value: u };
-      }
+      const d = await r.json().catch(() => null);
+      const u = d?.label_url ?? d?.url ?? null;
+      if (u) return { kind: "url", value: u };
     }
   } catch { /* ignora */ }
 
-  /* ── Objeto do envio → tracking_number ── */
+  /* ── Objeto do envio completo ── */
   try {
     const r = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: auth });
-    if (r.ok) {
-      const sh = await r.json().catch(() => null);
+    if (!r.ok) return null;
+    const sh = await r.json().catch(() => null);
 
-      const directUrl = sh?.label_url ?? sh?.shipping_label?.url ?? null;
-      if (directUrl) return { kind: "url", value: directUrl };
+    /* Log para diagnóstico */
+    console.info("[ml/etiqueta] carrier_info:", JSON.stringify(sh?.carrier_info ?? null));
+    console.info("[ml/etiqueta] tracking_method:", sh?.tracking_method);
+    console.info("[ml/etiqueta] tags:", JSON.stringify(sh?.tags ?? null));
 
-      const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
+    /* Campos diretos */
+    const directUrl = sh?.label_url
+      ?? sh?.shipping_label?.url
+      ?? sh?.carrier_info?.label_url
+      ?? sh?.carrier_info?.print_url
+      ?? sh?.carrier_info?.url
+      ?? null;
+    if (directUrl) return { kind: "url", value: directUrl };
 
-      if (tracking) {
-        const trackingUrl = `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
+    const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
 
-        /* 1. Tenta PDF via URL pública (sem auth) */
-        const pdfPublic = await tryPdf(trackingUrl);
-        if (pdfPublic) return { kind: "pdf", data: pdfPublic, trackingNumber: tracking };
+    if (tracking) {
+      const trackingUrl = `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
 
-        /* 2. Tenta PDF com token OAuth */
-        const pdfAuth = await tryPdf(trackingUrl, auth);
-        if (pdfAuth) return { kind: "pdf", data: pdfAuth, trackingNumber: tracking };
+      /* Tenta PDF com Accept: application/pdf */
+      const pdfDirect = await tryPdf(trackingUrl, { ...auth, Accept: "application/pdf" });
+      if (pdfDirect) return { kind: "pdf", data: pdfDirect, trackingNumber: tracking };
 
-        /* 3. Tenta URL alternativas de print */
-        for (const altUrl of [
-          `${ML_WEB_BASE}/envios/etiqueta/imprimir/${tracking}`,
-          `${ML_WEB_BASE}/checkout/v1/logistic/print/label/${shippingId}`,
-          `${ML_WEB_BASE}/checkout/v1/logistic/print/pdf/${shippingId}`,
-        ]) {
-          const pdfAlt = await tryPdf(altUrl, auth);
-          if (pdfAlt) return { kind: "pdf", data: pdfAlt, trackingNumber: tracking };
+      /* Tenta fetch com headers de browser para ver o HTML */
+      try {
+        const rHtml = await fetch(trackingUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ...auth,
+          },
+          redirect: "follow",
+        });
+        console.info(`[ml/etiqueta] html status=${rHtml.status} ct=${rHtml.headers.get("content-type")} finalUrl=${rHtml.url}`);
+        if (rHtml.ok) {
+          const ct = rHtml.headers.get("content-type") ?? "";
+          if (ct.includes("pdf")) return { kind: "pdf", data: await rHtml.arrayBuffer(), trackingNumber: tracking };
+
+          const html = await rHtml.text();
+          console.info("[ml/etiqueta] html preview:", html.slice(0, 800));
+
+          /* Procura URL de PDF no HTML */
+          const pdfInHtml = html.match(/https?:\/\/[^\s"'<>]*(?:pdf|label|etiqueta)[^\s"'<>]*/i)?.[0];
+          if (pdfInHtml) {
+            console.info("[ml/etiqueta] found in HTML:", pdfInHtml);
+            const pdfFromHtml = await tryPdf(pdfInHtml, auth);
+            if (pdfFromHtml) return { kind: "pdf", data: pdfFromHtml, trackingNumber: tracking };
+            return { kind: "url", value: pdfInHtml };
+          }
+
+          /* Procura em JSON embutido no HTML */
+          const jsonMatch = html.match(/"(?:label|print|etiqueta)_?[Uu]rl"\s*:\s*"([^"]+)"/);
+          if (jsonMatch?.[1]) {
+            return { kind: "url", value: jsonMatch[1] };
+          }
         }
-
-        /* Fallback: retorna URL para abrir no browser */
-        console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — nenhum PDF encontrado, retornando URL`);
-        return { kind: "url", value: trackingUrl };
+      } catch (e) {
+        console.warn("[ml/etiqueta] html fetch error:", e);
       }
 
-      const logisticType: string = sh?.logistic_type ?? "";
-      console.warn(`[ml/etiqueta] ${shippingId} sem tracking. logistic_type=${logisticType} status=${sh?.status} keys=${JSON.stringify(Object.keys(sh ?? {}))}`);
+      /* Sem PDF disponível via API — retorna URL para abrir no browser */
+      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — retornando URL fallback`);
+      return { kind: "url", value: trackingUrl };
     }
+
+    console.warn(`[ml/etiqueta] ${shippingId} sem tracking. logistic_type=${sh?.logistic_type}`);
   } catch (e) {
-    console.error("[ml/etiqueta] shipment fetch error:", e);
+    console.error("[ml/etiqueta] error:", e);
   }
 
   return null;

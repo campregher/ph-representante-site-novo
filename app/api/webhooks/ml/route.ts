@@ -164,7 +164,7 @@ export async function POST(request: Request) {
           marca:             marcaSlug,
           tipo_pedido:       "dropshipping",
           condicao_pagamento:"semanal",
-          status:            "em_separacao",
+          status:            "enviado",
           total,
           ml_order_id:       orderId,
           ml_shipping_id:    shippingId || null,

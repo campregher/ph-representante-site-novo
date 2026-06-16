@@ -48,7 +48,6 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   const [motivo,          setMotivo]          = useState("");
   const [showRecusar,     setShowRecusar]     = useState(false);
   const [downloaded,      setDownloaded]      = useState<Set<string>>(new Set());
-  const [buscandoEtq,    setBuscandoEtq]     = useState(false);
   const [showAlerta,      setShowAlerta]      = useState(false);
   const [mensagemAlerta,  setMensagemAlerta]  = useState("");
   const [enviandoAlerta,  setEnviandoAlerta]  = useState(false);
@@ -75,22 +74,6 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
     { value: "pago",         label: "Pago"                   },
     { value: "recusado",     label: "Recusado"               },
   ];
-
-  async function buscarEtiquetaML() {
-    setBuscandoEtq(true);
-    try {
-      const res = await fetch(`/api/marca/pedidos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "buscar_etiqueta_ml" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      toast.success("Etiqueta salva com sucesso!");
-      await load();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Etiqueta ainda não disponível no ML"); }
-    finally { setBuscandoEtq(false); }
-  }
 
   function markDownloaded(etqId: string) {
     setDownloaded((prev) => new Set([...prev, etqId]));
@@ -242,16 +225,9 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
                     })}
                   </div>
                 ) : (
-                  <div className="px-5 py-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500">Etiqueta ainda não salva — clique para buscar no ML.</p>
-                    <button
-                      onClick={buscarEtiquetaML}
-                      disabled={buscandoEtq}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0 disabled:opacity-50"
-                    >
-                      {buscandoEtq ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
-                      Buscar etiqueta
-                    </button>
+                  <div className="px-5 py-4 flex items-center gap-2 text-xs text-gray-500">
+                    <Clock size={12} className="flex-shrink-0" />
+                    Aguardando etiqueta do cliente — disponível quando o cliente processar o envio no ML.
                   </div>
                 )}
                 {hasEtq && !allEtqDownloaded && (
@@ -351,16 +327,9 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
                     ))}
                   </div>
                 ) : (
-                  <div className="px-5 py-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500">Etiqueta ainda não salva — clique para buscar no ML.</p>
-                    <button
-                      onClick={buscarEtiquetaML}
-                      disabled={buscandoEtq}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0 disabled:opacity-50"
-                    >
-                      {buscandoEtq ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
-                      Buscar etiqueta
-                    </button>
+                  <div className="px-5 py-4 flex items-center gap-2 text-xs text-gray-500">
+                    <Clock size={12} className="flex-shrink-0" />
+                    Aguardando etiqueta do cliente — disponível quando o cliente processar o envio no ML.
                   </div>
                 )}
               </div>

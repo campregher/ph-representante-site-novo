@@ -44,43 +44,63 @@ async function tryUrlApi(url: string, hdrs: Record<string, string>): Promise<str
 async function resolveLabel(shippingId: string, token: string): Promise<LabelResult | null> {
   const auth = { Authorization: `Bearer ${token}` };
 
-  /* ── Tentativas via API ML ── */
-  for (const responseType of ["link", "pdf", "zpl2"]) {
-    const u = `${ML_BASE}/shipments/${shippingId}/labels?response_type=${responseType}`;
+  /* ── 1. Pega ML user_id via /users/me ── */
+  let mlUserId: string | null = null;
+  try {
+    const rMe = await fetch(`${ML_BASE}/users/me`, { headers: auth });
+    if (rMe.ok) {
+      const me = await rMe.json().catch(() => null);
+      mlUserId = me?.id ? String(me.id) : null;
+    }
+  } catch { /* ignora */ }
+
+  /* ── 2. Tentativas via API ML com variações ── */
+  const apiAttempts: string[] = [];
+  for (const rt of ["link", "pdf", "zpl2"]) {
+    apiAttempts.push(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}`);
+    if (mlUserId) {
+      apiAttempts.push(
+        `${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}&caller_id=${mlUserId}`,
+        `${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}&caller.id=${mlUserId}`,
+      );
+    }
+  }
+  if (mlUserId) {
+    apiAttempts.push(`${ML_BASE}/users/${mlUserId}/shipments/${shippingId}/labels?response_type=pdf`);
+    apiAttempts.push(`${ML_BASE}/users/${mlUserId}/shipments/${shippingId}/labels?response_type=link`);
+  }
+
+  for (const u of apiAttempts) {
     const pdf = await tryPdf(u, auth);
     if (pdf) return { kind: "pdf", data: pdf };
     const url = await tryUrlApi(u, auth);
     if (url) return { kind: "url", value: url };
   }
 
-  /* ── POST batch labels ── */
+  /* ── 3. POST batch labels ── */
   try {
-    const r = await fetch(`${ML_BASE}/shipments/labels`, {
-      method: "POST",
-      headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ shipment_ids: [shippingId], response_type: "pdf" }),
-    });
-    if (r.ok) {
-      const ct = r.headers.get("content-type") ?? "";
-      if (ct.includes("pdf") || ct.includes("octet-stream")) return { kind: "pdf", data: await r.arrayBuffer() };
-      const d = await r.json().catch(() => null);
-      const u = d?.label_url ?? d?.url ?? null;
-      if (u) return { kind: "url", value: u };
+    for (const rt of ["pdf", "link", "zpl2"]) {
+      const r = await fetch(`${ML_BASE}/shipments/labels`, {
+        method: "POST",
+        headers: { ...auth, "Content-Type": "application/json" },
+        body: JSON.stringify({ shipment_ids: [shippingId], response_type: rt }),
+      });
+      if (r.ok) {
+        const ct = r.headers.get("content-type") ?? "";
+        if (ct.includes("pdf") || ct.includes("octet-stream")) return { kind: "pdf", data: await r.arrayBuffer() };
+        const d = await r.json().catch(() => null);
+        const u = d?.label_url ?? d?.url ?? null;
+        if (u) return { kind: "url", value: u };
+      }
     }
   } catch { /* ignora */ }
 
-  /* ── Objeto do envio completo ── */
+  /* ── 4. Objeto do envio completo ── */
   try {
     const r = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: auth });
     if (!r.ok) return null;
     const sh = await r.json().catch(() => null);
 
-    /* Log para diagnóstico */
-    console.info("[ml/etiqueta] carrier_info:", JSON.stringify(sh?.carrier_info ?? null));
-    console.info("[ml/etiqueta] tracking_method:", sh?.tracking_method);
-    console.info("[ml/etiqueta] tags:", JSON.stringify(sh?.tags ?? null));
-
-    /* Campos diretos */
     const directUrl = sh?.label_url
       ?? sh?.shipping_label?.url
       ?? sh?.carrier_info?.label_url
@@ -94,53 +114,31 @@ async function resolveLabel(shippingId: string, token: string): Promise<LabelRes
     if (tracking) {
       const trackingUrl = `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
 
-      /* Tenta PDF com Accept: application/pdf */
-      const pdfDirect = await tryPdf(trackingUrl, { ...auth, Accept: "application/pdf" });
-      if (pdfDirect) return { kind: "pdf", data: pdfDirect, trackingNumber: tracking };
+      /* Tenta com access_token na query (ML web histórico) */
+      const urlWithToken = `${trackingUrl}?access_token=${encodeURIComponent(token)}`;
+      const pdfWithToken = await tryPdf(urlWithToken, {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "application/pdf,*/*",
+      });
+      if (pdfWithToken) return { kind: "pdf", data: pdfWithToken, trackingNumber: tracking };
 
-      /* Tenta fetch com headers de browser para ver o HTML */
+      /* Log status da resposta HTML para diagnóstico */
       try {
-        const rHtml = await fetch(trackingUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            ...auth,
-          },
+        const rHead = await fetch(urlWithToken, {
+          method: "HEAD",
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
           redirect: "follow",
         });
-        console.info(`[ml/etiqueta] html status=${rHtml.status} ct=${rHtml.headers.get("content-type")} finalUrl=${rHtml.url}`);
-        if (rHtml.ok) {
-          const ct = rHtml.headers.get("content-type") ?? "";
-          if (ct.includes("pdf")) return { kind: "pdf", data: await rHtml.arrayBuffer(), trackingNumber: tracking };
-
-          const html = await rHtml.text();
-          console.info("[ml/etiqueta] html preview:", html.slice(0, 800));
-
-          /* Procura URL de PDF no HTML */
-          const pdfInHtml = html.match(/https?:\/\/[^\s"'<>]*(?:pdf|label|etiqueta)[^\s"'<>]*/i)?.[0];
-          if (pdfInHtml) {
-            console.info("[ml/etiqueta] found in HTML:", pdfInHtml);
-            const pdfFromHtml = await tryPdf(pdfInHtml, auth);
-            if (pdfFromHtml) return { kind: "pdf", data: pdfFromHtml, trackingNumber: tracking };
-            return { kind: "url", value: pdfInHtml };
-          }
-
-          /* Procura em JSON embutido no HTML */
-          const jsonMatch = html.match(/"(?:label|print|etiqueta)_?[Uu]rl"\s*:\s*"([^"]+)"/);
-          if (jsonMatch?.[1]) {
-            return { kind: "url", value: jsonMatch[1] };
-          }
-        }
+        console.info(`[ml/etiqueta] HEAD with token: status=${rHead.status} ct=${rHead.headers.get("content-type")} url=${rHead.url}`);
       } catch (e) {
-        console.warn("[ml/etiqueta] html fetch error:", e);
+        console.warn("[ml/etiqueta] HEAD error:", e);
       }
 
-      /* Sem PDF disponível via API — retorna URL para abrir no browser */
-      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — retornando URL fallback`);
+      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} mlUser=${mlUserId} — URL fallback`);
       return { kind: "url", value: trackingUrl };
     }
 
-    console.warn(`[ml/etiqueta] ${shippingId} sem tracking. logistic_type=${sh?.logistic_type}`);
+    console.warn(`[ml/etiqueta] ${shippingId} sem tracking. mode=${sh?.mode} logistic_type=${sh?.logistic_type}`);
   } catch (e) {
     console.error("[ml/etiqueta] error:", e);
   }

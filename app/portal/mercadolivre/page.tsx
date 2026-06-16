@@ -862,6 +862,8 @@ function VendasML() {
   const [gerandoPedido,  setGerandoPedido]  = useState<Set<string>>(new Set());
   const [etiquetaLoad,   setEtiquetaLoad]   = useState<Set<string>>(new Set());
   const [uploadingEtq,   setUploadingEtq]   = useState<Set<string>>(new Set());
+  const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
+  const [enviandoGrupo,  setEnviandoGrupo]  = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<string | null>(null);
 
@@ -900,7 +902,7 @@ function VendasML() {
       const res = await fetch("/api/portal/ml/gerar-pedido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ml_order_id: mlOrderId }),
+        body: JSON.stringify({ ml_order_ids: [mlOrderId] }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erro ao gerar pedido");
@@ -911,6 +913,29 @@ function VendasML() {
       toast.error(e instanceof Error ? e.message : "Erro ao gerar pedido");
     } finally {
       setGerandoPedido(prev => { const next = new Set(prev); next.delete(key); return next; });
+    }
+  }
+
+  async function handleEnviarGrupo() {
+    if (!selectedOrders.size) return;
+    setEnviandoGrupo(true);
+    try {
+      const res = await fetch("/api/portal/ml/gerar-pedido", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ml_order_ids: Array.from(selectedOrders) }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao enviar pedidos");
+      const nums = (json.pedidos as { numero: number }[])?.map(p => `#${p.numero}`).join(", ");
+      toast.success(`Pedido${json.pedidos?.length > 1 ? "s" : ""} ${nums} enviado${json.pedidos?.length > 1 ? "s" : ""} para a marca!`);
+      if (json.aviso) toast.info(json.aviso);
+      setSelectedOrders(new Set());
+      await fetchVendas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar pedidos");
+    } finally {
+      setEnviandoGrupo(false);
     }
   }
 
@@ -1065,37 +1090,80 @@ function VendasML() {
           </div>
         ) : (
           <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
+            {/* Header selecionar todos */}
+            {data.orders.some(o => hasLinked(o) && !hasPedido(o)) && (
+              <div className="px-4 py-2 flex items-center gap-2 bg-white/2 border-b border-white/4">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded accent-brand cursor-pointer"
+                  checked={selectedOrders.size > 0 && data.orders.filter(o => hasLinked(o) && !hasPedido(o)).every(o => selectedOrders.has(o.id))}
+                  onChange={e => {
+                    const elegíveis = data.orders.filter(o => hasLinked(o) && !hasPedido(o)).map(o => o.id);
+                    setSelectedOrders(e.target.checked ? new Set(elegíveis) : new Set());
+                  }}
+                />
+                <span className="text-[11px] text-gray-500">
+                  {selectedOrders.size > 0
+                    ? `${selectedOrders.size} venda${selectedOrders.size > 1 ? "s" : ""} selecionada${selectedOrders.size > 1 ? "s" : ""}`
+                    : "Selecionar todas"}
+                </span>
+                {selectedOrders.size > 0 && (
+                  <span className="ml-auto text-[11px] font-bold text-brand">
+                    {fmt(data.orders.filter(o => selectedOrders.has(o.id)).reduce((s, o) => s + o.total_amount, 0))}
+                  </span>
+                )}
+              </div>
+            )}
             {data.orders.map(o => (
-              <div key={o.id}>
+              <div key={o.id} className={selectedOrders.has(o.id) ? "bg-brand/5 ring-1 ring-inset ring-brand/20" : ""}>
                 {/* Linha principal */}
-                <button
-                  onClick={() => setExpanded(prev => prev === String(o.id) ? null : String(o.id))}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/2 transition-colors text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-xs font-semibold text-white font-mono">#{o.id}</p>
-                      {/* Badge do pedido na plataforma */}
-                      {hasPedido(o) ? (
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${PEDIDO_STATUS_COLOR[(o.pedidos ?? [])[0]?.status] ?? "bg-gray-400/15 text-gray-400"}`}>
-                          {PEDIDO_STATUS_LABEL[(o.pedidos ?? [])[0]?.status] ?? "Pedido gerado"}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/15 text-yellow-400">
-                          Aguardando pedido
-                        </span>
-                      )}
+                <div className="flex items-center gap-2 px-4">
+                  {/* Checkbox — só para pedidos com produtos vinculados e sem pedido já gerado */}
+                  {hasLinked(o) && !hasPedido(o) ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedOrders.has(o.id)}
+                      onChange={e => {
+                        setSelectedOrders(prev => {
+                          const next = new Set(prev);
+                          e.target.checked ? next.add(o.id) : next.delete(o.id);
+                          return next;
+                        });
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      className="w-4 h-4 rounded accent-brand flex-shrink-0 cursor-pointer"
+                    />
+                  ) : (
+                    <div className="w-4 flex-shrink-0" />
+                  )}
+                  <button
+                    onClick={() => setExpanded(prev => prev === String(o.id) ? null : String(o.id))}
+                    className="flex-1 flex items-center gap-3 py-3 hover:bg-white/2 transition-colors text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs font-semibold text-white font-mono">#{o.id}</p>
+                        {hasPedido(o) ? (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${PEDIDO_STATUS_COLOR[(o.pedidos ?? [])[0]?.status] ?? "bg-gray-400/15 text-gray-400"}`}>
+                            {PEDIDO_STATUS_LABEL[(o.pedidos ?? [])[0]?.status] ?? "Pedido gerado"}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/15 text-yellow-400">
+                            Aguardando pedido
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{o.buyer} · {fmtDate(o.date_created)}</p>
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-0.5">{o.buyer} · {fmtDate(o.date_created)}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-white">{fmt(o.total_amount)}</p>
-                    <p className="text-[10px] text-gray-500">{o.items.length} item{o.items.length !== 1 ? "s" : ""}</p>
-                  </div>
-                  {expanded === String(o.id)
-                    ? <ChevronUp size={13} className="text-gray-500 flex-shrink-0" />
-                    : <ChevronDown size={13} className="text-gray-500 flex-shrink-0" />}
-                </button>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-white">{fmt(o.total_amount)}</p>
+                      <p className="text-[10px] text-gray-500">{o.items.length} item{o.items.length !== 1 ? "s" : ""}</p>
+                    </div>
+                    {expanded === String(o.id)
+                      ? <ChevronUp size={13} className="text-gray-500 flex-shrink-0" />
+                      : <ChevronDown size={13} className="text-gray-500 flex-shrink-0" />}
+                  </button>
+                </div>
 
                 {/* Expandido */}
                 {expanded === String(o.id) && (
@@ -1205,6 +1273,24 @@ function VendasML() {
             ))}
           </div>
         )
+      )}
+
+      {/* Botão flutuante — envio em grupo */}
+      {selectedOrders.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <button
+            onClick={handleEnviarGrupo}
+            disabled={enviandoGrupo}
+            className="flex items-center gap-3 px-6 py-3.5 bg-brand hover:bg-brand/90 text-white text-sm font-bold rounded-2xl shadow-2xl shadow-brand/30 transition-all disabled:opacity-70"
+          >
+            {enviandoGrupo
+              ? <Loader2 size={15} className="animate-spin" />
+              : <Truck size={15} />}
+            {enviandoGrupo
+              ? "Enviando..."
+              : `Enviar ${selectedOrders.size} venda${selectedOrders.size > 1 ? "s" : ""} para a marca`}
+          </button>
+        </div>
       )}
     </div>
   );

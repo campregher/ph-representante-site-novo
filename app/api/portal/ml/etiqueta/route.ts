@@ -184,6 +184,40 @@ export async function GET(request: Request) {
   return NextResponse.json({ url: result.value });
 }
 
+/* ── Upload manual do PDF pelo cliente ── */
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const form = await request.formData();
+  const file       = form.get("file") as File | null;
+  const shippingId = form.get("shipping_id") as string | null;
+
+  if (!file || !shippingId) {
+    return NextResponse.json({ error: "file e shipping_id são obrigatórios" }, { status: 400 });
+  }
+  if (file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
+    return NextResponse.json({ error: "Apenas arquivos PDF são aceitos" }, { status: 400 });
+  }
+
+  const db      = await createAdminClient();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path     = `${user.id}/${Date.now()}-${safeName}`;
+  const buffer   = Buffer.from(await file.arrayBuffer());
+
+  const { error: uploadError } = await db.storage
+    .from("etiquetas")
+    .upload(path, buffer, { contentType: "application/pdf", upsert: false });
+
+  if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+
+  const { data: { publicUrl } } = db.storage.from("etiquetas").getPublicUrl(path);
+  await saveEtiqueta(shippingId, user.id, publicUrl);
+
+  return NextResponse.json({ url: publicUrl });
+}
+
 async function saveEtiqueta(shippingId: string, userId: string, labelUrl: string) {
   try {
     const db = await createAdminClient();

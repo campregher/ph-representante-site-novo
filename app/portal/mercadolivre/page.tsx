@@ -861,7 +861,9 @@ function VendasML() {
   const [expanded,       setExpanded]       = useState<string | null>(null);
   const [gerandoPedido,  setGerandoPedido]  = useState<Set<string>>(new Set());
   const [etiquetaLoad,   setEtiquetaLoad]   = useState<Set<string>>(new Set());
-  const [enviandoEtq,    setEnviandoEtq]    = useState<Set<string>>(new Set());
+  const [uploadingEtq,   setUploadingEtq]   = useState<Set<string>>(new Set());
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const uploadTarget = useRef<string | null>(null);
 
   async function fetchVendas() {
     setLoading(true);
@@ -900,7 +902,7 @@ function VendasML() {
     }
   }
 
-  async function fetchEtiqueta(shippingId: string, download: boolean) {
+  async function fetchEtiqueta(shippingId: string) {
     const res = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
@@ -908,6 +910,7 @@ function VendasML() {
     }
     const ct = res.headers.get("content-type") ?? "";
     if (ct.includes("pdf") || ct.includes("octet-stream")) {
+      /* PDF binário: download direto */
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -918,32 +921,34 @@ function VendasML() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } else {
+      /* URL de fallback (ME2 — requer sessão do ML no browser) */
       const json = await res.json().catch(() => ({}));
       if (!json.url) throw new Error("URL da etiqueta não encontrada");
-      if (download) {
-        const a    = document.createElement("a");
-        a.href     = json.url;
-        a.download = `etiqueta-${shippingId}.pdf`;
-        a.target   = "_blank";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        window.open(json.url, "_blank");
-      }
+      window.open(json.url, "_blank");
+      toast.info(
+        "Etiqueta aberta no Mercado Livre. Baixe o PDF por lá e use o botão de upload aqui para compartilhar com a marca.",
+        { duration: 8000 }
+      );
     }
   }
 
-  async function handleEnviarEtiquetaMarca(shippingId: string) {
-    if (!shippingId) return;
-    setEnviandoEtq(prev => new Set([...prev, shippingId]));
+  async function handleUploadEtiqueta(shippingId: string, file: File) {
+    setUploadingEtq(prev => new Set([...prev, shippingId]));
     try {
-      await fetchEtiqueta(shippingId, false);
+      const form = new FormData();
+      form.append("file", file);
+      form.append("shipping_id", shippingId);
+      const res = await fetch("/api/portal/ml/etiqueta", { method: "POST", body: form });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? "Erro ao fazer upload");
+      }
       toast.success("Etiqueta enviada para a marca!");
+      fetchVendas();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao enviar etiqueta");
+      toast.error(e instanceof Error ? e.message : "Erro ao fazer upload da etiqueta");
     } finally {
-      setEnviandoEtq(prev => { const next = new Set(prev); next.delete(shippingId); return next; });
+      setUploadingEtq(prev => { const n = new Set(prev); n.delete(shippingId); return n; });
     }
   }
 
@@ -951,7 +956,7 @@ function VendasML() {
     if (!shippingId) return;
     setEtiquetaLoad(prev => new Set([...prev, shippingId]));
     try {
-      await fetchEtiqueta(shippingId, true);
+      await fetchEtiqueta(shippingId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao buscar etiqueta");
     } finally {
@@ -1096,24 +1101,51 @@ function VendasML() {
                       ))}
                     </div>
 
-                    {/* Etiqueta ML — sempre disponível se shipping_id existir */}
+                    {/* Etiqueta ML */}
                     {o.shipping_id && (
-                      <div className="px-5 py-3 border-t border-white/4 flex items-center gap-3">
-                        <FileText size={13} className="text-yellow-400 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white">Etiqueta de envio ML</p>
-                          <p className="text-[10px] text-gray-600">Envio #{o.shipping_id}</p>
+                      <div className="px-5 py-3 border-t border-white/4 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <FileText size={13} className="text-yellow-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-white">Etiqueta de envio ML</p>
+                            <p className="text-[10px] text-gray-500">Envio #{o.shipping_id}</p>
+                          </div>
+                          <button
+                            onClick={() => handleDownloadEtiqueta(o.shipping_id)}
+                            disabled={etiquetaLoad.has(o.shipping_id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400/15 hover:bg-yellow-400/25 border border-yellow-400/25 text-yellow-400 text-xs font-bold rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+                          >
+                            {etiquetaLoad.has(o.shipping_id)
+                              ? <Loader2 size={11} className="animate-spin" />
+                              : <ExternalLink size={11} />}
+                            Abrir no ML
+                          </button>
                         </div>
-                        <button
-                          onClick={() => handleDownloadEtiqueta(o.shipping_id)}
-                          disabled={etiquetaLoad.has(o.shipping_id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400/15 hover:bg-yellow-400/25 border border-yellow-400/25 text-yellow-400 text-xs font-bold rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
-                        >
-                          {etiquetaLoad.has(o.shipping_id)
-                            ? <Loader2 size={11} className="animate-spin" />
-                            : <Download size={11} />}
-                          Baixar etiqueta
-                        </button>
+                        {/* Upload do PDF baixado do ML */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            ref={uploadRef}
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files?.[0];
+                              if (f && uploadTarget.current) handleUploadEtiqueta(uploadTarget.current, f);
+                              e.target.value = "";
+                            }}
+                          />
+                          <button
+                            onClick={() => { uploadTarget.current = o.shipping_id; uploadRef.current?.click(); }}
+                            disabled={uploadingEtq.has(o.shipping_id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 text-[11px] font-semibold rounded-xl transition-all disabled:opacity-50"
+                          >
+                            {uploadingEtq.has(o.shipping_id)
+                              ? <Loader2 size={10} className="animate-spin" />
+                              : <Plus size={10} />}
+                            Fazer upload do PDF
+                          </button>
+                          <p className="text-[10px] text-gray-600">Baixe no ML e envie aqui para a marca</p>
+                        </div>
                       </div>
                     )}
 
@@ -1134,18 +1166,6 @@ function VendasML() {
                             </a>
                           </div>
                         ))}
-                        {o.shipping_id && (
-                          <button
-                            onClick={() => handleEnviarEtiquetaMarca(o.shipping_id)}
-                            disabled={enviandoEtq.has(o.shipping_id)}
-                            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/25 text-blue-400 text-[11px] font-bold rounded-xl transition-all disabled:opacity-50"
-                          >
-                            {enviandoEtq.has(o.shipping_id)
-                              ? <Loader2 size={10} className="animate-spin" />
-                              : <Truck size={10} />}
-                            Enviar etiqueta para a marca
-                          </button>
-                        )}
                       </div>
                     ) : hasLinked(o) ? (
                       <div className="px-5 py-3 border-t border-white/4 flex items-center gap-3">

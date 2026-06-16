@@ -8,7 +8,7 @@ import {
   ExternalLink, Unlink, Package, Zap, ArrowRight,
   RefreshCw, AlertTriangle, Pause, Trash2, RotateCcw, Bell,
   Download, Link2, Search, ChevronDown, ChevronUp, Sparkles,
-  TrendingUp, BarChart2, DollarSign, ShoppingCart, Calendar,
+  DollarSign, FileText, Plus, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -813,83 +813,128 @@ function MeusAnunciosML({
   );
 }
 
-/* ── Vendas ML ───────────────────────────────────────────────── */
-type Periodo = "mes" | "7d" | "30d" | "90d";
-
-const PERIODO_LABEL: Record<Periodo, string> = {
-  mes:  "Este mês",
-  "7d":  "7 dias",
-  "30d": "30 dias",
-  "90d": "90 dias",
-};
-
+/* ── Pedidos a Enviar ML ─────────────────────────────────────── */
 interface VendaItem {
   ml_item_id: string; title: string; quantity: number; unit_price: number;
   vinculado: boolean; produto_id: string | null; marca_slug: string | null;
 }
 
-interface VendaOrder {
-  id: number; date_created: string; status: string;
-  total_amount: number; buyer: string; items: VendaItem[];
+interface PedidoResumo {
+  id: string; numero: number; status: string;
+  etiquetas: { id: string; nome: string; url: string }[];
 }
 
-interface RankingItem {
-  produto_id: string; marca_slug: string; titulo: string; qtd: number; total: number;
+interface VendaOrder {
+  id:              number;
+  date_created:    string;
+  status:          string;
+  total_amount:    number;
+  buyer:           string;
+  shipping_id:     string;
+  shipping_status: string;
+  items:           VendaItem[];
+  pedidos:         PedidoResumo[];
 }
 
 interface VendasData {
-  periodo: Periodo;
-  totalVendido: number;
   totalPedidos: number;
-  ticketMedio: number;
-  ranking: RankingItem[];
-  orders: VendaOrder[];
+  totalValor:   number;
+  orders:       VendaOrder[];
 }
 
-function VendasML() {
-  const [periodo,       setPeriodo]       = useState<Periodo>("mes");
-  const [data,          setData]          = useState<VendasData | null>(null);
-  const [loading,       setLoading]       = useState(false);
-  const [semPermissao,  setSemPermissao]  = useState(false);
-  const [expanded,      setExpanded]      = useState<string | null>(null);
+const PEDIDO_STATUS_LABEL: Record<string, string> = {
+  em_separacao: "Em separação", a_pagar: "A pagar",
+  pago: "Pago", enviado: "Enviado", recusado: "Recusado",
+};
+const PEDIDO_STATUS_COLOR: Record<string, string> = {
+  em_separacao: "bg-blue-400/15 text-blue-400",
+  a_pagar:      "bg-orange-400/15 text-orange-400",
+  pago:         "bg-emerald-400/15 text-emerald-400",
+  enviado:      "bg-indigo-400/15 text-indigo-400",
+  recusado:     "bg-red-400/15 text-red-400",
+};
 
-  async function fetchVendas(p: Periodo) {
+function VendasML() {
+  const [data,           setData]           = useState<VendasData | null>(null);
+  const [loading,        setLoading]        = useState(false);
+  const [semPermissao,   setSemPermissao]   = useState(false);
+  const [expanded,       setExpanded]       = useState<string | null>(null);
+  const [gerandoPedido,  setGerandoPedido]  = useState<Set<string>>(new Set());
+  const [etiquetaLoad,   setEtiquetaLoad]   = useState<Set<string>>(new Set());
+
+  async function fetchVendas() {
     setLoading(true);
     setSemPermissao(false);
     try {
-      const res  = await fetch(`/api/portal/ml/vendas?periodo=${p}`);
+      const res  = await fetch("/api/portal/ml/vendas");
       const json = await res.json();
       if (res.status === 403 && json.sem_permissao) { setSemPermissao(true); return; }
       if (!res.ok) throw new Error(json.error ?? "Erro");
       setData(json);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao buscar vendas");
+      toast.error(e instanceof Error ? e.message : "Erro ao buscar pedidos ML");
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { fetchVendas(periodo); }, [periodo]);
+  useEffect(() => { fetchVendas(); }, []);
+
+  async function handleGerarPedido(mlOrderId: number) {
+    const key = String(mlOrderId);
+    setGerandoPedido(prev => new Set([...prev, key]));
+    try {
+      const res = await fetch("/api/portal/ml/gerar-pedido", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ml_order_id: mlOrderId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao gerar pedido");
+      const num = json.pedidos?.[0]?.numero;
+      toast.success(num ? `Pedido #${num} gerado para a marca!` : "Pedido gerado!");
+      await fetchVendas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao gerar pedido");
+    } finally {
+      setGerandoPedido(prev => { const next = new Set(prev); next.delete(key); return next; });
+    }
+  }
+
+  async function handleDownloadEtiqueta(shippingId: string) {
+    if (!shippingId) return;
+    setEtiquetaLoad(prev => new Set([...prev, shippingId]));
+    try {
+      const res  = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Etiqueta não disponível");
+      window.open(json.url, "_blank");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao buscar etiqueta");
+    } finally {
+      setEtiquetaLoad(prev => { const next = new Set(prev); next.delete(shippingId); return next; });
+    }
+  }
 
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
   }
 
+  const hasPedido = (o: VendaOrder) => (o.pedidos ?? []).length > 0;
+  const hasLinked = (o: VendaOrder) => o.items.some(i => i.vinculado);
+
   return (
-    <div className="space-y-5">
-      {/* Period selector */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 p-1 bg-dark-800 border border-white/8 rounded-xl">
-          {(Object.keys(PERIODO_LABEL) as Periodo[]).map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriodo(p)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${periodo === p ? "bg-brand text-white shadow-sm" : "text-gray-400 hover:text-white"}`}
-            >
-              {PERIODO_LABEL[p]}
-            </button>
-          ))}
+    <div className="space-y-4">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-white flex items-center gap-2">
+            <Truck size={14} className="text-yellow-400" />
+            Pedidos a enviar
+            {data && <span className="text-xs font-normal text-gray-500">({data.totalPedidos})</span>}
+          </p>
+          <p className="text-[11px] text-gray-600 mt-0.5">Vendas pagas no ML aguardando envio</p>
         </div>
         <button
-          onClick={() => fetchVendas(periodo)}
+          onClick={fetchVendas}
           disabled={loading}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-dark-700 border border-white/8 text-gray-400 hover:text-white text-xs font-semibold rounded-xl transition-all disabled:opacity-50"
         >
@@ -898,6 +943,7 @@ function VendasML() {
         </button>
       </div>
 
+      {/* Sem permissão */}
       {semPermissao && (
         <div className="bg-dark-800 border border-yellow-400/20 rounded-2xl p-6 space-y-4">
           <div className="flex items-start gap-3">
@@ -905,149 +951,171 @@ function VendasML() {
             <div>
               <p className="text-sm font-bold text-white">Permissão de pedidos não habilitada</p>
               <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                O aplicativo ML não tem acesso à API de pedidos. Para habilitar, acesse o{" "}
-                <span className="text-yellow-400 font-semibold">ML Developers</span> e ative a permissão{" "}
-                <span className="text-white font-semibold">Pedidos (Orders)</span> para o seu app.
+                O app ML não tem acesso à API de pedidos. Habilite <span className="text-white font-semibold">Orders_v2</span> no ML Developers e reconecte a conta.
               </p>
             </div>
           </div>
-          <div className="ml-7 space-y-2 text-xs text-gray-500">
-            <p className="font-semibold text-gray-400">Como corrigir:</p>
-            <ol className="list-decimal list-inside space-y-1 leading-relaxed">
-              <li>Acesse <span className="text-brand font-mono">developers.mercadolivre.com.br</span></li>
-              <li>Selecione seu aplicativo</li>
-              <li>Vá em <span className="text-white">Permissões</span> e habilite <span className="text-white">Pedidos</span></li>
-              <li>Salve e reconecte sua conta ML aqui na plataforma</li>
-            </ol>
+          <ol className="ml-7 list-decimal list-inside space-y-1 text-xs text-gray-500 leading-relaxed">
+            <li>Acesse <span className="text-brand font-mono">developers.mercadolivre.com.br</span></li>
+            <li>Selecione seu app → <span className="text-white">Permissões</span></li>
+            <li>Habilite <span className="text-white">Pedidos (Orders)</span> e salve</li>
+            <li>Reconecte sua conta ML aqui</li>
+          </ol>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && !data && (
+        <div className="flex items-center justify-center py-16 gap-2 text-gray-500 text-sm">
+          <Loader2 size={16} className="animate-spin" /> Buscando pedidos no Mercado Livre...
+        </div>
+      )}
+
+      {/* KPIs */}
+      {data && !semPermissao && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-dark-800 border border-white/8 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 text-yellow-400 mb-2">
+              <Truck size={13} />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">A enviar</span>
+            </div>
+            <p className="text-xl font-bold text-white">{data.totalPedidos}</p>
+            <p className="text-[10px] text-gray-500">pedidos pendentes</p>
+          </div>
+          <div className="bg-dark-800 border border-white/8 rounded-2xl p-4">
+            <div className="flex items-center gap-1.5 text-green-400 mb-2">
+              <DollarSign size={13} />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">Valor total</span>
+            </div>
+            <p className="text-xl font-bold text-white">{fmt(data.totalValor)}</p>
+            <p className="text-[10px] text-gray-500">em aberto</p>
           </div>
         </div>
       )}
 
-      {loading && !data ? (
-        <div className="flex items-center justify-center py-16 gap-2 text-gray-500 text-sm">
-          <Loader2 size={16} className="animate-spin" /> Buscando vendas no Mercado Livre...
-        </div>
-      ) : !data || semPermissao ? null : (
-        <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-dark-800 border border-white/8 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-1.5 text-green-400 mb-2">
-                <DollarSign size={14} />
-                <span className="text-[11px] font-semibold uppercase tracking-wide">Total vendido</span>
-              </div>
-              <p className="text-xl font-bold text-white">{fmt(data.totalVendido)}</p>
-              <p className="text-[10px] text-gray-500">{PERIODO_LABEL[data.periodo]}</p>
-            </div>
-            <div className="bg-dark-800 border border-white/8 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-1.5 text-blue-400 mb-2">
-                <ShoppingCart size={14} />
-                <span className="text-[11px] font-semibold uppercase tracking-wide">Pedidos</span>
-              </div>
-              <p className="text-xl font-bold text-white">{data.totalPedidos}</p>
-              <p className="text-[10px] text-gray-500">pedidos pagos</p>
-            </div>
-            <div className="bg-dark-800 border border-white/8 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-1.5 text-purple-400 mb-2">
-                <TrendingUp size={14} />
-                <span className="text-[11px] font-semibold uppercase tracking-wide">Ticket médio</span>
-              </div>
-              <p className="text-xl font-bold text-white">{fmt(data.ticketMedio)}</p>
-              <p className="text-[10px] text-gray-500">por pedido</p>
-            </div>
+      {/* Lista de pedidos a enviar */}
+      {data && !semPermissao && (
+        data.orders.length === 0 ? (
+          <div className="bg-dark-800 border border-white/8 border-dashed rounded-2xl py-12 flex flex-col items-center gap-2">
+            <CheckCircle2 size={24} className="text-emerald-500" />
+            <p className="text-sm font-bold text-white">Tudo em dia!</p>
+            <p className="text-xs text-gray-500">Nenhum pedido aguardando envio no momento.</p>
           </div>
-
-          {data.totalPedidos === 0 ? (
-            <div className="bg-dark-800 border border-white/8 border-dashed rounded-2xl py-12 flex flex-col items-center gap-2">
-              <BarChart2 size={24} className="text-gray-700" />
-              <p className="text-sm text-gray-500">Nenhum pedido pago neste período</p>
-            </div>
-          ) : (
-            <>
-              {/* Ranking de produtos */}
-              {data.ranking.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-bold text-white flex items-center gap-2">
-                    <BarChart2 size={14} className="text-brand" />
-                    Produtos mais vendidos
-                    <span className="text-xs font-normal text-gray-500">(anúncios vinculados)</span>
-                  </p>
-                  <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
-                    {data.ranking.map((r, i) => {
-                      const pct = data.ranking[0].total > 0
-                        ? Math.round((r.total / data.ranking[0].total) * 100)
-                        : 0;
-                      return (
-                        <div key={r.produto_id ?? i} className="px-4 py-3 space-y-1.5">
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold text-gray-600 w-4 text-right flex-shrink-0">#{i + 1}</span>
-                            <p className="text-xs font-semibold text-white flex-1 truncate">{r.titulo}</p>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-xs font-bold text-brand">{fmt(r.total)}</p>
-                              <p className="text-[10px] text-gray-500">{r.qtd} un.</p>
-                            </div>
-                          </div>
-                          <div className="ml-7 h-1 bg-dark-600 rounded-full overflow-hidden">
-                            <div className="h-full bg-brand/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Lista de pedidos */}
-              <div className="space-y-2">
-                <p className="text-sm font-bold text-white flex items-center gap-2">
-                  <Calendar size={14} className="text-gray-400" />
-                  Pedidos recentes
-                  <span className="text-xs font-normal text-gray-500">({data.orders.length})</span>
-                </p>
-                <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
-                  {data.orders.map(o => (
-                    <div key={o.id}>
-                      <button
-                        onClick={() => setExpanded(prev => prev === String(o.id) ? null : String(o.id))}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/2 transition-colors text-left"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-xs font-semibold text-white font-mono">#{o.id}</p>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400">
-                              Pago
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{o.buyer} · {fmtDate(o.date_created)}</p>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-bold text-white">{fmt(o.total_amount)}</p>
-                          <p className="text-[10px] text-gray-500">{o.items.length} item{o.items.length !== 1 ? "s" : ""}</p>
-                        </div>
-                        {expanded === String(o.id)
-                          ? <ChevronUp size={13} className="text-gray-500 flex-shrink-0" />
-                          : <ChevronDown size={13} className="text-gray-500 flex-shrink-0" />}
-                      </button>
-
-                      {expanded === String(o.id) && (
-                        <div className="border-t border-white/4 bg-dark-900/40 divide-y divide-white/3">
-                          {o.items.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-3 px-5 py-2.5">
-                              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.vinculado ? "bg-green-400" : "bg-gray-600"}`} />
-                              <p className="text-xs text-gray-300 flex-1 truncate">{item.title}</p>
-                              <p className="text-[10px] text-gray-500 flex-shrink-0">{item.quantity}x</p>
-                              <p className="text-xs font-semibold text-white flex-shrink-0">{fmt(item.unit_price * item.quantity)}</p>
-                            </div>
-                          ))}
-                        </div>
+        ) : (
+          <div className="bg-dark-800 border border-white/8 rounded-2xl overflow-hidden divide-y divide-white/4">
+            {data.orders.map(o => (
+              <div key={o.id}>
+                {/* Linha principal */}
+                <button
+                  onClick={() => setExpanded(prev => prev === String(o.id) ? null : String(o.id))}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/2 transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-xs font-semibold text-white font-mono">#{o.id}</p>
+                      {/* Badge do pedido na plataforma */}
+                      {hasPedido(o) ? (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${PEDIDO_STATUS_COLOR[(o.pedidos ?? [])[0]?.status] ?? "bg-gray-400/15 text-gray-400"}`}>
+                          {PEDIDO_STATUS_LABEL[(o.pedidos ?? [])[0]?.status] ?? "Pedido gerado"}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-400/15 text-yellow-400">
+                          Aguardando pedido
+                        </span>
                       )}
                     </div>
-                  ))}
-                </div>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{o.buyer} · {fmtDate(o.date_created)}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold text-white">{fmt(o.total_amount)}</p>
+                    <p className="text-[10px] text-gray-500">{o.items.length} item{o.items.length !== 1 ? "s" : ""}</p>
+                  </div>
+                  {expanded === String(o.id)
+                    ? <ChevronUp size={13} className="text-gray-500 flex-shrink-0" />
+                    : <ChevronDown size={13} className="text-gray-500 flex-shrink-0" />}
+                </button>
+
+                {/* Expandido */}
+                {expanded === String(o.id) && (
+                  <div className="border-t border-white/4 bg-dark-900/40">
+
+                    {/* Itens */}
+                    <div className="divide-y divide-white/3">
+                      {o.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-3 px-5 py-2.5">
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.vinculado ? "bg-green-400" : "bg-gray-600"}`} />
+                          <p className="text-xs text-gray-300 flex-1 truncate">{item.title}</p>
+                          <p className="text-[10px] text-gray-500 flex-shrink-0">{item.quantity}×</p>
+                          <p className="text-xs font-semibold text-white flex-shrink-0">{fmt(item.unit_price * item.quantity)}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Etiqueta ML — sempre disponível se shipping_id existir */}
+                    {o.shipping_id && (
+                      <div className="px-5 py-3 border-t border-white/4 flex items-center gap-3">
+                        <FileText size={13} className="text-yellow-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white">Etiqueta de envio ML</p>
+                          <p className="text-[10px] text-gray-600">Envio #{o.shipping_id}</p>
+                        </div>
+                        <button
+                          onClick={() => handleDownloadEtiqueta(o.shipping_id)}
+                          disabled={etiquetaLoad.has(o.shipping_id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400/15 hover:bg-yellow-400/25 border border-yellow-400/25 text-yellow-400 text-xs font-bold rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+                        >
+                          {etiquetaLoad.has(o.shipping_id)
+                            ? <Loader2 size={11} className="animate-spin" />
+                            : <Download size={11} />}
+                          Baixar etiqueta
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Pedido na plataforma */}
+                    {hasPedido(o) ? (
+                      <div className="px-5 py-3 border-t border-white/4 space-y-2">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pedido na plataforma</p>
+                        {(o.pedidos ?? []).map(p => (
+                          <div key={p.id} className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white">#{p.numero}</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PEDIDO_STATUS_COLOR[p.status] ?? "bg-gray-400/15 text-gray-400"}`}>
+                              {PEDIDO_STATUS_LABEL[p.status] ?? p.status}
+                            </span>
+                            <a href={`/portal/orcamentos/${p.id}`}
+                              className="ml-auto flex items-center gap-1 text-[11px] text-brand hover:underline flex-shrink-0"
+                            >
+                              Ver pedido <ExternalLink size={10} />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    ) : hasLinked(o) ? (
+                      <div className="px-5 py-3 border-t border-white/4 flex items-center gap-3">
+                        <button
+                          onClick={() => handleGerarPedido(o.id)}
+                          disabled={gerandoPedido.has(String(o.id))}
+                          className="flex items-center gap-2 px-4 py-2 bg-brand/15 hover:bg-brand/25 border border-brand/30 text-brand text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                        >
+                          {gerandoPedido.has(String(o.id))
+                            ? <><Loader2 size={11} className="animate-spin" /> Gerando...</>
+                            : <><Plus size={11} /> Gerar pedido para a marca</>}
+                        </button>
+                        <p className="text-[10px] text-gray-600">Envia o pedido de dropshipping para a marca processar</p>
+                      </div>
+                    ) : (
+                      <div className="px-5 py-3 border-t border-white/4">
+                        <p className="text-[11px] text-orange-400 flex items-center gap-1.5">
+                          <AlertTriangle size={11} /> Vincule os anúncios deste pedido para gerar o pedido na plataforma.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </>
-          )}
-        </>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
@@ -1273,7 +1341,7 @@ export default function MercadoLivrePage() {
             onClick={() => setAba("vendas")}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-xl transition-all ${aba === "vendas" ? "bg-white/8 text-white shadow-sm" : "text-gray-400 hover:text-white"}`}
           >
-            <TrendingUp size={14} /> Vendas Mercado Livre
+            <Truck size={14} /> Pedidos a Enviar
           </button>
         </div>
       )}

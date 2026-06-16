@@ -6,6 +6,9 @@ export const runtime = "nodejs";
 
 const ML_BASE = "https://api.mercadolibre.com";
 
+/* Statuses de envio que significam "ainda não foi enviado" */
+const SHIPPING_PENDENTE = ["pending", "handling", "ready_to_ship", "in_preparation"];
+
 interface MLOrderItem {
   item:       { id: string; title: string; seller_sku?: string };
   quantity:   number;
@@ -18,37 +21,18 @@ interface MLOrder {
   status:       string;
   total_amount: number;
   buyer:        { nickname: string };
+  shipping:     { id: number; status: string; substatus?: string } | null;
   order_items:  MLOrderItem[];
 }
 
-function periodoMs(periodo: string): number {
-  if (periodo === "7d")  return 7  * 24 * 60 * 60 * 1000;
-  if (periodo === "30d") return 30 * 24 * 60 * 60 * 1000;
-  if (periodo === "90d") return 90 * 24 * 60 * 60 * 1000;
-  const now = new Date();
-  return now.getTime() - new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-}
-
 async function fetchOrders(mlUserId: string, token: string): Promise<{ results: MLOrder[]; paging: { total: number } } | null> {
-  const attempts = [
-    /* sem seller — ML usa usuário autenticado do token */
-    { url: `${ML_BASE}/orders/search?sort=date_desc&limit=50` },
-    /* com seller explícito */
-    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc&limit=50` },
-    /* forma legada com access_token na query */
-    { url: `${ML_BASE}/orders/search?seller=${mlUserId}&access_token=${token}&limit=50` },
-    /* endpoint alternativo */
-    { url: `${ML_BASE}/orders/search?seller=${mlUserId}` },
-  ];
-
-  for (const { url } of attempts) {
-    const safeUrl = url.replace(token, "***");
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) { console.log("[ml/vendas] success:", safeUrl); return res.json(); }
-    const body = await res.text().catch(() => "");
-    console.error("[ml/vendas] failed", safeUrl, res.status, body.slice(0, 300));
-    if (res.status !== 403 && res.status !== 401) return null;
-  }
+  const res = await fetch(
+    `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=paid&sort=date_desc&limit=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (res.ok) return res.json();
+  const body = await res.text().catch(() => "");
+  console.error("[ml/vendas] orders/search failed", res.status, body.slice(0, 300));
   return null;
 }
 
@@ -71,25 +55,19 @@ export async function GET(request: Request) {
   if (!tokenRow?.ml_user_id)
     return NextResponse.json({ error: "Conta ML não encontrada" }, { status: 404 });
 
-  const url     = new URL(request.url);
-  const periodo = url.searchParams.get("periodo") ?? "mes";
-
   const searchData = await fetchOrders(tokenRow.ml_user_id, token);
 
   if (!searchData) {
-    /* diagnóstico: verifica escopos do token */
-    let scopes     = "desconhecido";
-    let checkRaw   = "";
-    let meStatus   = 0;
+    let scopes = "desconhecido";
+    let meStatus = 0;
     let meNickname = "";
     try {
       const checkRes = await fetch(`${ML_BASE}/oauth/check_token?token=${token}`);
-      checkRaw = await checkRes.text();
       if (checkRes.ok) {
-        const d = JSON.parse(checkRaw);
+        const d = await checkRes.json();
         scopes = d.scope ?? JSON.stringify(d);
       } else {
-        scopes = `HTTP ${checkRes.status}: ${checkRaw.slice(0, 300)}`;
+        scopes = `HTTP ${checkRes.status}`;
       }
     } catch (e) { scopes = `erro: ${e}`; }
 
@@ -97,10 +75,8 @@ export async function GET(request: Request) {
       const meRes = await fetch(`${ML_BASE}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
       meStatus = meRes.status;
       const meBody = await meRes.json().catch(() => ({}));
-      meNickname = meBody.nickname ?? meBody.first_name ?? JSON.stringify(meBody).slice(0, 100);
+      meNickname = meBody.nickname ?? meBody.first_name ?? "";
     } catch { /* noop */ }
-
-    console.error("[ml/vendas] diagnóstico:", { scopes, meStatus, meNickname, mlUserId: tokenRow.ml_user_id });
 
     return NextResponse.json({
       sem_permissao: true,
@@ -111,14 +87,14 @@ export async function GET(request: Request) {
 
   const allOrders = searchData.results ?? [];
 
-  /* filtra pelo período e só pedidos pagos */
-  const cutoff = Date.now() - periodoMs(periodo);
-  const orders = allOrders.filter(o =>
-    new Date(o.date_created).getTime() >= cutoff &&
-    (o.status === "paid" || o.status === "payment_required" || o.status === "partially_paid")
-  );
+  /* Filtra somente pedidos que ainda precisam ser enviados (com envio pendente) */
+  const orders = allOrders.filter(o => {
+    if (!o.shipping?.id) return false; // sem envio ML
+    const shStatus = o.shipping.status ?? "";
+    return SHIPPING_PENDENTE.includes(shStatus);
+  });
 
-  /* anúncios vinculados */
+  /* Anúncios vinculados */
   const { data: vinculados } = await db
     .from("portal_ml_anuncios")
     .select("ml_item_id, produto_id, marca_slug, preco_revenda")
@@ -127,44 +103,82 @@ export async function GET(request: Request) {
   const vinculadoMap: Record<string, { produto_id: string; marca_slug: string; preco_revenda: number | null }> = {};
   for (const v of vinculados ?? []) vinculadoMap[v.ml_item_id] = v;
 
+  type PedidoResumo = {
+    id: string; numero: number; status: string;
+    etiquetas: { id: string; nome: string; url: string }[];
+  };
+
   type EnrichedOrder = {
-    id: number; date_created: string; status: string; total_amount: number; buyer: string;
-    items: { ml_item_id: string; title: string; quantity: number; unit_price: number; vinculado: boolean; produto_id: string | null; marca_slug: string | null }[];
+    id:              number;
+    date_created:    string;
+    status:          string;
+    total_amount:    number;
+    buyer:           string;
+    shipping_id:     string;
+    shipping_status: string;
+    items:           { ml_item_id: string; title: string; quantity: number; unit_price: number; vinculado: boolean; produto_id: string | null; marca_slug: string | null }[];
+    pedidos:         PedidoResumo[];
   };
 
   const enriched: EnrichedOrder[] = orders.map(o => ({
-    id:           o.id,
-    date_created: o.date_created,
-    status:       o.status,
-    total_amount: o.total_amount,
-    buyer:        o.buyer?.nickname ?? "—",
+    id:              o.id,
+    date_created:    o.date_created,
+    status:          o.status,
+    total_amount:    o.total_amount,
+    buyer:           o.buyer?.nickname ?? "—",
+    shipping_id:     String(o.shipping!.id),
+    shipping_status: o.shipping!.status,
+    pedidos:         [],
     items: (o.order_items ?? []).map(i => {
       const link = vinculadoMap[i.item?.id ?? ""];
       return {
-        ml_item_id: i.item?.id ?? "", title: i.item?.title ?? "",
-        quantity: i.quantity, unit_price: i.unit_price,
-        vinculado: !!link, produto_id: link?.produto_id ?? null, marca_slug: link?.marca_slug ?? null,
+        ml_item_id: i.item?.id ?? "",
+        title:      i.item?.title ?? "",
+        quantity:   i.quantity,
+        unit_price: i.unit_price,
+        vinculado:  !!link,
+        produto_id: link?.produto_id ?? null,
+        marca_slug: link?.marca_slug ?? null,
       };
     }),
   }));
 
-  const totalVendido = enriched.reduce((s, o) => s + Number(o.total_amount), 0);
-  const totalPedidos = enriched.length;
-  const ticketMedio  = totalPedidos > 0 ? totalVendido / totalPedidos : 0;
+  /* Busca pedidos da plataforma vinculados a estes orders ML */
+  const mlOrderIds = enriched.map(o => String(o.id));
+  if (mlOrderIds.length) {
+    const { data: clienteRow } = await db
+      .from("clientes")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  const produtoTotais: Record<string, { produto_id: string; marca_slug: string; titulo: string; qtd: number; total: number }> = {};
-  for (const o of enriched) {
-    for (const i of o.items) {
-      if (!i.vinculado || !i.produto_id) continue;
-      if (!produtoTotais[i.ml_item_id]) {
-        produtoTotais[i.ml_item_id] = { produto_id: i.produto_id, marca_slug: i.marca_slug ?? "", titulo: i.title, qtd: 0, total: 0 };
+    if (clienteRow) {
+      const { data: orcamentos } = await db
+        .from("orcamentos")
+        .select("id, numero, status, ml_order_id, orcamento_etiquetas(id, nome, url)")
+        .in("ml_order_id", mlOrderIds)
+        .eq("cliente_id", clienteRow.id);
+
+      const pedidosByOrder: Record<string, PedidoResumo[]> = {};
+      for (const orc of orcamentos ?? []) {
+        if (!orc.ml_order_id) continue;
+        if (!pedidosByOrder[orc.ml_order_id]) pedidosByOrder[orc.ml_order_id] = [];
+        pedidosByOrder[orc.ml_order_id].push({
+          id:        orc.id,
+          numero:    orc.numero,
+          status:    orc.status,
+          etiquetas: (orc.orcamento_etiquetas ?? []) as { id: string; nome: string; url: string }[],
+        });
       }
-      produtoTotais[i.ml_item_id].qtd   += i.quantity;
-      produtoTotais[i.ml_item_id].total += i.unit_price * i.quantity;
+
+      for (const o of enriched) {
+        o.pedidos = pedidosByOrder[String(o.id)] ?? [];
+      }
     }
   }
 
-  const ranking = Object.values(produtoTotais).sort((a, b) => b.total - a.total).slice(0, 10);
+  const totalPedidos = enriched.length;
+  const totalValor   = enriched.reduce((s, o) => s + Number(o.total_amount), 0);
 
-  return NextResponse.json({ periodo, totalVendido, totalPedidos, ticketMedio, ranking, orders: enriched, paging: searchData.paging });
+  return NextResponse.json({ totalPedidos, totalValor, orders: enriched });
 }

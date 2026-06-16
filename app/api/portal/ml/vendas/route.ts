@@ -25,15 +25,19 @@ interface MLOrder {
   order_items:  MLOrderItem[];
 }
 
-async function fetchOrders(mlUserId: string, token: string): Promise<{ results: MLOrder[]; paging: { total: number } } | null> {
+type FetchOrdersResult =
+  | { ok: true;  data: { results: MLOrder[]; paging: { total: number } } }
+  | { ok: false; status: number; body: string };
+
+async function fetchOrders(mlUserId: string, token: string): Promise<FetchOrdersResult> {
   const res = await fetch(
-    `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=paid&sort=date_desc&limit=100`,
+    `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=paid`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
-  if (res.ok) return res.json();
+  if (res.ok) return { ok: true, data: await res.json() };
   const body = await res.text().catch(() => "");
   console.error("[ml/vendas] orders/search failed", res.status, body.slice(0, 300));
-  return null;
+  return { ok: false, status: res.status, body };
 }
 
 export async function GET(request: Request) {
@@ -55,37 +59,28 @@ export async function GET(request: Request) {
   if (!tokenRow?.ml_user_id)
     return NextResponse.json({ error: "Conta ML não encontrada" }, { status: 404 });
 
-  const searchData = await fetchOrders(tokenRow.ml_user_id, token);
+  const result = await fetchOrders(tokenRow.ml_user_id, token);
 
-  if (!searchData) {
-    let scopes = "desconhecido";
-    let meStatus = 0;
-    let meNickname = "";
-    try {
-      const checkRes = await fetch(`${ML_BASE}/oauth/check_token?token=${token}`);
-      if (checkRes.ok) {
-        const d = await checkRes.json();
-        scopes = d.scope ?? JSON.stringify(d);
-      } else {
-        scopes = `HTTP ${checkRes.status}`;
-      }
-    } catch (e) { scopes = `erro: ${e}`; }
-
-    try {
-      const meRes = await fetch(`${ML_BASE}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
-      meStatus = meRes.status;
-      const meBody = await meRes.json().catch(() => ({}));
-      meNickname = meBody.nickname ?? meBody.first_name ?? "";
-    } catch { /* noop */ }
-
-    return NextResponse.json({
-      sem_permissao: true,
-      error: "O aplicativo ML não tem permissão para acessar pedidos. Habilite Orders_v2 no ML Developers e reconecte a conta.",
-      debug: { scopes, meStatus, meNickname },
-    }, { status: 403 });
+  if (!result.ok) {
+    if (result.status === 403) {
+      return NextResponse.json({
+        sem_permissao: true,
+        error: "O aplicativo ML não tem permissão para acessar pedidos. Habilite Orders_v2 no ML Developers e reconecte a conta.",
+      }, { status: 403 });
+    }
+    if (result.status === 401) {
+      return NextResponse.json(
+        { error: "Token ML inválido. Desconecte e reconecte sua conta Mercado Livre." },
+        { status: 401 }
+      );
+    }
+    return NextResponse.json(
+      { error: `Erro ao buscar pedidos no Mercado Livre (${result.status})` },
+      { status: 502 }
+    );
   }
 
-  const allOrders = searchData.results ?? [];
+  const allOrders = result.data.results ?? [];
 
   /* Filtra somente pedidos que ainda precisam ser enviados (com envio pendente) */
   const orders = allOrders.filter(o => {

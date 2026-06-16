@@ -145,7 +145,7 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   const cli      = pedido.clientes;
   const etiquetas = pedido.orcamento_etiquetas ?? [];
   const hasEtq   = etiquetas.length > 0;
-  // For DROP: all etiquetas must be downloaded before confirming
+  // Only block confirmation for DROP orders until etiquetas are downloaded
   const allEtqDownloaded = !isDrop || !hasEtq || downloaded.size >= etiquetas.length;
   const missingDownloads = etiquetas.filter(e => !downloaded.has(e.id)).length;
 
@@ -176,8 +176,8 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
         {/* ── Ação: Confirmar recebimento (status = enviado) ── */}
         {pedido.status === "enviado" && (
           <div className="space-y-3">
-            {/* Etiquetas para download (DROP) — aparecem ANTES do botão de confirmação */}
-            {isDrop && hasEtq && (
+            {/* Etiquetas para download — aparecem ANTES do botão de confirmação */}
+            {hasEtq && (
               <div className="bg-dark-800 border border-blue-400/25 rounded-2xl overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
                   <Download size={13} className="text-blue-400" />
@@ -286,20 +286,52 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
 
         {/* ── Ação: Marcar como enviado (status = em_separacao) ── */}
         {pedido.status === "em_separacao" && (
-          <div className="bg-dark-800 border border-blue-400/20 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Package size={15} className="text-blue-400 flex-shrink-0" />
-              <p className="text-sm font-bold text-blue-400">Em separação — pronto para envio?</p>
+          <div className="space-y-3">
+            {/* Etiquetas para download antes de despachar */}
+            {hasEtq && (
+              <div className="bg-dark-800 border border-blue-400/25 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
+                  <Download size={13} className="text-blue-400" />
+                  <h2 className="text-sm font-bold text-white">Etiquetas de envio</h2>
+                  <span className="ml-auto text-xs text-gray-500">{etiquetas.length} arquivo{etiquetas.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {etiquetas.map((etq) => (
+                    <div key={etq.id} className="px-5 py-3 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <Download size={13} className="text-blue-400" />
+                      </div>
+                      <span className="text-sm text-gray-300 flex-1 truncate">{etq.nome}</span>
+                      <a
+                        href={etq.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={etq.nome}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0"
+                      >
+                        <Download size={11} /> Baixar
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-dark-800 border border-blue-400/20 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Package size={15} className="text-blue-400 flex-shrink-0" />
+                <p className="text-sm font-bold text-blue-400">Em separação — pronto para envio?</p>
+              </div>
+              <p className="text-xs text-gray-500">Quando o pedido for despachado, clique abaixo para notificar o cliente.</p>
+              <button
+                onClick={() => doAction("marcar_enviado")}
+                disabled={acting}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+              >
+                {acting ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
+                Marcar como enviado
+              </button>
             </div>
-            <p className="text-xs text-gray-500">Quando o pedido for despachado, clique abaixo para notificar o cliente.</p>
-            <button
-              onClick={() => doAction("marcar_enviado")}
-              disabled={acting}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
-            >
-              {acting ? <Loader2 size={13} className="animate-spin" /> : <Truck size={13} />}
-              Marcar como enviado
-            </button>
           </div>
         )}
 

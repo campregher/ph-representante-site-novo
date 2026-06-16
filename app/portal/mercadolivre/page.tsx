@@ -938,8 +938,8 @@ function VendasML() {
       if (!json.url) throw new Error("URL da etiqueta não encontrada");
       window.open(json.url, "_blank");
       toast.info(
-        "Etiqueta aberta no Mercado Livre. Baixe o PDF por lá e use o botão de upload aqui para compartilhar com a marca.",
-        { duration: 8000 }
+        "A etiqueta foi aberta no Mercado Livre. Baixe o PDF lá e faça upload aqui para a marca receber.",
+        { duration: 7000 }
       );
     }
   }
@@ -1129,8 +1129,8 @@ function VendasML() {
                           >
                             {etiquetaLoad.has(o.shipping_id)
                               ? <Loader2 size={11} className="animate-spin" />
-                              : <ExternalLink size={11} />}
-                            Abrir no ML
+                              : <Download size={11} />}
+                            Baixar etiqueta
                           </button>
                         </div>
                         {/* Upload do PDF baixado do ML */}

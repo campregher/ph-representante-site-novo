@@ -21,39 +21,64 @@ export async function GET(request: Request) {
   const headers = { Authorization: `Bearer ${token}` };
   const results: Record<string, unknown> = {};
 
-  /* 1. labels?response_type=link */
+  /* 1. Shipment completo */
+  let senderId: string | null = null;
+  let trackingNumber: string | null = null;
+  try {
+    const r = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers });
+    const body = await r.json().catch(() => null);
+    senderId = body?.sender_id ? String(body.sender_id) : null;
+    trackingNumber = body?.tracking_number ?? body?.tracking_codes?.[0]?.code ?? null;
+    results["shipment"] = {
+      status: r.status,
+      sender_id: senderId,
+      tracking_number: trackingNumber,
+      status_field: body?.status,
+      substatus: body?.substatus,
+      mode: body?.mode,
+      label_url: body?.label_url ?? null,
+      shipping_label: body?.shipping_label ?? null,
+      logistic_type: body?.logistic_type ?? null,
+      all_keys: Object.keys(body ?? {}),
+    };
+  } catch (e) { results["shipment"] = { error: String(e) }; }
+
+  /* 2. labels?response_type=link */
   try {
     const r = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=link`, { headers });
     const body = await r.text();
-    results["labels_response_type_link"] = {
-      status: r.status,
-      contentType: r.headers.get("content-type"),
-      finalUrl: r.url,
-      body: body.slice(0, 500),
-    };
-  } catch (e) { results["labels_response_type_link"] = { error: String(e) }; }
+    results["labels_link"] = { status: r.status, contentType: r.headers.get("content-type"), body: body.slice(0, 300) };
+  } catch (e) { results["labels_link"] = { error: String(e) }; }
 
-  /* 2. labels sem params */
+  /* 3. labels sem params */
   try {
     const r = await fetch(`${ML_BASE}/shipments/${shippingId}/labels`, { headers });
     const body = await r.text();
-    results["labels_plain"] = {
-      status: r.status,
-      contentType: r.headers.get("content-type"),
-      finalUrl: r.url,
-      body: body.slice(0, 500),
-    };
+    results["labels_plain"] = { status: r.status, contentType: r.headers.get("content-type"), finalUrl: r.url, body: body.slice(0, 300) };
   } catch (e) { results["labels_plain"] = { error: String(e) }; }
 
-  /* 3. shipment object */
-  try {
-    const r = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers });
-    const body = await r.text();
-    results["shipment"] = {
-      status: r.status,
-      body: body.slice(0, 1000),
-    };
-  } catch (e) { results["shipment"] = { error: String(e) }; }
+  /* 4. labels via user endpoint (ME2) */
+  if (senderId) {
+    try {
+      const r = await fetch(`${ML_BASE}/users/${senderId}/shipments/${shippingId}/labels?response_type=link`, { headers });
+      const body = await r.text();
+      results["labels_user_path"] = { status: r.status, contentType: r.headers.get("content-type"), body: body.slice(0, 300) };
+    } catch (e) { results["labels_user_path"] = { error: String(e) }; }
+  }
+
+  /* 5. labels com caller_id */
+  if (senderId) {
+    try {
+      const r = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=link&caller_id=${senderId}`, { headers });
+      const body = await r.text();
+      results["labels_caller_id"] = { status: r.status, body: body.slice(0, 300) };
+    } catch (e) { results["labels_caller_id"] = { error: String(e) }; }
+  }
+
+  /* 6. URL por tracking_number */
+  if (trackingNumber) {
+    results["tracking_label_url"] = `https://www.mercadolivre.com.br/envios/etiqueta/print/link/${trackingNumber}`;
+  }
 
   return NextResponse.json(results);
 }

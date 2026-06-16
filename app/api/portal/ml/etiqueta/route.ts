@@ -36,30 +36,32 @@ export async function GET(request: Request) {
   if (!labelUrl) return NextResponse.json({ error: "URL da etiqueta não encontrada" }, { status: 404 });
 
   /* Salva etiqueta no orcamento correspondente (em background, não bloqueia resposta) */
-  const db = await createAdminClient();
-  db.from("clientes").select("id").eq("user_id", user.id).single().then(({ data: cli }) => {
-    if (!cli) return;
-    return db.from("orcamentos")
-      .select("id, ml_order_id, orcamento_etiquetas(id)")
-      .eq("ml_shipping_id", shippingId)
-      .eq("cliente_id", cli.id)
-      .maybeSingle()
-      .then(({ data: orc }) => {
-        if (!orc) return;
-        const existing = (orc.orcamento_etiquetas ?? []) as { id: string }[];
-        if (existing.length > 0) {
-          /* Atualiza URL se já existia */
-          return db.from("orcamento_etiquetas")
-            .update({ url: labelUrl })
-            .eq("id", existing[0].id);
-        }
-        return db.from("orcamento_etiquetas").insert({
+  void (async () => {
+    try {
+      const db = await createAdminClient();
+      const { data: cli } = await db.from("clientes").select("id").eq("user_id", user.id).single();
+      if (!cli) return;
+
+      const { data: orc } = await db
+        .from("orcamentos")
+        .select("id, ml_order_id, orcamento_etiquetas(id)")
+        .eq("ml_shipping_id", shippingId)
+        .eq("cliente_id", cli.id)
+        .maybeSingle();
+      if (!orc) return;
+
+      const existing = (orc.orcamento_etiquetas ?? []) as { id: string }[];
+      if (existing.length > 0) {
+        await db.from("orcamento_etiquetas").update({ url: labelUrl }).eq("id", existing[0].id);
+      } else {
+        await db.from("orcamento_etiquetas").insert({
           orcamento_id: orc.id,
           nome:         `Etiqueta ML #${orc.ml_order_id ?? shippingId}`,
           url:          labelUrl,
         });
-      });
-  }).catch(() => {});
+      }
+    } catch { /* não bloqueia resposta */ }
+  })();
 
   return NextResponse.json({ url: labelUrl });
 }

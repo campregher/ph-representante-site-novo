@@ -939,7 +939,47 @@ function VendasML() {
     }
   }
 
+  function triggerBlobDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
   async function fetchEtiqueta(shippingId: string) {
+    /* ── 1. Chama sales-omni direto do browser com cookies de sessão ML ── */
+    try {
+      const r = await fetch(
+        "https://www.mercadolivre.com.br/sales-omni/packs/marketshops/action/file/printed_ship_label",
+        {
+          method:      "POST",
+          credentials: "include",
+          headers:     { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            isPrintDanfe: false,
+            shipmentIds:  [Number(shippingId)],
+            siteId:       "MLB",
+            isUserCBT:    false,
+          }),
+        }
+      );
+      if (r.ok) {
+        const ct = r.headers.get("content-type") ?? "";
+        if (ct.includes("pdf") || ct.includes("octet-stream")) {
+          triggerBlobDownload(await r.blob(), `etiqueta-${shippingId}.pdf`);
+          return;
+        }
+        const d = await r.json().catch(() => null);
+        const fileUrl: string | null = d?.url ?? d?.file_url ?? d?.label_url ?? d?.print_url ?? null;
+        if (fileUrl && fileUrl.startsWith("http") && !fileUrl.includes("/detalhe")) {
+          window.open(fileUrl, "_blank");
+          return;
+        }
+      }
+    } catch { /* CORS ou não logado no ML — cai no servidor */ }
+
+    /* ── 2. Fallback: endpoint do servidor ── */
     const res = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
@@ -947,25 +987,12 @@ function VendasML() {
     }
     const ct = res.headers.get("content-type") ?? "";
     if (ct.includes("pdf") || ct.includes("octet-stream")) {
-      /* PDF binário: download direto */
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `etiqueta-${shippingId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(await res.blob(), `etiqueta-${shippingId}.pdf`);
     } else {
-      /* URL de fallback (ME2 — requer sessão do ML no browser) */
       const json = await res.json().catch(() => ({}));
       if (!json.url) throw new Error("URL da etiqueta não encontrada");
       window.open(json.url, "_blank");
-      toast.info(
-        "A etiqueta foi aberta no Mercado Livre. Baixe o PDF lá e faça upload aqui para a marca receber.",
-        { duration: 7000 }
-      );
+      toast.info("Aberto no Mercado Livre — use o botão de upload para enviar o PDF para a marca.", { duration: 6000 });
     }
   }
 

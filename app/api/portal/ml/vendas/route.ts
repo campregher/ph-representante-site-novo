@@ -6,8 +6,8 @@ export const runtime = "nodejs";
 
 const ML_BASE = "https://api.mercadolibre.com";
 
-/* Statuses de envio que significam "ainda não foi enviado" */
-const SHIPPING_PENDENTE = ["pending", "handling", "ready_to_ship", "in_preparation"];
+/* Statuses de envio que significam "já finalizado" — todos os outros aparecem */
+const SHIPPING_FINALIZADO = ["shipped", "delivered", "cancelled", "not_delivered", "return_expired", "lost"];
 
 interface MLOrderItem {
   item:       { id: string; title: string; seller_sku?: string };
@@ -30,38 +30,16 @@ type FetchOrdersResult =
   | { ok: false; status: number; body: string };
 
 async function fetchOrders(mlUserId: string, token: string): Promise<FetchOrdersResult> {
-  // Busca pedidos pagos E enviados — quando a etiqueta é gerada o ML muda order.status para "shipped"
-  // mas o shipping.status ainda pode ser ready_to_ship/handling (não despachado fisicamente)
-  const urls = [
-    `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=paid`,
-    `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=shipped`,
-  ];
-
-  const results = await Promise.all(urls.map(url =>
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  ));
-
-  // Se qualquer chamada retornar 401/403 propaga o erro
-  for (const res of results) {
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.error("[ml/vendas] orders/search failed", res.status, body.slice(0, 300));
-      return { ok: false, status: res.status, body };
-    }
-  }
-
-  const jsons = await Promise.all(results.map(r => r.json())) as { results: MLOrder[]; paging: { total: number } }[];
-
-  // Combina e deduplica por ID
-  const seen = new Set<number>();
-  const combined: MLOrder[] = [];
-  for (const j of jsons) {
-    for (const o of (j.results ?? [])) {
-      if (!seen.has(o.id)) { seen.add(o.id); combined.push(o); }
-    }
-  }
-
-  return { ok: true, data: { results: combined, paging: { total: combined.length } } };
+  // Sem filtro de order.status — o ML transiciona o status de forma não-documentada
+  // ao longo do ciclo de vida (paid → outros). Filtramos pelo shipping.status no servidor.
+  const res = await fetch(
+    `${ML_BASE}/orders/search?seller=${mlUserId}&sort=date_desc`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (res.ok) return { ok: true, data: await res.json() };
+  const body = await res.text().catch(() => "");
+  console.error("[ml/vendas] orders/search failed", res.status, body.slice(0, 300));
+  return { ok: false, status: res.status, body };
 }
 
 export async function GET(request: Request) {
@@ -106,11 +84,11 @@ export async function GET(request: Request) {
 
   const allOrders = result.data.results ?? [];
 
-  /* Filtra somente pedidos que ainda precisam ser enviados (com envio pendente) */
+  /* Mantém só pedidos com envio ML ainda não concluído */
   const orders = allOrders.filter(o => {
-    if (!o.shipping?.id) return false; // sem envio ML
+    if (!o.shipping?.id) return false;
     const shStatus = o.shipping.status ?? "";
-    return SHIPPING_PENDENTE.includes(shStatus);
+    return !SHIPPING_FINALIZADO.includes(shStatus);
   });
 
   /* Anúncios vinculados */

@@ -19,9 +19,24 @@ interface MLAddress {
   city: { name: string } | null; state: { name: string } | null;
 }
 
-async function fetchTrackingUrl(shippingId: string, _token: string): Promise<string> {
-  /* URL direta via shipment ID — não requer tracking_number */
-  return `${ML_WEB}/envios/etiqueta/print/shipment/${shippingId}?print=true`;
+async function fetchLabelUrl(shippingId: string, token: string, orderId: string): Promise<string> {
+  /* Tenta API ML para ME1 */
+  try {
+    for (const rt of ["link", "pdf"]) {
+      const r = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const ct = r.headers.get("content-type") ?? "";
+        if (!ct.includes("json")) continue;
+        const d = await r.json().catch(() => null);
+        const u = typeof d === "string" ? d : d?.label_url ?? d?.url ?? null;
+        if (u && u.startsWith("http")) return u;
+      }
+    }
+  } catch { /* ignora */ }
+  /* ME2: usa URL da venda no ML onde o seller tem "Reimprimir etiqueta" */
+  return `${ML_WEB}/vendas/${orderId}/detalhe`;
 }
 
 export async function POST(request: Request) {
@@ -175,8 +190,10 @@ export async function POST(request: Request) {
     );
 
     /* Salva etiquetas de todas as vendas agrupadas */
-    for (const sid of shippingIds) {
-      const labelUrl = await fetchTrackingUrl(sid, token);
+    for (let si = 0; si < shippingIds.length; si++) {
+      const sid      = shippingIds[si];
+      const oidForSid = novosIds[si] ?? novosIds[0];
+      const labelUrl = await fetchLabelUrl(sid, token, oidForSid);
       if (labelUrl) {
         void (async () => {
           try {

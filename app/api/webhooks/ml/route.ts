@@ -36,15 +36,13 @@ async function fetchLabelUrl(shippingId: string, token: string): Promise<string 
     } catch { /* continua */ }
   }
 
-  /* ME2/drop_off: API retorna 404 — usa tracking_number como URL de impressão */
+  /* ME2/drop_off: API retorna 404 — usa URL da venda no ML (botão nativo de reimprimir) */
   try {
     const res = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: auth });
     if (res.ok) {
       const sh = await res.json().catch(() => null);
-      const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
-      if (tracking) {
-        return `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
-      }
+      const orderId: string | null = sh?.order_id ? String(sh.order_id) : null;
+      if (orderId) return `${ML_WEB_BASE}/vendas/${orderId}/detalhe`;
     }
   } catch { /* ignora */ }
 

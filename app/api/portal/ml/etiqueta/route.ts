@@ -112,18 +112,13 @@ async function resolveLabel(shippingId: string, token: string): Promise<LabelRes
     const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
 
     if (tracking) {
-      /* URL de impressão direta via shipment ID (sem tracking) */
-      const printByShipment = `${ML_WEB_BASE}/envios/etiqueta/print/shipment/${shippingId}`;
-      const pdfByShipment = await tryPdf(printByShipment, { ...auth,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "application/pdf,*/*",
-      });
-      if (pdfByShipment) return { kind: "pdf", data: pdfByShipment, trackingNumber: tracking };
-
-      /* Fallback: URL com ?print=true para auto-abrir diálogo de impressão */
-      const printUrl = `${ML_WEB_BASE}/envios/etiqueta/print/shipment/${shippingId}?print=true`;
-      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — URL fallback (shipment)`);
-      return { kind: "url", value: printUrl };
+      /* Fallback: página da venda no ML onde o seller tem o botão "Reimprimir etiqueta" */
+      const orderId: string | null = sh?.order_id ? String(sh.order_id) : null;
+      const fallbackUrl = orderId
+        ? `${ML_WEB_BASE}/vendas/${orderId}/detalhe`
+        : `${ML_WEB_BASE}/envios/${shippingId}`;
+      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — URL fallback: ${fallbackUrl}`);
+      return { kind: "url", value: fallbackUrl };
     }
 
     console.warn(`[ml/etiqueta] ${shippingId} sem tracking. mode=${sh?.mode} logistic_type=${sh?.logistic_type}`);

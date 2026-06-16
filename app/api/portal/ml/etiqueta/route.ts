@@ -42,58 +42,56 @@ async function tryUrlApi(url: string, hdrs: Record<string, string>): Promise<str
 }
 
 async function resolveLabel(shippingId: string, token: string): Promise<LabelResult | null> {
-  const auth = { Authorization: `Bearer ${token}` };
+  const auth    = { Authorization: `Bearer ${token}` };
+  const browser = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-  /* ── 1. Pega ML user_id via /users/me ── */
-  let mlUserId: string | null = null;
+  /* ── 1. API interna do ML (descoberta via network capture) ── */
   try {
-    const rMe = await fetch(`${ML_BASE}/users/me`, { headers: auth });
-    if (rMe.ok) {
-      const me = await rMe.json().catch(() => null);
-      mlUserId = me?.id ? String(me.id) : null;
-    }
-  } catch { /* ignora */ }
-
-  /* ── 2. Tentativas via API ML com variações ── */
-  const apiAttempts: string[] = [];
-  for (const rt of ["link", "pdf", "zpl2"]) {
-    apiAttempts.push(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}`);
-    if (mlUserId) {
-      apiAttempts.push(
-        `${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}&caller_id=${mlUserId}`,
-        `${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}&caller.id=${mlUserId}`,
+    for (const baseUrl of [
+      "https://www.mercadolivre.com.br/sales-omni",
+      "https://api.mercadolibre.com/sales-omni",
+    ]) {
+      const r = await fetch(
+        `${baseUrl}/packs/marketshops/action/file/printed_ship_label`,
+        {
+          method: "POST",
+          headers: {
+            ...auth,
+            "Content-Type": "application/json",
+            "User-Agent": browser,
+            "Origin": "https://www.mercadolivre.com.br",
+            "Referer": "https://www.mercadolivre.com.br/",
+          },
+          body: JSON.stringify({
+            isPrintDanfe: false,
+            shipmentIds:  [Number(shippingId)],
+            siteId:       "MLB",
+            isUserCBT:    false,
+          }),
+        }
       );
+      console.info(`[ml/etiqueta] sales-omni ${baseUrl} → ${r.status} ct=${r.headers.get("content-type")}`);
+      if (r.ok) {
+        const ct = r.headers.get("content-type") ?? "";
+        if (ct.includes("pdf") || ct.includes("octet-stream")) {
+          return { kind: "pdf", data: await r.arrayBuffer() };
+        }
+        const d = await r.json().catch(() => null);
+        console.info("[ml/etiqueta] sales-omni body:", JSON.stringify(d)?.slice(0, 300));
+        const url = d?.url ?? d?.label_url ?? d?.file_url ?? d?.print_url ?? null;
+        if (url && url.startsWith("http")) return { kind: "url", value: url };
+      }
     }
-  }
-  if (mlUserId) {
-    apiAttempts.push(`${ML_BASE}/users/${mlUserId}/shipments/${shippingId}/labels?response_type=pdf`);
-    apiAttempts.push(`${ML_BASE}/users/${mlUserId}/shipments/${shippingId}/labels?response_type=link`);
-  }
+  } catch (e) { console.warn("[ml/etiqueta] sales-omni error:", e); }
 
-  for (const u of apiAttempts) {
+  /* ── 2. API pública ML ── */
+  for (const rt of ["link", "pdf"]) {
+    const u = `${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}`;
     const pdf = await tryPdf(u, auth);
     if (pdf) return { kind: "pdf", data: pdf };
     const url = await tryUrlApi(u, auth);
     if (url) return { kind: "url", value: url };
   }
-
-  /* ── 3. POST batch labels ── */
-  try {
-    for (const rt of ["pdf", "link", "zpl2"]) {
-      const r = await fetch(`${ML_BASE}/shipments/labels`, {
-        method: "POST",
-        headers: { ...auth, "Content-Type": "application/json" },
-        body: JSON.stringify({ shipment_ids: [shippingId], response_type: rt }),
-      });
-      if (r.ok) {
-        const ct = r.headers.get("content-type") ?? "";
-        if (ct.includes("pdf") || ct.includes("octet-stream")) return { kind: "pdf", data: await r.arrayBuffer() };
-        const d = await r.json().catch(() => null);
-        const u = d?.label_url ?? d?.url ?? null;
-        if (u) return { kind: "url", value: u };
-      }
-    }
-  } catch { /* ignora */ }
 
   /* ── 4. Objeto do envio completo ── */
   try {

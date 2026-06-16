@@ -10,9 +10,8 @@ const ML_BASE = "https://api.mercadolibre.com";
 async function resolveLabel(shippingId: string, token: string): Promise<string | null> {
   const headers = { Authorization: `Bearer ${token}` };
 
-  /* Tentativa 1: response_type=link */
+  /* Tentativa 1: /labels?response_type=link (funciona para me1) */
   const r1 = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=link`, { headers });
-
   if (r1.ok) {
     const ct = r1.headers.get("content-type") ?? "";
     if (ct.includes("json")) {
@@ -24,42 +23,36 @@ async function resolveLabel(shippingId: string, token: string): Promise<string |
       const text = await r1.text().catch(() => "");
       if (text.trim().startsWith("http")) return text.trim();
     }
-    /* fetch segue redirects — se a URL final mudou, é o PDF */
-    const finalUrl1 = r1.url;
-    const reqUrl1   = `${ML_BASE}/shipments/${shippingId}/labels?response_type=link`;
-    if (finalUrl1 && finalUrl1 !== reqUrl1) return finalUrl1;
-  } else {
-    const errBody = await r1.text().catch(() => "");
-    console.warn(`[ml/etiqueta] response_type=link → ${r1.status}: ${errBody.slice(0, 300)}`);
+    if (r1.url !== `${ML_BASE}/shipments/${shippingId}/labels?response_type=link`) return r1.url;
   }
 
-  /* Tentativa 2: sem response_type (pode redirectar para o PDF) */
+  /* Tentativa 2: /labels sem params (pode redirect) */
   const r2 = await fetch(`${ML_BASE}/shipments/${shippingId}/labels`, { headers });
-
   if (r2.ok) {
-    const finalUrl2 = r2.url;
-    const reqUrl2   = `${ML_BASE}/shipments/${shippingId}/labels`;
-    if (finalUrl2 && finalUrl2 !== reqUrl2) return finalUrl2;
-
+    const origUrl = `${ML_BASE}/shipments/${shippingId}/labels`;
+    if (r2.url && r2.url !== origUrl) return r2.url;
     const ct2 = r2.headers.get("content-type") ?? "";
     if (ct2.includes("json")) {
       const data2 = await r2.json().catch(() => null);
       const url2 = data2?.label_url ?? data2?.print_url ?? data2?.url ?? null;
       if (url2) return url2;
     }
-  } else {
-    const errBody2 = await r2.text().catch(() => "");
-    console.warn(`[ml/etiqueta] labels (plain) → ${r2.status}: ${errBody2.slice(0, 300)}`);
   }
 
-  /* Tentativa 3: detalhes do envio — alguns envios expõem label_url no objeto */
+  /* Tentativa 3: campo label_url no objeto do envio */
   const r3 = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers });
   if (r3.ok) {
     const sh = await r3.json().catch(() => null);
-    const url3 = sh?.label_url ?? sh?.shipping_label?.url ?? null;
-    if (url3) return url3;
-    /* Loga status para diagnóstico */
-    console.info(`[ml/etiqueta] shipment ${shippingId} status=${sh?.status} substatus=${sh?.substatus}`);
+
+    /* Campos diretos */
+    const directUrl = sh?.label_url ?? sh?.shipping_label?.url ?? null;
+    if (directUrl) return directUrl;
+
+    /* ME2 / drop_off: constrói URL via tracking_number */
+    const tracking = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
+    if (tracking) {
+      return `https://www.mercadolivre.com.br/envios/etiqueta/print/link/${tracking}`;
+    }
   }
 
   return null;
@@ -81,7 +74,7 @@ export async function GET(request: Request) {
 
   if (!labelUrl) {
     return NextResponse.json(
-      { error: "Etiqueta ainda não disponível — gere a etiqueta no painel do Mercado Livre e tente novamente." },
+      { error: "Etiqueta ainda não disponível — gere a etiqueta no Mercado Livre e tente novamente." },
       { status: 404 }
     );
   }

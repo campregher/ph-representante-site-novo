@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendOrderReceivedEmail, sendShippingEmail, sendPaymentConfirmationEmail, sendSupplierNotification, sendExpedicaoEmail } from "@/lib/email";
 import { criarNotificacao, getClienteUserId } from "@/lib/notificacoes";
 import { sendText } from "@/lib/evolution";
+import { getValidPortalToken } from "@/lib/portal-ml-auth";
+
+const ML_BASE = "https://api.mercadolibre.com";
 
 export const runtime = "nodejs";
 
@@ -49,7 +52,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         .reduce((s, i) => s + Number(i.valor_total ?? 0), 0);
 
   const { action, motivo, etiquetas_confirmadas, mensagem, novoStatus } = body as {
-    action: "confirmar_recebimento" | "marcar_enviado" | "confirmar_pagamento" | "recusar" | "alertar_cliente" | "mudar_status";
+    action: "confirmar_recebimento" | "marcar_enviado" | "confirmar_pagamento" | "recusar" | "alertar_cliente" | "mudar_status" | "buscar_etiqueta_ml";
     motivo?: string;
     etiquetas_confirmadas?: boolean;
     mensagem?: string;
@@ -275,6 +278,60 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (clienteWpp) sendText(clienteWpp, `📢 *${brandName} — Pedido #${existing.numero}*\n\n${msg}`).catch(() => {});
 
     return NextResponse.json({ ok: true });
+  }
+
+  // ── Buscar etiqueta do ML e salvar ──────────────────────────────────────────
+  if (action === "buscar_etiqueta_ml") {
+    const { data: orc } = await db
+      .from("orcamentos")
+      .select("id, ml_shipping_id, ml_order_id, cliente_id")
+      .eq("id", id)
+      .eq("marca", ctx.marcaSlug)
+      .single();
+
+    if (!orc?.ml_shipping_id) {
+      return NextResponse.json({ error: "Pedido sem shipping ML" }, { status: 400 });
+    }
+
+    const shippingId = orc.ml_shipping_id as string;
+
+    /* Busca token do cliente */
+    const { data: tokenRow } = await db
+      .from("portal_ml_tokens")
+      .select("cliente_id")
+      .eq("cliente_id", orc.cliente_id as string)
+      .maybeSingle();
+
+    if (!tokenRow) return NextResponse.json({ error: "Token ML não encontrado" }, { status: 404 });
+
+    const token = await getValidPortalToken(tokenRow.cliente_id).catch(() => null);
+    if (!token) return NextResponse.json({ error: "Token ML inválido" }, { status: 401 });
+
+    const labelRes = await fetch(
+      `${ML_BASE}/shipments/${shippingId}/labels?response_type=link`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!labelRes.ok) {
+      return NextResponse.json({ error: "Etiqueta ainda não disponível no ML" }, { status: 404 });
+    }
+
+    const labelData = await labelRes.json();
+    const labelUrl: string | null = typeof labelData === "string" ? labelData : (labelData?.label_url ?? null);
+
+    if (!labelUrl) {
+      return NextResponse.json({ error: "Etiqueta ainda não disponível no ML" }, { status: 404 });
+    }
+
+    /* Remove etiquetas antigas e insere nova */
+    await db.from("orcamento_etiquetas").delete().eq("orcamento_id", id);
+    await db.from("orcamento_etiquetas").insert({
+      orcamento_id: id,
+      nome:         `Etiqueta ML #${orc.ml_order_id ?? shippingId}`,
+      url:          labelUrl,
+    });
+
+    return NextResponse.json({ ok: true, url: labelUrl });
   }
 
   // ── Alterar status manualmente ───────────────────────────────────────────────

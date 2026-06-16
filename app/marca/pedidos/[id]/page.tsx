@@ -18,6 +18,7 @@ interface Pedido {
   condicao_pagamento: string | null; prazo_boleto: string | null;
   transportadora: string | null; observacoes: string | null; observacao_admin: string | null;
   horario_postagem: string | null;
+  ml_shipping_id: string | null;
   total: number; created_at: string;
   orcamento_itens: Item[];
   orcamento_etiquetas: Etiqueta[];
@@ -47,6 +48,7 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   const [motivo,          setMotivo]          = useState("");
   const [showRecusar,     setShowRecusar]     = useState(false);
   const [downloaded,      setDownloaded]      = useState<Set<string>>(new Set());
+  const [buscandoEtq,    setBuscandoEtq]     = useState(false);
   const [showAlerta,      setShowAlerta]      = useState(false);
   const [mensagemAlerta,  setMensagemAlerta]  = useState("");
   const [enviandoAlerta,  setEnviandoAlerta]  = useState(false);
@@ -73,6 +75,22 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
     { value: "pago",         label: "Pago"                   },
     { value: "recusado",     label: "Recusado"               },
   ];
+
+  async function buscarEtiquetaML() {
+    setBuscandoEtq(true);
+    try {
+      const res = await fetch(`/api/marca/pedidos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "buscar_etiqueta_ml" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success("Etiqueta salva com sucesso!");
+      await load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Etiqueta ainda não disponível no ML"); }
+    finally { setBuscandoEtq(false); }
+  }
 
   function markDownloaded(etqId: string) {
     setDownloaded((prev) => new Set([...prev, etqId]));
@@ -145,6 +163,7 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
   const cli      = pedido.clientes;
   const etiquetas = pedido.orcamento_etiquetas ?? [];
   const hasEtq   = etiquetas.length > 0;
+  const hasMLShipping = !!pedido.ml_shipping_id;
   // Only block confirmation for DROP orders until etiquetas are downloaded
   const allEtqDownloaded = !isDrop || !hasEtq || downloaded.size >= etiquetas.length;
   const missingDownloads = etiquetas.filter(e => !downloaded.has(e.id)).length;
@@ -177,49 +196,65 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
         {pedido.status === "enviado" && (
           <div className="space-y-3">
             {/* Etiquetas para download — aparecem ANTES do botão de confirmação */}
-            {hasEtq && (
+            {(hasEtq || hasMLShipping) && (
               <div className="bg-dark-800 border border-blue-400/25 rounded-2xl overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
                   <Download size={13} className="text-blue-400" />
                   <h2 className="text-sm font-bold text-white">Etiquetas de envio</h2>
-                  <span className="ml-auto text-xs font-semibold">
-                    {downloaded.size >= etiquetas.length
-                      ? <span className="text-emerald-400">Todas baixadas ✓</span>
-                      : <span className="text-yellow-400">{missingDownloads} pendente{missingDownloads !== 1 ? "s" : ""}</span>
-                    }
-                  </span>
+                  {hasEtq && (
+                    <span className="ml-auto text-xs font-semibold">
+                      {downloaded.size >= etiquetas.length
+                        ? <span className="text-emerald-400">Todas baixadas ✓</span>
+                        : <span className="text-yellow-400">{missingDownloads} pendente{missingDownloads !== 1 ? "s" : ""}</span>
+                      }
+                    </span>
+                  )}
                 </div>
-                <div className="divide-y divide-white/5">
-                  {etiquetas.map((etq) => {
-                    const done = downloaded.has(etq.id);
-                    return (
-                      <div key={etq.id} className={`px-5 py-3 flex items-center gap-3 transition-colors ${done ? "bg-emerald-500/5" : ""}`}>
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${done ? "bg-emerald-500/15 border-emerald-500/25" : "bg-blue-500/10 border-blue-500/20"}`}>
-                          {done
-                            ? <CheckCircle size={14} className="text-emerald-400" />
-                            : <Download size={13} className="text-blue-400" />
-                          }
+                {hasEtq ? (
+                  <div className="divide-y divide-white/5">
+                    {etiquetas.map((etq) => {
+                      const done = downloaded.has(etq.id);
+                      return (
+                        <div key={etq.id} className={`px-5 py-3 flex items-center gap-3 transition-colors ${done ? "bg-emerald-500/5" : ""}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${done ? "bg-emerald-500/15 border-emerald-500/25" : "bg-blue-500/10 border-blue-500/20"}`}>
+                            {done
+                              ? <CheckCircle size={14} className="text-emerald-400" />
+                              : <Download size={13} className="text-blue-400" />
+                            }
+                          </div>
+                          <span className={`text-sm flex-1 truncate ${done ? "text-gray-500 line-through" : "text-gray-300"}`}>{etq.nome}</span>
+                          <a
+                            href={etq.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={etq.nome}
+                            onClick={() => markDownloaded(etq.id)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex-shrink-0 ${
+                              done
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/25"
+                                : "bg-blue-500 hover:bg-blue-600 text-white"
+                            }`}
+                          >
+                            <Download size={11} /> {done ? "Baixado" : "Baixar"}
+                          </a>
                         </div>
-                        <span className={`text-sm flex-1 truncate ${done ? "text-gray-500 line-through" : "text-gray-300"}`}>{etq.nome}</span>
-                        <a
-                          href={etq.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={etq.nome}
-                          onClick={() => markDownloaded(etq.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex-shrink-0 ${
-                            done
-                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/25"
-                              : "bg-blue-500 hover:bg-blue-600 text-white"
-                          }`}
-                        >
-                          <Download size={11} /> {done ? "Baixado" : "Baixar"}
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
-                {!allEtqDownloaded && (
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-5 py-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-gray-500">Etiqueta ainda não salva — clique para buscar no ML.</p>
+                    <button
+                      onClick={buscarEtiquetaML}
+                      disabled={buscandoEtq}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0 disabled:opacity-50"
+                    >
+                      {buscandoEtq ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
+                      Buscar etiqueta
+                    </button>
+                  </div>
+                )}
+                {hasEtq && !allEtqDownloaded && (
                   <div className="px-5 py-3 border-t border-white/8 bg-yellow-400/5">
                     <p className="text-xs text-yellow-400">
                       Baixe todas as etiquetas antes de confirmar o recebimento.
@@ -288,32 +323,46 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
         {pedido.status === "em_separacao" && (
           <div className="space-y-3">
             {/* Etiquetas para download antes de despachar */}
-            {hasEtq && (
+            {(hasEtq || hasMLShipping) && (
               <div className="bg-dark-800 border border-blue-400/25 rounded-2xl overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-white/8 flex items-center gap-2">
                   <Download size={13} className="text-blue-400" />
                   <h2 className="text-sm font-bold text-white">Etiquetas de envio</h2>
-                  <span className="ml-auto text-xs text-gray-500">{etiquetas.length} arquivo{etiquetas.length !== 1 ? "s" : ""}</span>
+                  {hasEtq && <span className="ml-auto text-xs text-gray-500">{etiquetas.length} arquivo{etiquetas.length !== 1 ? "s" : ""}</span>}
                 </div>
-                <div className="divide-y divide-white/5">
-                  {etiquetas.map((etq) => (
-                    <div key={etq.id} className="px-5 py-3 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
-                        <Download size={13} className="text-blue-400" />
+                {hasEtq ? (
+                  <div className="divide-y divide-white/5">
+                    {etiquetas.map((etq) => (
+                      <div key={etq.id} className="px-5 py-3 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                          <Download size={13} className="text-blue-400" />
+                        </div>
+                        <span className="text-sm text-gray-300 flex-1 truncate">{etq.nome}</span>
+                        <a
+                          href={etq.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={etq.nome}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0"
+                        >
+                          <Download size={11} /> Baixar
+                        </a>
                       </div>
-                      <span className="text-sm text-gray-300 flex-1 truncate">{etq.nome}</span>
-                      <a
-                        href={etq.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={etq.nome}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0"
-                      >
-                        <Download size={11} /> Baixar
-                      </a>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-5 py-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-gray-500">Etiqueta ainda não salva — clique para buscar no ML.</p>
+                    <button
+                      onClick={buscarEtiquetaML}
+                      disabled={buscandoEtq}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-all flex-shrink-0 disabled:opacity-50"
+                    >
+                      {buscandoEtq ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
+                      Buscar etiqueta
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

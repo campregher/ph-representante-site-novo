@@ -39,19 +39,26 @@ async function resolveLabel(shippingId: string, token: string): Promise<string |
     }
   }
 
-  /* Tentativa 3: campo label_url no objeto do envio */
+  /* Tentativa 3: objeto do envio — tracking_number ou label_url direto */
   const r3 = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers });
   if (r3.ok) {
     const sh = await r3.json().catch(() => null);
 
-    /* Campos diretos */
     const directUrl = sh?.label_url ?? sh?.shipping_label?.url ?? null;
     if (directUrl) return directUrl;
 
-    /* ME2 / drop_off: constrói URL via tracking_number */
+    /* ME2 (drop_off / xd_drop_off / cross_docking): URL via tracking_number */
     const tracking = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
     if (tracking) {
       return `https://www.mercadolivre.com.br/envios/etiqueta/print/link/${tracking}`;
+    }
+
+    /* Fulfillment ou envio sem etiqueta para vendedor */
+    const logisticType: string = sh?.logistic_type ?? "";
+    if (logisticType === "fulfillment") {
+      console.info(`[ml/etiqueta] shipment ${shippingId} é fulfillment — ML despacha sem etiqueta do vendedor`);
+    } else {
+      console.warn(`[ml/etiqueta] shipment ${shippingId} sem tracking_number. logistic_type=${logisticType} status=${sh?.status}`);
     }
   }
 

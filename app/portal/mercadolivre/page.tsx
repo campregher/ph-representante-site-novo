@@ -881,6 +881,18 @@ function VendasML() {
 
   useEffect(() => { fetchVendas(); }, []);
 
+  /* Auto-fetch silencioso de etiquetas para pedidos sem etiqueta salva */
+  useEffect(() => {
+    if (!data?.orders) return;
+    const semEtiqueta = data.orders.filter(o => {
+      if (!o.shipping_id) return false;
+      return !o.pedidos?.some(p => p.etiquetas && p.etiquetas.length > 0);
+    });
+    for (const o of semEtiqueta) {
+      fetch(`/api/portal/ml/etiqueta?shipping_id=${o.shipping_id}`).catch(() => {});
+    }
+  }, [data]);
+
   async function handleGerarPedido(mlOrderId: number) {
     const key = String(mlOrderId);
     setGerandoPedido(prev => new Set([...prev, key]));

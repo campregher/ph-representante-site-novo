@@ -13,19 +13,42 @@ function extractOrderId(resource: string): string | null {
   return m ? m[1] : null;
 }
 
-/* Busca URL da etiqueta de envio */
+const ML_WEB_BASE = "https://www.mercadolivre.com.br";
+
+/* Busca URL da etiqueta de envio — tenta API, cai para tracking URL como fallback */
 async function fetchLabelUrl(shippingId: string, token: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `${ML_BASE}/shipments/${shippingId}/labels?response_type=link`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return typeof data === "string" ? data : data?.label_url ?? null;
-  } catch {
-    return null;
+  const auth = { Authorization: `Bearer ${token}` };
+
+  /* ME1: API retorna URL diretamente */
+  for (const rt of ["link", "pdf", "zpl2"]) {
+    try {
+      const res = await fetch(`${ML_BASE}/shipments/${shippingId}/labels?response_type=${rt}`, { headers: auth });
+      if (res.ok) {
+        const ct = res.headers.get("content-type") ?? "";
+        if (ct.includes("pdf") || ct.includes("octet-stream")) {
+          /* PDF binário: não conseguimos salvar como URL aqui — retorna null para tratar no chamador */
+          return null;
+        }
+        const data = await res.json().catch(() => null);
+        const url = typeof data === "string" ? data : data?.label_url ?? data?.url ?? null;
+        if (url && url.startsWith("http")) return url;
+      }
+    } catch { /* continua */ }
   }
+
+  /* ME2/drop_off: API retorna 404 — usa tracking_number como URL de impressão */
+  try {
+    const res = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: auth });
+    if (res.ok) {
+      const sh = await res.json().catch(() => null);
+      const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
+      if (tracking) {
+        return `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
+      }
+    }
+  } catch { /* ignora */ }
+
+  return null;
 }
 
 export async function POST(request: Request) {

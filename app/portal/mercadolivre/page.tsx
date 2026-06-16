@@ -971,7 +971,15 @@ function VendasML() {
           return;
         }
         const d = await r.json().catch(() => null);
-        const fileUrl: string | null = d?.url ?? d?.file_url ?? d?.label_url ?? d?.print_url ?? null;
+        /* ML retorna {response: {file: "<base64 PDF>", contentType: "application/pdf"}} */
+        const inner = d?.response ?? d;
+        const b64: string | null = inner?.file ?? null;
+        if (b64 && b64.startsWith("JVBER")) {
+          const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+          triggerBlobDownload(new Blob([bytes], { type: "application/pdf" }), `etiqueta-${shippingId}.pdf`);
+          return;
+        }
+        const fileUrl: string | null = inner?.url ?? d?.url ?? d?.file_url ?? d?.label_url ?? d?.print_url ?? null;
         if (fileUrl && fileUrl.startsWith("http") && !fileUrl.includes("/detalhe")) {
           window.open(fileUrl, "_blank");
           return;
@@ -991,8 +999,9 @@ function VendasML() {
     } else {
       const json = await res.json().catch(() => ({}));
       if (!json.url) throw new Error("URL da etiqueta não encontrada");
+      /* Abre a página da venda no ML onde o seller pode reimprimir */
       window.open(json.url, "_blank");
-      toast.info("Aberto no Mercado Livre — use o botão de upload para enviar o PDF para a marca.", { duration: 6000 });
+      toast.info("Abra o ML e clique em 'Reimprimir etiqueta' — depois use o botão de upload para enviar o PDF para a marca.", { duration: 8000 });
     }
   }
 

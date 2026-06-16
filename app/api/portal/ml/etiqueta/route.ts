@@ -45,41 +45,62 @@ async function resolveLabel(shippingId: string, token: string): Promise<LabelRes
   const auth    = { Authorization: `Bearer ${token}` };
   const browser = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-  /* ── 1. API interna do ML (descoberta via network capture) ── */
+  /* ── 1. API interna do ML (sales-omni) ──
+     ML retorna {response: {file: "<base64 PDF>", contentType:"application/pdf"}}
+     quando autenticado via cookie de sessão. Tentamos Bearer + Cookie com o token. */
   try {
     for (const baseUrl of [
       "https://www.mercadolivre.com.br/sales-omni",
       "https://api.mercadolibre.com/sales-omni",
     ]) {
-      const r = await fetch(
-        `${baseUrl}/packs/marketshops/action/file/printed_ship_label`,
-        {
-          method: "POST",
-          headers: {
-            ...auth,
-            "Content-Type": "application/json",
-            "User-Agent": browser,
-            "Origin": "https://www.mercadolivre.com.br",
-            "Referer": "https://www.mercadolivre.com.br/",
-          },
-          body: JSON.stringify({
-            isPrintDanfe: false,
-            shipmentIds:  [Number(shippingId)],
-            siteId:       "MLB",
-            isUserCBT:    false,
-          }),
-        }
-      );
-      console.info(`[ml/etiqueta] sales-omni ${baseUrl} → ${r.status} ct=${r.headers.get("content-type")}`);
-      if (r.ok) {
+      for (const extraHeaders of [
+        { Cookie: `access_token=${token}` },
+        {},
+      ]) {
+        const r = await fetch(
+          `${baseUrl}/packs/marketshops/action/file/printed_ship_label`,
+          {
+            method: "POST",
+            headers: {
+              ...auth,
+              ...extraHeaders,
+              "Content-Type": "application/json",
+              "User-Agent": browser,
+              "Origin": "https://www.mercadolivre.com.br",
+              "Referer": "https://www.mercadolivre.com.br/",
+            },
+            body: JSON.stringify({
+              isPrintDanfe: false,
+              shipmentIds:  [Number(shippingId)],
+              siteId:       "MLB",
+              isUserCBT:    false,
+            }),
+          }
+        );
+        console.info(`[ml/etiqueta] sales-omni ${baseUrl} cookie=${!!extraHeaders.Cookie} → ${r.status} ct=${r.headers.get("content-type")}`);
+        if (!r.ok) continue;
+
         const ct = r.headers.get("content-type") ?? "";
         if (ct.includes("pdf") || ct.includes("octet-stream")) {
           return { kind: "pdf", data: await r.arrayBuffer() };
         }
+
         const d = await r.json().catch(() => null);
         console.info("[ml/etiqueta] sales-omni body:", JSON.stringify(d)?.slice(0, 300));
-        const url = d?.url ?? d?.label_url ?? d?.file_url ?? d?.print_url ?? null;
-        if (url && url.startsWith("http")) return { kind: "url", value: url };
+
+        /* Resposta com base64 PDF inline: {response: {file: "JVBERi0x...", contentType: "application/pdf"}} */
+        const inner = d?.response ?? d;
+        const b64 = inner?.file ?? null;
+        if (b64 && typeof b64 === "string" && b64.startsWith("JVBER")) {
+          const buf = Buffer.from(b64, "base64");
+          return { kind: "pdf", data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer };
+        }
+
+        /* Resposta com URL */
+        const url = inner?.url ?? d?.url ?? d?.label_url ?? d?.file_url ?? d?.print_url ?? null;
+        if (url && typeof url === "string" && url.startsWith("http") && !url.includes("/detalhe")) {
+          return { kind: "url", value: url };
+        }
       }
     }
   } catch (e) { console.warn("[ml/etiqueta] sales-omni error:", e); }
@@ -149,9 +170,20 @@ export async function GET(request: Request) {
   }
 
   if (result.kind === "pdf") {
-    if (result.trackingNumber) {
-      void saveEtiqueta(shippingId, user.id, `${ML_WEB_BASE}/envios/etiqueta/print/link/${result.trackingNumber}`);
-    }
+    /* Faz upload automático no Supabase e salva URL persistida */
+    void (async () => {
+      try {
+        const db   = await createAdminClient();
+        const path = `${user.id}/${Date.now()}-etiqueta-${shippingId}.pdf`;
+        const buf  = Buffer.from(result.data);
+        const { error } = await db.storage.from("etiquetas").upload(path, buf, { contentType: "application/pdf", upsert: false });
+        if (!error) {
+          const { data: { publicUrl } } = db.storage.from("etiquetas").getPublicUrl(path);
+          await saveEtiqueta(shippingId, user.id, publicUrl);
+        }
+      } catch { /* não bloqueia */ }
+    })();
+
     return new Response(result.data, {
       headers: {
         "Content-Type": "application/pdf",

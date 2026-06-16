@@ -30,14 +30,38 @@ type FetchOrdersResult =
   | { ok: false; status: number; body: string };
 
 async function fetchOrders(mlUserId: string, token: string): Promise<FetchOrdersResult> {
-  const res = await fetch(
+  // Busca pedidos pagos E enviados — quando a etiqueta é gerada o ML muda order.status para "shipped"
+  // mas o shipping.status ainda pode ser ready_to_ship/handling (não despachado fisicamente)
+  const urls = [
     `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=paid`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (res.ok) return { ok: true, data: await res.json() };
-  const body = await res.text().catch(() => "");
-  console.error("[ml/vendas] orders/search failed", res.status, body.slice(0, 300));
-  return { ok: false, status: res.status, body };
+    `${ML_BASE}/orders/search?seller=${mlUserId}&order.status=shipped`,
+  ];
+
+  const results = await Promise.all(urls.map(url =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  ));
+
+  // Se qualquer chamada retornar 401/403 propaga o erro
+  for (const res of results) {
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[ml/vendas] orders/search failed", res.status, body.slice(0, 300));
+      return { ok: false, status: res.status, body };
+    }
+  }
+
+  const jsons = await Promise.all(results.map(r => r.json())) as { results: MLOrder[]; paging: { total: number } }[];
+
+  // Combina e deduplica por ID
+  const seen = new Set<number>();
+  const combined: MLOrder[] = [];
+  for (const j of jsons) {
+    for (const o of (j.results ?? [])) {
+      if (!seen.has(o.id)) { seen.add(o.id); combined.push(o); }
+    }
+  }
+
+  return { ok: true, data: { results: combined, paging: { total: combined.length } } };
 }
 
 export async function GET(request: Request) {

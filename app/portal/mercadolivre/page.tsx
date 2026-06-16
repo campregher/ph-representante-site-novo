@@ -861,6 +861,7 @@ function VendasML() {
   const [expanded,       setExpanded]       = useState<string | null>(null);
   const [gerandoPedido,  setGerandoPedido]  = useState<Set<string>>(new Set());
   const [etiquetaLoad,   setEtiquetaLoad]   = useState<Set<string>>(new Set());
+  const [enviandoEtq,    setEnviandoEtq]    = useState<Set<string>>(new Set());
 
   async function fetchVendas() {
     setLoading(true);
@@ -896,6 +897,21 @@ function VendasML() {
       toast.error(e instanceof Error ? e.message : "Erro ao gerar pedido");
     } finally {
       setGerandoPedido(prev => { const next = new Set(prev); next.delete(key); return next; });
+    }
+  }
+
+  async function handleEnviarEtiquetaMarca(shippingId: string) {
+    if (!shippingId) return;
+    setEnviandoEtq(prev => new Set([...prev, shippingId]));
+    try {
+      const res  = await fetch(`/api/portal/ml/etiqueta?shipping_id=${shippingId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Etiqueta não disponível");
+      toast.success("Etiqueta enviada para a marca!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar etiqueta");
+    } finally {
+      setEnviandoEtq(prev => { const next = new Set(prev); next.delete(shippingId); return next; });
     }
   }
 
@@ -1077,7 +1093,7 @@ function VendasML() {
                       <div className="px-5 py-3 border-t border-white/4 space-y-2">
                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pedido na plataforma</p>
                         {(o.pedidos ?? []).map(p => (
-                          <div key={p.id} className="flex items-center gap-2">
+                          <div key={p.id} className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold text-white">#{p.numero}</span>
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PEDIDO_STATUS_COLOR[p.status] ?? "bg-gray-400/15 text-gray-400"}`}>
                               {PEDIDO_STATUS_LABEL[p.status] ?? p.status}
@@ -1089,6 +1105,18 @@ function VendasML() {
                             </a>
                           </div>
                         ))}
+                        {o.shipping_id && (
+                          <button
+                            onClick={() => handleEnviarEtiquetaMarca(o.shipping_id)}
+                            disabled={enviandoEtq.has(o.shipping_id)}
+                            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/25 text-blue-400 text-[11px] font-bold rounded-xl transition-all disabled:opacity-50"
+                          >
+                            {enviandoEtq.has(o.shipping_id)
+                              ? <Loader2 size={10} className="animate-spin" />
+                              : <Truck size={10} />}
+                            Enviar etiqueta para a marca
+                          </button>
+                        )}
                       </div>
                     ) : hasLinked(o) ? (
                       <div className="px-5 py-3 border-t border-white/4 flex items-center gap-3">

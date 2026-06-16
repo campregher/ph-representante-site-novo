@@ -104,10 +104,17 @@ export async function GET(request: Request) {
           ? `Boleto${o.prazo_boleto ? ` — ${o.prazo_boleto} dias` : ""}`
           : (o.condicao_pagamento ?? "");
 
-    const etiquetasHtml = isDrop && etiquetas.length > 0 ? `
+    const etiquetasHtml = etiquetas.length > 0 ? `
       <div style="margin-top:14px;padding:10px 12px;background:#fffbeb;border:0.5pt solid #fde68a;border-radius:6px">
-        <div style="font-size:7pt;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">⚠ Pedido Dropshipping — Etiquetas de envio</div>
-        ${etiquetas.map((et) => `<div style="font-size:7.5pt;color:#78350f;margin-bottom:3px;padding-left:8px">• ${et.nome}</div>`).join("")}
+        <div style="font-size:7pt;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">
+          ${isDrop ? "⚠ Dropshipping — " : ""}Etiquetas de envio (${etiquetas.length})
+        </div>
+        ${etiquetas.map((et) => `
+          <div style="font-size:7.5pt;color:#78350f;margin-bottom:4px;padding-left:8px">
+            • <a href="${et.url}" target="_blank" style="color:#1d4ed8;text-decoration:underline;font-weight:600">${et.nome}</a>
+          </div>
+        `).join("")}
+        <div style="font-size:6.5pt;color:#9ca3af;margin-top:6px;padding-left:8px">Clique no link acima para baixar a etiqueta de envio.</div>
       </div>` : "";
 
     return `

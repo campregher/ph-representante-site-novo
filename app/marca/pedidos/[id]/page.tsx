@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, use } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -39,6 +40,7 @@ function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", 
 
 export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [pedido,          setPedido]          = useState<Pedido | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [acting,          setActing]          = useState(false);
@@ -92,6 +94,8 @@ export default function MarcaPedidoDetailPage({ params }: { params: Promise<{ id
       if (!res.ok) throw new Error(data.error);
       toast.success("Atualizado com sucesso!");
       setShowRecusar(false);
+      setNovoStatus("");
+      router.refresh(); // invalida cache da lista
       await load();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setActing(false); }

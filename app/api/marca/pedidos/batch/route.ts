@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const ctx = await getMarcaUser();
   if (!ctx) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { action, ids } = await request.json() as { action: string; ids: string[] };
+  const { action, ids, novoStatus } = await request.json() as { action: string; ids: string[]; novoStatus?: string };
 
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: "Nenhum pedido selecionado" }, { status: 400 });
@@ -127,6 +127,22 @@ export async function POST(request: Request) {
       }
     }
     return NextResponse.json({ ok: true, updated: eligibleIds.length });
+  }
+
+  // ── Alterar status em lote (sem email) ──────────────────────────────────────
+  if (action === "mudar_status") {
+    const validos = ["enviado", "em_separacao", "a_pagar", "pago", "recusado"];
+    if (!novoStatus || !validos.includes(novoStatus))
+      return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+
+    const { error: updateErr } = await db
+      .from("orcamentos")
+      .update({ status: novoStatus })
+      .eq("marca", ctx.marcaSlug)
+      .in("id", ids);
+
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true, updated: ids.length });
   }
 
   return NextResponse.json({ error: "Ação inválida" }, { status: 400 });

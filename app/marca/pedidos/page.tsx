@@ -64,6 +64,7 @@ function MarcaPedidosPage() {
   });
   const [selected,     setSelected]     = useState<Set<string>>(new Set());
   const [confirming,   setConfirming]   = useState(false);
+  const [batchStatus,  setBatchStatus]  = useState("");
   const [lote,             setLote]             = useState<{ pedidos: LotePedido[]; resumo: LoteResumo[] } | null>(null);
   const [loadingLote,      setLoadingLote]      = useState(false);
   const [loteSelected,     setLoteSelected]     = useState<Set<string>>(new Set());
@@ -123,7 +124,7 @@ function MarcaPedidosPage() {
     { key: "dropshipping", label: `Lote Drop${dropCount > 0 ? ` (${dropCount})` : ""}`, highlight: dropCount > 0 },
   ];
 
-  const isSelectionMode = tab === "a_pagar" || tab === "enviado" || tab === "em_separacao";
+  const isSelectionMode = tab !== "dropshipping";
 
   async function enviarLoteSelecionado() {
     if (loteSelected.size === 0) return;
@@ -201,6 +202,24 @@ function MarcaPedidosPage() {
     } else {
       setSelected(new Set(filtered.map((p) => p.id)));
     }
+  }
+
+  async function executarMudarStatus() {
+    if (selected.size === 0 || !batchStatus) return;
+    setConfirming(true);
+    try {
+      const res = await fetch("/api/marca/pedidos/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mudar_status", ids: [...selected], novoStatus: batchStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(`${data.updated} pedido${data.updated !== 1 ? "s" : ""} atualizado${data.updated !== 1 ? "s" : ""}!`);
+      setBatchStatus("");
+      await load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setConfirming(false); }
   }
 
   async function executarLote(action: "confirmar_pagamento" | "confirmar_recebimento" | "marcar_enviado") {
@@ -604,41 +623,74 @@ function MarcaPedidosPage() {
       {/* ── Barra de ação em lote (fixa na base) ── */}
       {isSelectionMode && selected.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 px-4 py-4 bg-dark-900/95 backdrop-blur-md border-t border-white/10">
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-white">{selected.size} pedido{selected.size !== 1 ? "s" : ""} selecionado{selected.size !== 1 ? "s" : ""}</p>
-              <p className="text-xs text-gray-500">
-                Total: {fmt(filtered.filter(p => selected.has(p.id)).reduce((s, p) => s + orderTotal(p), 0))}
-              </p>
+          <div className="max-w-5xl mx-auto space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <p className="text-sm font-bold text-white">{selected.size} selecionado{selected.size !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-gray-500">
+                  Total: {fmt(filtered.filter(p => selected.has(p.id)).reduce((s, p) => s + orderTotal(p), 0))}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Imprimir selecionados */}
+                <button
+                  onClick={() => window.open(`/api/marca/imprimir?ids=${[...selected].join(",")}`, "_blank")}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 border border-white/15 hover:border-white/30 text-gray-300 hover:text-white text-xs font-semibold rounded-xl transition-all"
+                >
+                  <Printer size={13} /> Imprimir ({selected.size})
+                </button>
+
+                {/* Ação contextual do status atual */}
+                {tab === "a_pagar" && (
+                  <button onClick={() => executarLote("confirmar_pagamento")} disabled={confirming}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                  >
+                    {confirming ? <Loader2 size={13} className="animate-spin" /> : <BadgeCheck size={13} />}
+                    Confirmar pagamento
+                  </button>
+                )}
+                {tab === "em_separacao" && (
+                  <button onClick={() => executarLote("marcar_enviado")} disabled={confirming}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                  >
+                    {confirming ? <Loader2 size={13} className="animate-spin" /> : <BadgeCheck size={13} />}
+                    Marcar como enviado
+                  </button>
+                )}
+                {tab === "enviado" && (
+                  <button onClick={() => executarLote("confirmar_recebimento")} disabled={confirming}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                  >
+                    {confirming ? <Loader2 size={13} className="animate-spin" /> : <BadgeCheck size={13} />}
+                    Aprovar selecionados
+                  </button>
+                )}
+              </div>
             </div>
-            {tab === "a_pagar" ? (
-              <button
-                onClick={() => executarLote("confirmar_pagamento")}
-                disabled={confirming}
-                className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+
+            {/* Alterar status em lote */}
+            <div className="flex items-center gap-2 border-t border-white/8 pt-3">
+              <span className="text-xs text-gray-500 flex-shrink-0">Alterar status:</span>
+              <select
+                value={batchStatus}
+                onChange={(e) => setBatchStatus(e.target.value)}
+                className="flex-1 max-w-[220px] px-3 py-1.5 bg-dark-800 border border-white/15 rounded-xl text-white text-xs focus:outline-none focus:border-brand/50"
               >
-                {confirming ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
-                Confirmar pagamento
-              </button>
-            ) : tab === "em_separacao" ? (
+                <option value="">Selecionar...</option>
+                <option value="enviado">Aguardando confirmação</option>
+                <option value="em_separacao">Em separação</option>
+                <option value="a_pagar">A pagar</option>
+                <option value="pago">Pago</option>
+                <option value="recusado">Recusado</option>
+              </select>
               <button
-                onClick={() => executarLote("marcar_enviado")}
-                disabled={confirming}
-                className="flex items-center gap-2 px-5 py-3 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+                onClick={executarMudarStatus}
+                disabled={confirming || !batchStatus}
+                className="px-4 py-1.5 bg-brand hover:bg-brand-hover text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40"
               >
-                {confirming ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
-                Marcar como enviado
+                {confirming ? <Loader2 size={12} className="animate-spin" /> : "Aplicar"}
               </button>
-            ) : (
-              <button
-                onClick={() => executarLote("confirmar_recebimento")}
-                disabled={confirming}
-                className="flex items-center gap-2 px-5 py-3 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50"
-              >
-                {confirming ? <Loader2 size={14} className="animate-spin" /> : <BadgeCheck size={14} />}
-                Aprovar selecionados
-              </button>
-            )}
+            </div>
           </div>
         </div>
       )}

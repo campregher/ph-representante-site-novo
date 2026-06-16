@@ -54,8 +54,8 @@ async function resolveLabel(shippingId: string, token: string): Promise<LabelRes
       "https://api.mercadolibre.com/sales-omni",
     ]) {
       for (const extraHeaders of [
-        { Cookie: `access_token=${token}` },
-        {},
+        { Cookie: `access_token=${token}` } as Record<string, string>,
+        {} as Record<string, string>,
       ]) {
         const r = await fetch(
           `${baseUrl}/packs/marketshops/action/file/printed_ship_label`,

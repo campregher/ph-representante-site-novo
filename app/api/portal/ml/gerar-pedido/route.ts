@@ -19,17 +19,9 @@ interface MLAddress {
   city: { name: string } | null; state: { name: string } | null;
 }
 
-async function fetchTrackingUrl(shippingId: string, token: string): Promise<string | null> {
-  try {
-    const r = await fetch(`${ML_BASE}/shipments/${shippingId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!r.ok) return null;
-    const sh = await r.json();
-    const tracking: string | null = sh?.tracking_number ?? null;
-    if (tracking) return `${ML_WEB}/envios/etiqueta/print/link/${tracking}`;
-    return null;
-  } catch { return null; }
+async function fetchTrackingUrl(shippingId: string, _token: string): Promise<string> {
+  /* URL direta via shipment ID — não requer tracking_number */
+  return `${ML_WEB}/envios/etiqueta/print/shipment/${shippingId}?print=true`;
 }
 
 export async function POST(request: Request) {

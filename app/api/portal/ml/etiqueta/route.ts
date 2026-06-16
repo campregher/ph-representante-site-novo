@@ -112,30 +112,18 @@ async function resolveLabel(shippingId: string, token: string): Promise<LabelRes
     const tracking: string | null = sh?.tracking_number ?? sh?.tracking_codes?.[0]?.code ?? null;
 
     if (tracking) {
-      const trackingUrl = `${ML_WEB_BASE}/envios/etiqueta/print/link/${tracking}`;
-
-      /* Tenta com access_token na query (ML web histórico) */
-      const urlWithToken = `${trackingUrl}?access_token=${encodeURIComponent(token)}`;
-      const pdfWithToken = await tryPdf(urlWithToken, {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      /* URL de impressão direta via shipment ID (sem tracking) */
+      const printByShipment = `${ML_WEB_BASE}/envios/etiqueta/print/shipment/${shippingId}`;
+      const pdfByShipment = await tryPdf(printByShipment, { ...auth,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         Accept: "application/pdf,*/*",
       });
-      if (pdfWithToken) return { kind: "pdf", data: pdfWithToken, trackingNumber: tracking };
+      if (pdfByShipment) return { kind: "pdf", data: pdfByShipment, trackingNumber: tracking };
 
-      /* Log status da resposta HTML para diagnóstico */
-      try {
-        const rHead = await fetch(urlWithToken, {
-          method: "HEAD",
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-          redirect: "follow",
-        });
-        console.info(`[ml/etiqueta] HEAD with token: status=${rHead.status} ct=${rHead.headers.get("content-type")} url=${rHead.url}`);
-      } catch (e) {
-        console.warn("[ml/etiqueta] HEAD error:", e);
-      }
-
-      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} mlUser=${mlUserId} — URL fallback`);
-      return { kind: "url", value: trackingUrl };
+      /* Fallback: URL com ?print=true para auto-abrir diálogo de impressão */
+      const printUrl = `${ML_WEB_BASE}/envios/etiqueta/print/shipment/${shippingId}?print=true`;
+      console.warn(`[ml/etiqueta] ${shippingId} tracking=${tracking} — URL fallback (shipment)`);
+      return { kind: "url", value: printUrl };
     }
 
     console.warn(`[ml/etiqueta] ${shippingId} sem tracking. mode=${sh?.mode} logistic_type=${sh?.logistic_type}`);

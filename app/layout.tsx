@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Toaster } from "sonner";
-import AuthRecoveryHandler from "@/components/AuthRecoveryHandler";
 import "./globals.css";
 
 const GOOGLE_ADS_ID = "AW-18096631778";
@@ -183,7 +182,6 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-        <AuthRecoveryHandler />
         {children}
         <Toaster
           theme="dark"

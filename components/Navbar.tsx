@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, ChevronDown, BookOpen, UserCircle2 } from "lucide-react";
+import { Menu, X, ChevronDown, BookOpen } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -86,14 +86,9 @@ export default function Navbar() {
           {/* CTA */}
           <div className="hidden lg:flex items-center gap-2">
             <Link href="/catalogo"
-              className="flex items-center gap-2 px-4 py-2.5 bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-brand/30 text-gray-300 hover:text-white text-sm font-semibold rounded-full transition-all duration-200"
-            >
-              <BookOpen size={15} /> Catálogo
-            </Link>
-            <Link href="/portal/login"
               className="flex items-center gap-2 px-5 py-2.5 bg-brand hover:bg-brand-hover text-white text-sm font-semibold rounded-full transition-all duration-200 glow-red-sm hover:scale-105"
             >
-              <UserCircle2 size={16} /> Área do Cliente
+              <BookOpen size={16} /> Catálogo
             </Link>
           </div>
 
@@ -118,14 +113,9 @@ export default function Navbar() {
               ))}
               <div className="pt-3 space-y-2">
                 <Link href="/catalogo" onClick={() => setIsOpen(false)}
-                  className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-dark-800 border border-white/10 text-gray-300 font-semibold rounded-full transition-colors"
-                >
-                  <BookOpen size={18} /> Ver Catálogo
-                </Link>
-                <Link href="/portal/login" onClick={() => setIsOpen(false)}
                   className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-brand hover:bg-brand-hover text-white font-semibold rounded-full transition-colors"
                 >
-                  <UserCircle2 size={18} /> Área do Cliente
+                  <BookOpen size={18} /> Ver Catálogo
                 </Link>
               </div>
             </div>

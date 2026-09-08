@@ -63,24 +63,37 @@ export default async function ProdutosPage({
   // NÍVEL 1 — grade de representadas (quando não há representada nem busca)
   // ─────────────────────────────────────────────────────────────────
   if (!representada && !busca && !verTodos) {
-    const [{ data: reps }, { data: prods }] = await Promise.all([
-      supabase
-        .from("representadas")
-        .select("id, nome_fantasia, razao_social, logo_url")
-        .order("nome_fantasia", { ascending: true, nullsFirst: false }),
-      supabase.from("produtos").select("representada_id, ativo").limit(50000),
-    ]);
+    const { data: reps } = await supabase
+      .from("representadas")
+      .select("id, nome_fantasia, razao_social, logo_url")
+      .order("nome_fantasia", { ascending: true, nullsFirst: false });
 
-    const contagem = new Map<string, { total: number; inativos: number }>();
-    for (const p of prods ?? []) {
-      const rid = (p.representada_id as string) ?? "—";
-      const c = contagem.get(rid) ?? { total: 0, inativos: 0 };
-      c.total += 1;
-      if (!p.ativo) c.inativos += 1;
-      contagem.set(rid, c);
-    }
+    // contagens via count exato (head:true não traz linhas) — 2 por representada
+    const repList = reps ?? [];
+    const contagens = await Promise.all(
+      repList.map(async (r) => {
+        const [{ count: total }, { count: inativos }] = await Promise.all([
+          supabase
+            .from("produtos")
+            .select("id", { count: "exact", head: true })
+            .eq("representada_id", r.id as string),
+          supabase
+            .from("produtos")
+            .select("id", { count: "exact", head: true })
+            .eq("representada_id", r.id as string)
+            .eq("ativo", false),
+        ]);
+        return { id: r.id as string, total: total ?? 0, inativos: inativos ?? 0 };
+      })
+    );
+    const { count: semRepCount } = await supabase
+      .from("produtos")
+      .select("id", { count: "exact", head: true })
+      .is("representada_id", null);
 
-    const cards: RepCard[] = (reps ?? [])
+    const contagem = new Map(contagens.map((c) => [c.id, c]));
+
+    const cards: RepCard[] = repList
       .map((r) => {
         const c = contagem.get(r.id as string) ?? { total: 0, inativos: 0 };
         return {
@@ -93,8 +106,8 @@ export default async function ProdutosPage({
       })
       .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
 
-    const totalProdutos = cards.reduce((s, c) => s + c.total, 0);
-    const semRep = contagem.get("—")?.total ?? 0;
+    const totalProdutos = cards.reduce((s, c) => s + c.total, 0) + (semRepCount ?? 0);
+    const semRep = semRepCount ?? 0;
 
     return (
       <div>

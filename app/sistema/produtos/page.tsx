@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Plus, Package, Eye, Pencil, Upload } from "lucide-react";
 import { requireSistemaProfile, canManage } from "@/lib/sistema/auth";
 import { createSistemaClient } from "@/lib/supabase/server";
-import { listRepresentadaOptions } from "@/lib/sistema/queries";
+import { listRepresentadaOptions, variacaoCountMap } from "@/lib/sistema/queries";
 import { formatBRL } from "@/lib/sistema/format";
 import { PageHeader, EmptyState } from "@/components/sistema/ui/State";
 import { buttonClass } from "@/components/sistema/ui/buttonClass";
@@ -80,6 +80,7 @@ export default async function ProdutosPage({
   const { data, count } = await query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   const rows = data ?? [];
   const total = count ?? 0;
+  const varCount = await variacaoCountMap(rows.map((p) => p.id as string));
 
   const isEmpty = total === 0 && !busca && !representada && !categoria && !status;
 
@@ -173,6 +174,11 @@ export default async function ProdutosPage({
                           >
                             {p.nome as string}
                           </Link>
+                          {varCount.get(p.id as string) ? (
+                            <span className="ml-2 rounded-full bg-brand/10 px-1.5 py-0.5 text-[11px] font-semibold text-brand">
+                              {varCount.get(p.id as string)} variações
+                            </span>
+                          ) : null}
                         </Td>
                         <Td>{rep ? rep.nome_fantasia || rep.razao_social : "—"}</Td>
                         <Td>{cat?.nome ?? "—"}</Td>

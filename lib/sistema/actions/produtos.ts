@@ -3,8 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createSistemaClient } from "@/lib/supabase/server";
 import { getSistemaProfile, canManage } from "@/lib/sistema/auth";
-import { produtoSchema, categoriaSchema } from "@/lib/sistema/schemas";
-import type { ActionResult } from "@/lib/sistema/types";
+import {
+  produtoSchema,
+  categoriaSchema,
+  salvarVariacoesSchema,
+} from "@/lib/sistema/schemas";
+import type { ActionResult, VariacaoEixo } from "@/lib/sistema/types";
 
 async function guard() {
   const profile = await getSistemaProfile();
@@ -22,9 +26,12 @@ export async function saveProduto(id: string | null, raw: unknown): Promise<Acti
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
-  const v = parsed.data;
+  // As variações têm ciclo próprio (salvarVariacoes) — não gravamos aqui.
+  const { tem_variacoes: _tv, variacao_eixos: _ve, ...campos } = parsed.data;
+  void _tv;
+  void _ve;
   const supabase = await createSistemaClient();
-  const payload = { ...v, sku: v.sku.trim(), updated_by: g.profile!.id };
+  const payload = { ...campos, sku: campos.sku.trim(), updated_by: g.profile!.id };
 
   if (id) {
     const { error } = await supabase.from("produtos").update(payload).eq("id", id);
@@ -90,6 +97,77 @@ export async function createCategoria(raw: unknown): Promise<ActionResult<{ id?:
   return { ok: true, id: data.id as string, nome: data.nome as string };
 }
 
+// ─────────────────────────── Variações ────────────────────────────
+// Grava os eixos no produto pai e substitui todo o conjunto de
+// variações (delete + insert). `pedido_itens.variacao_id` tem
+// ON DELETE SET NULL e o snapshot preserva o histórico do pedido.
+
+export async function salvarVariacoes(raw: unknown): Promise<ActionResult> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+
+  const parsed = salvarVariacoesSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const { produto_id, eixos, variacoes } = parsed.data;
+  const supabase = await createSistemaClient();
+
+  const { data: prod } = await supabase
+    .from("produtos")
+    .select("id")
+    .eq("id", produto_id)
+    .maybeSingle();
+  if (!prod) return { ok: false, error: "Produto não encontrado." };
+
+  // SKUs de variação não podem repetir dentro do mesmo produto
+  const skus = variacoes.map((x) => x.sku.trim().toLowerCase());
+  const repetido = skus.find((s, i) => skus.indexOf(s) !== i);
+  if (repetido) {
+    return { ok: false, error: `SKU de variação repetido: "${repetido}".` };
+  }
+
+  const { error: eProd } = await supabase
+    .from("produtos")
+    .update({
+      tem_variacoes: variacoes.length > 0,
+      variacao_eixos: eixos,
+      updated_by: g.profile!.id,
+    })
+    .eq("id", produto_id);
+  if (eProd) return { ok: false, error: eProd.message };
+
+  const { error: eDel } = await supabase
+    .from("produto_variacoes")
+    .delete()
+    .eq("produto_id", produto_id);
+  if (eDel) return { ok: false, error: eDel.message };
+
+  if (variacoes.length) {
+    const rows = variacoes.map((x, i) => ({
+      produto_id,
+      sku: x.sku.trim(),
+      atributos: x.atributos ?? {},
+      preco_bruto: x.preco_bruto ?? null,
+      codigo_fabrica: x.codigo_fabrica ?? null,
+      ean: x.ean ?? null,
+      imagem_url: x.imagem_url ?? null,
+      peso: x.peso ?? null,
+      ativo: x.ativo ?? true,
+      ordem: typeof x.ordem === "number" ? x.ordem : i,
+      observacoes: x.observacoes ?? null,
+      created_by: g.profile!.id,
+      updated_by: g.profile!.id,
+    }));
+    const { error: eIns } = await supabase.from("produto_variacoes").insert(rows);
+    if (eIns) return { ok: false, error: friendly(eIns) };
+  }
+
+  revalidatePath("/sistema/produtos");
+  revalidatePath(`/sistema/produtos/${produto_id}`);
+  return { ok: true, id: produto_id };
+}
+
 // ─────────────────────────── Importação ───────────────────────────
 // Modelo: a planilha traz os dados do produto + o PREÇO BRUTO.
 // As tabelas de preço (regras de desconto) são criadas no sistema.
@@ -123,6 +201,10 @@ export interface ImportRow {
   observacoes?: string;
   categoria?: string; // nome — resolvido/criado por representada
   ativo?: string; // "sim/não/1/0/ativo/inativo"
+  /** SKU do produto pai — quando presente e ≠ do próprio SKU, a linha é uma variação */
+  sku_pai?: string;
+  /** eixos da variação: [{nome:"Estofado", valor:"Couro"}, ...] */
+  variacao_eixos?: { nome: string; valor: string }[];
 }
 
 export interface ImportResumo {
@@ -131,6 +213,32 @@ export interface ImportResumo {
   categoriasCriadas: number;
   ignorados: number;
   erros: number;
+  variacoesCriadas: number;
+  variacoesAtualizadas: number;
+}
+
+/** une os eixos já gravados no pai com os desta remessa (nomes/valores distintos). */
+function mergeEixos(atuais: VariacaoEixo[], grupo: ImportRow[]): VariacaoEixo[] {
+  const map = new Map<string, string[]>();
+  const ordem: string[] = [];
+  for (const e of atuais) {
+    map.set(e.nome, [...(e.valores ?? [])]);
+    ordem.push(e.nome);
+  }
+  for (const r of grupo) {
+    for (const e of r.variacao_eixos ?? []) {
+      const nome = String(e.nome ?? "").trim();
+      const valor = String(e.valor ?? "").trim();
+      if (!nome || !valor) continue;
+      if (!map.has(nome)) {
+        map.set(nome, []);
+        ordem.push(nome);
+      }
+      const arr = map.get(nome)!;
+      if (!arr.includes(valor)) arr.push(valor);
+    }
+  }
+  return ordem.map((nome) => ({ nome, valores: map.get(nome) ?? [] }));
 }
 
 const TEXT_FIELDS = [
@@ -231,6 +339,14 @@ export async function importProdutos(payload: {
     ).values(),
   ];
 
+  // linha é variação quando tem SKU pai informado e diferente do próprio SKU
+  const isVariante = (r: ImportRow) => {
+    const pai = String(r.sku_pai ?? "").trim();
+    return !!pai && pai.toLowerCase() !== r.sku.toLowerCase();
+  };
+  const standaloneRows = rows.filter((r) => !isVariante(r));
+  const varianteRows = rows.filter(isVariante);
+
   const { data: existing } = await supabase
     .from("produtos")
     .select("id, sku")
@@ -244,6 +360,8 @@ export async function importProdutos(payload: {
     categoriasCriadas,
     ignorados: 0,
     erros: 0,
+    variacoesCriadas: 0,
+    variacoesAtualizadas: 0,
   };
 
   const catId = (r: ImportRow) => {
@@ -251,7 +369,7 @@ export async function importProdutos(payload: {
     return n ? catByNome.get(n) : undefined;
   };
 
-  const novos = rows.filter((r) => !bySku.has(r.sku.toLowerCase()));
+  const novos = standaloneRows.filter((r) => !bySku.has(r.sku.toLowerCase()));
   if (options.criarNovos && novos.length) {
     const insertPayload = novos.map((r) => {
       const extra = produtoFieldsFromRow(r, catId(r));
@@ -271,7 +389,7 @@ export async function importProdutos(payload: {
     resumo.ignorados += novos.length;
   }
 
-  for (const r of rows) {
+  for (const r of standaloneRows) {
     const key = r.sku.toLowerCase();
     if (!existing?.some((p) => String(p.sku).toLowerCase() === key)) continue;
     const pid = existing.find((p) => String(p.sku).toLowerCase() === key)!.id as string;
@@ -286,6 +404,119 @@ export async function importProdutos(payload: {
         const { error } = await supabase.from("produtos").update(patch).eq("id", pid);
         if (error) resumo.erros++;
         else resumo.atualizados++;
+      }
+    }
+  }
+
+  // ── variações ──────────────────────────────────────────────────
+  if (varianteRows.length) {
+    // recarrega os produtos (o passo acima pode ter criado o pai)
+    const { data: prodAll } = await supabase
+      .from("produtos")
+      .select("id, sku, variacao_eixos")
+      .eq("representada_id", representadaId);
+    const paiBySku = new Map<string, { id: string; eixos: VariacaoEixo[] }>();
+    for (const p of prodAll ?? [])
+      paiBySku.set(String(p.sku).toLowerCase(), {
+        id: p.id as string,
+        eixos: Array.isArray(p.variacao_eixos) ? (p.variacao_eixos as VariacaoEixo[]) : [],
+      });
+
+    const grupos = new Map<string, ImportRow[]>();
+    for (const r of varianteRows) {
+      const k = String(r.sku_pai).trim().toLowerCase();
+      const g2 = grupos.get(k);
+      if (g2) g2.push(r);
+      else grupos.set(k, [r]);
+    }
+
+    for (const [skuKey, grupo] of grupos) {
+      const skuPai = String(grupo[0].sku_pai).trim();
+      let pai = paiBySku.get(skuKey);
+
+      if (!pai) {
+        if (!options.criarNovos) {
+          resumo.ignorados += grupo.length;
+          continue;
+        }
+        const { data: novoPai, error: ePai } = await supabase
+          .from("produtos")
+          .insert({
+            representada_id: representadaId,
+            sku: skuPai,
+            nome: String(grupo[0].nome ?? "").trim() || skuPai,
+            categoria_id: catId(grupo[0]) ?? null,
+            tem_variacoes: true,
+            created_by: g.profile!.id,
+          })
+          .select("id, variacao_eixos")
+          .single();
+        if (ePai || !novoPai) {
+          resumo.erros += grupo.length;
+          continue;
+        }
+        pai = { id: novoPai.id as string, eixos: [] };
+        paiBySku.set(skuKey, pai);
+        resumo.criados++;
+      }
+
+      const eixos = mergeEixos(pai.eixos, grupo);
+      await supabase
+        .from("produtos")
+        .update({ tem_variacoes: true, variacao_eixos: eixos, updated_by: g.profile!.id })
+        .eq("id", pai.id);
+      pai.eixos = eixos;
+
+      const { data: varsExist } = await supabase
+        .from("produto_variacoes")
+        .select("id, sku")
+        .eq("produto_id", pai.id);
+      const varBySku = new Map<string, string>();
+      for (const x of varsExist ?? []) varBySku.set(String(x.sku).toLowerCase(), x.id as string);
+
+      const toInsert: Record<string, unknown>[] = [];
+      for (const r of grupo) {
+        const atributos: Record<string, string> = {};
+        for (const e of r.variacao_eixos ?? []) {
+          const nome = String(e.nome ?? "").trim();
+          const valor = String(e.valor ?? "").trim();
+          if (nome && valor) atributos[nome] = valor;
+        }
+        const campos = {
+          sku: r.sku,
+          atributos,
+          preco_bruto:
+            r.preco_bruto != null && Number.isFinite(r.preco_bruto) ? r.preco_bruto : null,
+          codigo_fabrica: r.codigo_fabrica?.trim() || null,
+          ean: r.ean?.trim() || null,
+          imagem_url: r.imagem_url?.trim() || null,
+          peso: r.peso != null && Number.isFinite(r.peso) ? r.peso : null,
+          ativo: parseAtivo(r.ativo) ?? true,
+        };
+        const existId = varBySku.get(r.sku.toLowerCase());
+        if (existId) {
+          if (options.ignorarDuplicados || !options.atualizarDados) {
+            resumo.ignorados++;
+            continue;
+          }
+          const { error } = await supabase
+            .from("produto_variacoes")
+            .update({ ...campos, updated_by: g.profile!.id })
+            .eq("id", existId);
+          if (error) resumo.erros++;
+          else resumo.variacoesAtualizadas++;
+        } else {
+          if (!options.criarNovos) {
+            resumo.ignorados++;
+            continue;
+          }
+          toInsert.push({ produto_id: pai.id, ...campos, created_by: g.profile!.id });
+        }
+      }
+      if (toInsert.length) {
+        const { error } = await supabase.from("produto_variacoes").insert(toInsert);
+        if (error) resumo.erros += toInsert.length;
+        else resumo.variacoesCriadas += toInsert.length;
       }
     }
   }

@@ -63,6 +63,10 @@ const FIELDS: FieldDef[] = [
 const MAIN_FIELDS = FIELDS.filter((f) => f.main);
 const EXTRA_FIELDS = FIELDS.filter((f) => !f.main);
 
+// A importação vai numa Server Action; o corpo é limitado (~1 MB por padrão).
+// Enviamos em lotes para não estourar esse limite nem o tempo da função.
+const IMPORT_CHUNK_SIZE = 400;
+
 export default function ImportWizard({
   representadaOptions,
 }: {
@@ -74,37 +78,59 @@ export default function ImportWizard({
   const [parsed, setParsed] = useState<Parsed | null>(null);
   const [fileName, setFileName] = useState("");
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [skuPaiCol, setSkuPaiCol] = useState("");
+  const [eixoCols, setEixoCols] = useState<string[]>([]);
   const [options, setOptions] = useState({
     criarNovos: true,
     atualizarDados: false,
     ignorarDuplicados: false,
   });
   const [importing, startImport] = useTransition();
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [resumo, setResumo] = useState<ImportResumo | null>(null);
 
   async function baixarModelo() {
     const XLSX = await import("xlsx");
-    const linhas = [
-      {
-        SKU: "TAP-001", Nome: "Tapete de borracha universal", Descrição: "Jogo 4 peças, preto",
-        "Preço bruto": "129,90",
-        "Código de fábrica": "TB-4P", EAN: "7890000000017", NCM: "87082999", Marca: "ATTIS",
-        Aplicação: "Assoalho", Montadora: "VW", Modelo: "Gol", "Ano início": "2013", "Ano fim": "2023",
-        Unidade: "JG", Categoria: "Tapetes", "Peso (kg)": "2,4", "Altura (cm)": "8",
-        "Largura (cm)": "45", "Comprimento (cm)": "60", Foto: "https://exemplo.com/tap-001.jpg", Ativo: "sim",
-      },
-      {
-        SKU: "CAL-014", Nome: "Calha de chuva defletor", Descrição: "Par dianteiro, fumê",
-        "Preço bruto": "79,90",
-        "Código de fábrica": "CD-2D", EAN: "7890000000024", NCM: "39264000", Marca: "ECOFLEX",
-        Aplicação: "Porta dianteira", Montadora: "GM", Modelo: "Onix", "Ano início": "2020", "Ano fim": "",
-        Unidade: "PAR", Categoria: "Calhas", "Peso (kg)": "0,9", "Altura (cm)": "6",
-        "Largura (cm)": "12", "Comprimento (cm)": "100", Foto: "https://exemplo.com/cal-014.jpg", Ativo: "sim",
-      },
+    const header = [
+      "SKU", "SKU Pai", "Estofado", "Costura", "Nome", "Descrição", "Preço bruto",
+      "Código de fábrica", "EAN", "NCM", "Marca", "Aplicação", "Montadora", "Modelo",
+      "Ano início", "Ano fim", "Unidade", "Categoria", "Peso (kg)", "Altura (cm)",
+      "Largura (cm)", "Comprimento (cm)", "Foto", "Ativo",
     ];
-    const header = Object.keys(linhas[0]);
+    const b = (o: Record<string, string>) => {
+      const row: Record<string, string> = {};
+      for (const h of header) row[h] = o[h] ?? "";
+      return row;
+    };
+    const linhas = [
+      b({
+        SKU: "TAP-001", Nome: "Tapete de borracha universal", Descrição: "Jogo 4 peças, preto",
+        "Preço bruto": "129,90", "Código de fábrica": "TB-4P", EAN: "7890000000017", NCM: "87082999",
+        Marca: "ATTIS", Aplicação: "Assoalho", Montadora: "VW", Modelo: "Gol",
+        "Ano início": "2013", "Ano fim": "2023", Unidade: "JG", Categoria: "Tapetes",
+        "Peso (kg)": "2,4", Foto: "https://exemplo.com/tap-001.jpg", Ativo: "sim",
+      }),
+      // Produto com variações: a 1ª linha é o pai; as seguintes são as variações
+      b({
+        SKU: "APB-HB20", Nome: "Apoio de braço HB20", Descrição: "Central, encaixe no console",
+        "Preço bruto": "159,90", Marca: "ATTIS", Aplicação: "Console central",
+        Montadora: "Hyundai", Modelo: "HB20", Categoria: "Apoio de braço", Ativo: "sim",
+      }),
+      b({
+        SKU: "APB-HB20-COURO-SIMPLES", "SKU Pai": "APB-HB20", Estofado: "Couro", Costura: "Simples",
+        "Preço bruto": "189,90", Ativo: "sim",
+      }),
+      b({
+        SKU: "APB-HB20-COURO-DUPLAV", "SKU Pai": "APB-HB20", Estofado: "Couro", Costura: "Dupla vermelha",
+        "Preço bruto": "199,90", Ativo: "sim",
+      }),
+      b({
+        SKU: "APB-HB20-TECIDO-SIMPLES", "SKU Pai": "APB-HB20", Estofado: "Tecido", Costura: "Simples",
+        "Preço bruto": "", Ativo: "sim",
+      }),
+    ];
     const ws = XLSX.utils.json_to_sheet(linhas, { header });
-    ws["!cols"] = header.map((h) => ({ wch: /nome|descri|foto|aplica/i.test(h) ? 32 : 14 }));
+    ws["!cols"] = header.map((h) => ({ wch: /nome|descri|foto|aplica|sku/i.test(h) ? 26 : 13 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Produtos");
     XLSX.writeFile(wb, "modelo-importacao-produtos.xlsx");
@@ -131,6 +157,11 @@ export default function ImportWizard({
         if (hit && !Object.values(nextMap).includes(hit)) nextMap[f.key] = hit;
       }
       setMapping(nextMap);
+      const paiHit = p.columns.find(
+        (c) => /sku.?pai|produto.?pai|\bpai\b/i.test(c) && c !== nextMap.sku
+      );
+      setSkuPaiCol(paiHit ?? "");
+      setEixoCols([]);
       setStep(3);
     } catch {
       toast.error("Falha ao enviar o arquivo.");
@@ -150,23 +181,69 @@ export default function ImportWizard({
           const v = raw[col];
           row[f.key] = f.kind === "text" ? String(v ?? "").trim() : parseNumeroBR(v as string);
         }
+        if (skuPaiCol) row.sku_pai = String(raw[skuPaiCol] ?? "").trim();
+        if (eixoCols.length) {
+          row.variacao_eixos = eixoCols
+            .map((c) => ({ nome: c, valor: String(raw[c] ?? "").trim() }))
+            .filter((e) => e.valor);
+        }
         return row;
       })
       .filter((r) => r.sku);
-  }, [parsed, mapping]);
+  }, [parsed, mapping, skuPaiCol, eixoCols]);
 
   function runImport() {
+    // Deduplica por SKU (último vence) — mesma regra da action — e envia em lotes
+    // para não estourar o limite de corpo da Server Action.
+    const bySku = new Map<string, Record<string, unknown>>();
+    for (const r of mappedRows) {
+      const key = String(r.sku ?? "").trim().toLowerCase();
+      if (key) bySku.set(key, r);
+    }
+    const todas = [...bySku.values()] as unknown as Parameters<
+      typeof importProdutos
+    >[0]["rows"];
+
     startImport(async () => {
-      const res = await importProdutos({
-        representadaId,
-        rows: mappedRows as unknown as Parameters<typeof importProdutos>[0]["rows"],
-        options,
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      setProgress({ done: 0, total: todas.length });
+      const acc: ImportResumo = {
+        criados: 0,
+        atualizados: 0,
+        categoriasCriadas: 0,
+        ignorados: 0,
+        erros: 0,
+        variacoesCriadas: 0,
+        variacoesAtualizadas: 0,
+      };
+
+      for (let i = 0; i < todas.length; i += IMPORT_CHUNK_SIZE) {
+        const lote = todas.slice(i, i + IMPORT_CHUNK_SIZE);
+        const res = await importProdutos({ representadaId, rows: lote, options });
+        if (!res.ok) {
+          setProgress(null);
+          toast.error(
+            `${res.error} (falhou entre as linhas ${i + 1}–${i + lote.length})`
+          );
+          return;
+        }
+        const r = res.resumo;
+        if (r) {
+          acc.criados += r.criados;
+          acc.atualizados += r.atualizados;
+          acc.categoriasCriadas += r.categoriasCriadas;
+          acc.ignorados += r.ignorados;
+          acc.erros += r.erros;
+          acc.variacoesCriadas += r.variacoesCriadas ?? 0;
+          acc.variacoesAtualizadas += r.variacoesAtualizadas ?? 0;
+        }
+        setProgress({
+          done: Math.min(i + IMPORT_CHUNK_SIZE, todas.length),
+          total: todas.length,
+        });
       }
-      setResumo(res.resumo ?? null);
+
+      setProgress(null);
+      setResumo(acc);
       setStep(5);
       toast.success("Importação concluída.");
     });
@@ -176,8 +253,11 @@ export default function ImportWizard({
     setStep(1);
     setParsed(null);
     setResumo(null);
+    setProgress(null);
     setFileName("");
     setMapping({});
+    setSkuPaiCol("");
+    setEixoCols([]);
   }
 
   const colOptions = (parsed?.columns ?? []).map((c) => (
@@ -290,6 +370,58 @@ export default function ImportWizard({
               </div>
             </details>
 
+            <details className="rounded-lg border border-neutral-200" open={!!skuPaiCol}>
+              <summary className="cursor-pointer px-4 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Variações (opcional)
+              </summary>
+              <div className="space-y-3 p-4 pt-0">
+                <Field
+                  label="Coluna do SKU do produto pai"
+                  hint="Linhas com esse SKU (≠ do SKU da linha) viram variações do produto pai."
+                >
+                  <Select value={skuPaiCol} onChange={(e) => setSkuPaiCol(e.target.value)}>
+                    <option value="">— nenhuma (sem variações) —</option>
+                    {colOptions}
+                  </Select>
+                </Field>
+                {skuPaiCol && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-neutral-500">
+                      Colunas de eixo de variação
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(parsed?.columns ?? [])
+                        .filter((c) => c !== skuPaiCol && c !== mapping.sku)
+                        .map((c) => {
+                          const on = eixoCols.includes(c);
+                          return (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() =>
+                                setEixoCols((s) =>
+                                  on ? s.filter((x) => x !== c) : [...s, c]
+                                )
+                              }
+                              className={`rounded-full border px-2.5 py-1 text-xs ${
+                                on
+                                  ? "border-brand bg-brand/10 font-semibold text-brand"
+                                  : "border-neutral-300 text-neutral-600 hover:border-neutral-400"
+                              }`}
+                            >
+                              {c}
+                            </button>
+                          );
+                        })}
+                    </div>
+                    <p className="mt-1.5 text-xs text-neutral-400">
+                      Ex.: marque “Estofado” e “Costura”. O cabeçalho da coluna vira o nome do eixo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </details>
+
             <div>
               <p className="mb-2 text-xs font-semibold text-neutral-500">Prévia (5 primeiras)</p>
               <TableScroll>
@@ -297,6 +429,7 @@ export default function ImportWizard({
                   <Thead>
                     <Tr>
                       <Th>SKU</Th>
+                      {skuPaiCol && <Th>Variação de</Th>}
                       <Th>Nome</Th>
                       <Th className="text-right">Preço bruto</Th>
                       <Th>Categoria</Th>
@@ -306,6 +439,11 @@ export default function ImportWizard({
                     {mappedRows.slice(0, 5).map((r, i) => (
                       <Tr key={i}>
                         <Td className="font-mono text-xs">{r.sku as string}</Td>
+                        {skuPaiCol && (
+                          <Td className="font-mono text-xs text-neutral-500">
+                            {(r.sku_pai as string) || "—"}
+                          </Td>
+                        )}
                         <Td>{(r.nome as string) || "—"}</Td>
                         <Td className="text-right">
                           {r.preco_bruto != null ? (r.preco_bruto as number) : "—"}
@@ -354,13 +492,20 @@ export default function ImportWizard({
             <p className="text-xs text-neutral-500">
               Depois da importação, crie as tabelas de preço (desconto %) em <b>Tabelas de Preço</b>.
             </p>
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(3)}>
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="outline" onClick={() => setStep(3)} disabled={importing}>
                 <ArrowLeft size={15} /> Voltar
               </Button>
-              <Button onClick={runImport} loading={importing}>
-                Importar
-              </Button>
+              <div className="flex items-center gap-3">
+                {importing && progress && (
+                  <span className="text-xs text-neutral-500">
+                    {progress.done}/{progress.total}…
+                  </span>
+                )}
+                <Button onClick={runImport} loading={importing}>
+                  Importar
+                </Button>
+              </div>
             </div>
           </CardBody>
         </Card>
@@ -376,6 +521,12 @@ export default function ImportWizard({
               <Stat label="Atualizados" value={resumo.atualizados} />
               <Stat label="Categorias criadas" value={resumo.categoriasCriadas} />
               <Stat label="Ignorados" value={resumo.ignorados} />
+              {resumo.variacoesCriadas > 0 && (
+                <Stat label="Variações criadas" value={resumo.variacoesCriadas} />
+              )}
+              {resumo.variacoesAtualizadas > 0 && (
+                <Stat label="Variações atualizadas" value={resumo.variacoesAtualizadas} />
+              )}
               {resumo.erros > 0 && <Stat label="Erros" value={resumo.erros} />}
             </div>
             <div className="mt-6 flex justify-center gap-2">

@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import { Package } from "lucide-react";
 import { requireSistemaProfile, canManage } from "@/lib/sistema/auth";
 import { createSistemaClient } from "@/lib/supabase/server";
+import { getProdutoVariacoes } from "@/lib/sistema/queries";
 import { formatBRL, formatDate } from "@/lib/sistema/format";
-import { precoLiquido } from "@/lib/sistema/preco";
+import { precoLiquido, brutoEfetivo } from "@/lib/sistema/preco";
 import { Card, CardBody, CardHeader } from "@/components/sistema/ui/Card";
 import { Badge } from "@/components/sistema/ui/Badge";
 import {
@@ -44,13 +45,14 @@ export default async function ProdutoDetailPage({
     categoria: { nome: string } | null;
   };
 
-  const [{ data: tabelas }, { data: overrides }] = await Promise.all([
+  const [{ data: tabelas }, { data: overrides }, variacoes] = await Promise.all([
     supabase
       .from("tabelas_preco")
       .select("id, nome, tipo, ativa, desconto_percentual")
       .eq("representada_id", p.representada_id)
       .order("nome", { ascending: true }),
     supabase.from("produtos_precos").select("tabela_preco_id, preco").eq("produto_id", id),
+    getProdutoVariacoes(id),
   ]);
   const overrideMap = new Map(
     (overrides ?? []).map((o) => [o.tabela_preco_id as string, o.preco != null ? Number(o.preco) : null])
@@ -135,6 +137,60 @@ export default async function ProdutoDetailPage({
           </Card>
         )}
       </div>
+
+      {(p.tem_variacoes || variacoes.length > 0) && (
+        <div className="mt-4">
+          <Card>
+            <CardHeader
+              title={`Variações (${variacoes.length})`}
+              description="Preço em branco herda o preço bruto do produto. O desconto da tabela e o override valem para todas as variações."
+            />
+            <CardBody className="p-0">
+              <TableScroll>
+                <Table>
+                  <Thead>
+                    <Tr>
+                      <Th>SKU</Th>
+                      <Th>Atributos</Th>
+                      <Th className="text-right">Preço bruto efetivo</Th>
+                      <Th>Cód. fábrica</Th>
+                      <Th>Status</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    {variacoes.length === 0 ? (
+                      <TableEmpty colSpan={5}>Nenhuma variação cadastrada.</TableEmpty>
+                    ) : (
+                      variacoes.map((v) => {
+                        const bruto = brutoEfetivo(v.preco_bruto, p.preco_bruto);
+                        const atrib = Object.values(v.atributos ?? {}).filter(Boolean).join(" / ");
+                        return (
+                          <Tr key={v.id}>
+                            <Td className="font-mono text-xs">{v.sku}</Td>
+                            <Td>{atrib || "—"}</Td>
+                            <Td className="text-right">
+                              {bruto != null ? formatBRL(bruto) : "—"}
+                              {v.preco_bruto == null && bruto != null && (
+                                <span className="ml-1 text-xs text-neutral-400">(herdado)</span>
+                              )}
+                            </Td>
+                            <Td>{v.codigo_fabrica || "—"}</Td>
+                            <Td>
+                              <Badge tone={v.ativo ? "green" : "neutral"}>
+                                {v.ativo ? "Ativa" : "Inativa"}
+                              </Badge>
+                            </Td>
+                          </Tr>
+                        );
+                      })
+                    )}
+                  </Tbody>
+                </Table>
+              </TableScroll>
+            </CardBody>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-4">
         <Card>

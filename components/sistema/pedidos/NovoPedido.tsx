@@ -33,22 +33,42 @@ interface CatProduto {
   sku: string;
   nome: string;
   aplicacao: string | null;
+  tem_variacoes: boolean;
+}
+interface CatVariacao {
+  id: string;
+  sku: string;
+  atributos: Record<string, string>;
+  preco_bruto: number | null;
 }
 interface Catalogo {
   representada: { pedido_minimo: number; desconto_maximo_padrao: number };
   tabelas: { id: string; nome: string; tipo: string | null; data_fim: string | null; ativa: boolean }[];
   produtos: CatProduto[];
+  variacoes: Record<string, CatVariacao[]>;
   tabelaPadrao: string | null;
   precos: Record<string, { preco: number; preco_minimo: number | null; desconto_maximo: number | null }>;
 }
 
 interface Item {
   produto_id: string;
+  variacao_id: string | null;
   sku: string;
   nome: string;
   quantidade: number;
   preco_tabela: number;
   desconto_item_percentual: number;
+}
+
+/** rótulo curto dos atributos de uma variação: "Couro / Dupla vermelha" */
+function atributosLabel(atributos: Record<string, string>): string {
+  return Object.values(atributos ?? {})
+    .filter(Boolean)
+    .join(" / ");
+}
+/** chave estável de uma linha do pedido */
+function itemKey(it: { produto_id: string; variacao_id: string | null }): string {
+  return it.variacao_id ?? it.produto_id;
 }
 
 export interface PedidoInitial {
@@ -117,7 +137,7 @@ export default function NovoPedido({
         setItens((prev) =>
           prev.map((it) => ({
             ...it,
-            preco_tabela: data.precos[it.produto_id]?.preco ?? it.preco_tabela,
+            preco_tabela: data.precos[itemKey(it)]?.preco ?? it.preco_tabela,
           }))
         );
       } finally {
@@ -129,36 +149,88 @@ export default function NovoPedido({
     };
   }, [representadaId, tabelaId, clienteId]);
 
-  const produtosFiltrados = useMemo(() => {
+  // Entradas "adicionáveis": produto sem variação = 1 entrada; produto com
+  // variações = 1 entrada por variação ativa.
+  type PickEntry = {
+    key: string;
+    produto: CatProduto;
+    variacao: CatVariacao | null;
+    sku: string;
+    label: string;
+    preco: number | undefined;
+  };
+
+  const pickEntries = useMemo<PickEntry[]>(() => {
     if (!cat) return [];
     const q = busca.trim().toLowerCase();
-    const jaAdd = new Set(itens.map((i) => i.produto_id));
-    return cat.produtos
-      .filter((p) => !jaAdd.has(p.id))
-      .filter(
-        (p) =>
-          !q ||
-          p.sku.toLowerCase().includes(q) ||
-          p.nome.toLowerCase().includes(q) ||
-          (p.aplicacao ?? "").toLowerCase().includes(q)
-      )
-      .slice(0, 25);
+    const jaAdd = new Set(itens.map(itemKey));
+    const out: PickEntry[] = [];
+
+    for (const p of cat.produtos) {
+      const vs = cat.variacoes[p.id] ?? [];
+      const matchProduto =
+        !q ||
+        p.sku.toLowerCase().includes(q) ||
+        p.nome.toLowerCase().includes(q) ||
+        (p.aplicacao ?? "").toLowerCase().includes(q);
+
+      if (p.tem_variacoes && vs.length > 0) {
+        for (const v of vs) {
+          if (jaAdd.has(v.id)) continue;
+          const attr = atributosLabel(v.atributos);
+          if (
+            q &&
+            !matchProduto &&
+            !v.sku.toLowerCase().includes(q) &&
+            !attr.toLowerCase().includes(q)
+          )
+            continue;
+          out.push({
+            key: v.id,
+            produto: p,
+            variacao: v,
+            sku: v.sku,
+            label: `${p.nome} — ${attr}`,
+            preco: cat.precos[v.id]?.preco,
+          });
+        }
+      } else {
+        if (jaAdd.has(p.id)) continue;
+        if (!matchProduto) continue;
+        out.push({
+          key: p.id,
+          produto: p,
+          variacao: null,
+          sku: p.sku,
+          label: p.nome,
+          preco: cat.precos[p.id]?.preco,
+        });
+      }
+    }
+    return out.slice(0, 30);
   }, [cat, busca, itens]);
 
-  function addProduto(p: CatProduto) {
-    const preco = cat?.precos[p.id]?.preco ?? 0;
+  function addEntry(e: PickEntry) {
     setItens((prev) => [
       ...prev,
-      { produto_id: p.id, sku: p.sku, nome: p.nome, quantidade: 1, preco_tabela: preco, desconto_item_percentual: 0 },
+      {
+        produto_id: e.produto.id,
+        variacao_id: e.variacao?.id ?? null,
+        sku: e.sku,
+        nome: e.label,
+        quantidade: 1,
+        preco_tabela: e.preco ?? 0,
+        desconto_item_percentual: 0,
+      },
     ]);
     setBusca("");
   }
 
-  function updateItem(id: string, patch: Partial<Item>) {
-    setItens((prev) => prev.map((it) => (it.produto_id === id ? { ...it, ...patch } : it)));
+  function updateItem(key: string, patch: Partial<Item>) {
+    setItens((prev) => prev.map((it) => (itemKey(it) === key ? { ...it, ...patch } : it)));
   }
-  function removeItem(id: string) {
-    setItens((prev) => prev.filter((it) => it.produto_id !== id));
+  function removeItem(key: string) {
+    setItens((prev) => prev.filter((it) => itemKey(it) !== key));
   }
 
   const calc = useMemo(
@@ -204,6 +276,7 @@ export default function NovoPedido({
       desconto_input: Number(descInput.replace(",", ".")) || 0,
       itens: itens.map((i) => ({
         produto_id: i.produto_id,
+        variacao_id: i.variacao_id,
         sku_snapshot: i.sku,
         descricao_snapshot: i.nome,
         quantidade: Number(i.quantidade) || 0,
@@ -370,21 +443,21 @@ export default function NovoPedido({
                 placeholder="Buscar produto por SKU, nome ou aplicação…"
                 className="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10"
               />
-              {busca && produtosFiltrados.length > 0 && (
+              {busca && pickEntries.length > 0 && (
                 <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white shadow-lg">
-                  {produtosFiltrados.map((p) => (
+                  {pickEntries.map((e) => (
                     <button
-                      key={p.id}
+                      key={e.key}
                       type="button"
-                      onClick={() => addProduto(p)}
+                      onClick={() => addEntry(e)}
                       className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-neutral-50"
                     >
                       <span>
-                        <span className="font-mono text-xs text-neutral-500">{p.sku}</span>{" "}
-                        <span className="text-neutral-800">{p.nome}</span>
+                        <span className="font-mono text-xs text-neutral-500">{e.sku}</span>{" "}
+                        <span className="text-neutral-800">{e.label}</span>
                       </span>
                       <span className="text-xs text-neutral-500">
-                        {cat?.precos[p.id] ? formatBRL(cat.precos[p.id].preco) : "sem preço"}
+                        {e.preco != null ? formatBRL(e.preco) : "sem preço"}
                       </span>
                     </button>
                   ))}
@@ -410,8 +483,9 @@ export default function NovoPedido({
                   ) : (
                     itens.map((it, idx) => {
                       const ci = calc.itens[idx];
+                      const key = itemKey(it);
                       return (
-                        <Tr key={it.produto_id}>
+                        <Tr key={key}>
                           <Td>
                             <span className="font-mono text-xs text-neutral-500">{it.sku}</span>
                             <div className="text-neutral-800">{it.nome}</div>
@@ -422,7 +496,7 @@ export default function NovoPedido({
                               min="0"
                               step="1"
                               value={it.quantidade}
-                              onChange={(e) => updateItem(it.produto_id, { quantidade: Number(e.target.value) })}
+                              onChange={(e) => updateItem(key, { quantidade: Number(e.target.value) })}
                               className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
                             />
                           </Td>
@@ -432,7 +506,7 @@ export default function NovoPedido({
                               min="0"
                               step="0.01"
                               value={it.preco_tabela}
-                              onChange={(e) => updateItem(it.produto_id, { preco_tabela: Number(e.target.value) })}
+                              onChange={(e) => updateItem(key, { preco_tabela: Number(e.target.value) })}
                               className="w-24 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
                               disabled={!!tabelaId}
                             />
@@ -445,7 +519,7 @@ export default function NovoPedido({
                               step="0.5"
                               value={it.desconto_item_percentual}
                               onChange={(e) =>
-                                updateItem(it.produto_id, { desconto_item_percentual: Number(e.target.value) })
+                                updateItem(key, { desconto_item_percentual: Number(e.target.value) })
                               }
                               className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
                             />
@@ -454,7 +528,7 @@ export default function NovoPedido({
                           <Td className="text-right">
                             <button
                               type="button"
-                              onClick={() => removeItem(it.produto_id)}
+                              onClick={() => removeItem(key)}
                               className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-red-600"
                             >
                               <Trash2 size={14} />

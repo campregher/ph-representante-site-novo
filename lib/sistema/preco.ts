@@ -1,3 +1,13 @@
+/** Preço bruto efetivo: o da variação quando informado, senão o do produto pai. */
+export function brutoEfetivo(
+  variacaoBruto: number | null | undefined,
+  produtoBruto: number | null | undefined
+): number | null {
+  if (variacaoBruto != null && Number.isFinite(variacaoBruto)) return Number(variacaoBruto);
+  if (produtoBruto != null && Number.isFinite(produtoBruto)) return Number(produtoBruto);
+  return null;
+}
+
 /** Preço líquido de um produto numa tabela.
  *  override tem prioridade; senão bruto − desconto% da tabela. */
 export function precoLiquido(

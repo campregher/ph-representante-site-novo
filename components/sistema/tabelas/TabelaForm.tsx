@@ -36,12 +36,15 @@ export default function TabelaForm({
           nome: initial.nome,
           descricao: initial.descricao ?? "",
           tipo: initial.tipo ?? "",
-          desconto_percentual: initial.desconto_percentual ?? 0,
+          desconto_percentual:
+            initial.desconto_percentual != null
+              ? String(initial.desconto_percentual).replace(".", ",")
+              : "0",
           data_inicio: initial.data_inicio ?? "",
           data_fim: initial.data_fim ?? "",
           ativa: initial.ativa,
         }
-      : { representada_id: lockRepresentada ?? "", ativa: true, desconto_percentual: 0 },
+      : { representada_id: lockRepresentada ?? "", ativa: true, desconto_percentual: "0" },
   });
 
   function onSubmit(values: TabelaInput) {
@@ -89,9 +92,14 @@ export default function TabelaForm({
             <Field
               label="Desconto sobre o preço bruto (%)"
               error={errors.desconto_percentual?.message}
-              hint="Preço da tabela = preço bruto − este desconto. Overrides por produto na aba de preços."
+              hint="Preço da tabela = preço bruto − este desconto. Aceita vírgula ou ponto (ex.: 12,5)."
             >
-              <Input {...register("desconto_percentual")} type="number" step="0.01" min="0" max="100" />
+              <Input
+                {...register("desconto_percentual")}
+                type="text"
+                inputMode="decimal"
+                placeholder="ex.: 12,5"
+              />
             </Field>
             <Field
               label="Início da vigência"

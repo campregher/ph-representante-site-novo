@@ -17,9 +17,17 @@ No painel do Supabase → **SQL Editor**, rode **na ordem**:
 | 5 | `migrations/011_comercial_gestao.sql` | `comissoes`, `tarefas`, `crm_oportunidades`, `metas_vendas` |
 | 6 | `migrations/012_comercial_indexes.sql` | índices de busca/performance (usa `pg_trgm`) |
 | 7 | `migrations/013_comercial_rls.sql` | ativa RLS e cria todas as políticas por papel |
+| 8+ | `migrations/014_*` … `migrations/021_*` | incrementos: modalidades/endereço da representada, storage de logos, dimensões e preço bruto do produto, link do pedido, config da empresa e **021 = variações de produto** |
 
 Todas são **idempotentes** (`create ... if not exists`, `drop policy if exists`)
-e **não destrutivas** — podem ser reaplicadas com segurança.
+e **não destrutivas** — podem ser reaplicadas com segurança. Rode na ordem do
+número do arquivo.
+
+> **021 — Variações de produto:** cria `comercial.produto_variacoes` (SKU +
+> `atributos` + `preco_bruto` opcional que herda do produto pai) e adiciona
+> `produtos.tem_variacoes` / `produtos.variacao_eixos` e
+> `pedido_itens.variacao_id`. O override por tabela (`produtos_precos`) continua
+> **por produto** e vale para todas as suas variações.
 
 > CLI alternativa: `supabase db push` (se você usa o Supabase CLI e tem o projeto linkado).
 

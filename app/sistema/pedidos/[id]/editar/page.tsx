@@ -36,6 +36,7 @@ export default async function EditarPedidoPage({
     .filter((it) => it.produto_id)
     .map((it) => ({
       produto_id: it.produto_id as string,
+      variacao_id: it.variacao_id ?? null,
       sku: it.sku_snapshot ?? "",
       nome: nomeCurto(it.descricao_snapshot),
       quantidade: Number(it.quantidade),

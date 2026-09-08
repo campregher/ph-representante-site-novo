@@ -1,5 +1,10 @@
 import { createSistemaClient } from "@/lib/supabase/server";
-import type { Representada, CategoriaProduto, TabelaPreco } from "./types";
+import type {
+  Representada,
+  CategoriaProduto,
+  TabelaPreco,
+  ProdutoVariacao,
+} from "./types";
 
 /** Representadas ativas para popular <select> (id + rótulo). */
 export async function listRepresentadaOptions(): Promise<
@@ -111,4 +116,32 @@ export async function representadaLabelMap(): Promise<Map<string, string>> {
     map.set(r.id as string, (r.nome_fantasia as string) || (r.razao_social as string));
   }
   return map;
+}
+
+/** Variações de um produto, ordenadas para exibição. */
+export async function getProdutoVariacoes(produtoId: string): Promise<ProdutoVariacao[]> {
+  const supabase = await createSistemaClient();
+  const { data } = await supabase
+    .from("produto_variacoes")
+    .select("*")
+    .eq("produto_id", produtoId)
+    .order("ordem", { ascending: true })
+    .order("sku", { ascending: true });
+  return (data as ProdutoVariacao[]) ?? [];
+}
+
+/** Quantidade de variações por produto (para uma lista de ids). */
+export async function variacaoCountMap(produtoIds: string[]): Promise<Map<string, number>> {
+  const m = new Map<string, number>();
+  if (produtoIds.length === 0) return m;
+  const supabase = await createSistemaClient();
+  const { data } = await supabase
+    .from("produto_variacoes")
+    .select("produto_id")
+    .in("produto_id", produtoIds);
+  for (const r of data ?? []) {
+    const k = r.produto_id as string;
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
 }

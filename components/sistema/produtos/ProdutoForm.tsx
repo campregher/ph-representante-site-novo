@@ -7,13 +7,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { produtoSchema, type ProdutoInput } from "@/lib/sistema/schemas";
-import { saveProduto, createCategoria } from "@/lib/sistema/actions/produtos";
+import { saveProduto, createCategoria, salvarVariacoes } from "@/lib/sistema/actions/produtos";
 import { UNIDADE_OPTIONS, type Produto } from "@/lib/sistema/types";
+import { parseNumeroBR } from "@/lib/sistema/format";
 import { Field, Input, Textarea, Select, Checkbox, FormGrid } from "@/components/sistema/ui/Field";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
 import { Modal } from "@/components/sistema/ui/Modal";
 import FormActions from "@/components/sistema/FormActions";
+import VariacoesEditor, {
+  emptyVariacoesState,
+  type VariacoesState,
+} from "@/components/sistema/produtos/VariacoesEditor";
 
 interface Categoria {
   id: string;
@@ -26,11 +31,13 @@ export default function ProdutoForm({
   representadaOptions,
   categorias: categoriasProp,
   lockRepresentada,
+  initialVariacoes,
 }: {
   initial?: Produto;
   representadaOptions: { id: string; label: string }[];
   categorias: Categoria[];
   lockRepresentada?: string;
+  initialVariacoes?: VariacoesState;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -38,6 +45,9 @@ export default function ProdutoForm({
   const [catModal, setCatModal] = useState(false);
   const [catNome, setCatNome] = useState("");
   const [catSaving, startCat] = useTransition();
+  const [variacoes, setVariacoes] = useState<VariacoesState>(
+    initialVariacoes ?? emptyVariacoesState()
+  );
 
   const {
     register,
@@ -77,20 +87,53 @@ export default function ProdutoForm({
   });
 
   const repId = useWatch({ control, name: "representada_id" });
+  const skuAtual = (useWatch({ control, name: "sku" }) as string) ?? "";
+  const precoBrutoAtual = useWatch({ control, name: "preco_bruto" }) as string | number | undefined;
   const catsDaRep = useMemo(
     () => categorias.filter((c) => c.representada_id === repId),
     [categorias, repId]
   );
 
   function onSubmit(values: ProdutoInput) {
+    if (variacoes.temVariacoes && variacoes.variacoes.some((r) => !r.sku.trim())) {
+      toast.error("Toda variação precisa de um SKU.");
+      return;
+    }
     startTransition(async () => {
       const res = await saveProduto(initial?.id ?? null, values);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
+      const produtoId = res.id!;
+
+      const vres = await salvarVariacoes({
+        produto_id: produtoId,
+        eixos: variacoes.temVariacoes ? variacoes.eixos : [],
+        variacoes: variacoes.temVariacoes
+          ? variacoes.variacoes.map((r, i) => ({
+              sku: r.sku.trim(),
+              atributos: Object.fromEntries(
+                Object.entries(r.atributos).filter(([, v]) => v)
+              ),
+              preco_bruto: parseNumeroBR(r.preco_bruto),
+              codigo_fabrica: r.codigo_fabrica || null,
+              ean: r.ean || null,
+              imagem_url: r.imagem_url || null,
+              ativo: r.ativo,
+              ordem: i,
+            }))
+          : [],
+      });
+      if (!vres.ok) {
+        toast.error(`Produto salvo, mas as variações falharam: ${vres.error}`);
+        router.push(`/sistema/produtos/${produtoId}`);
+        router.refresh();
+        return;
+      }
+
       toast.success(initial ? "Produto atualizado." : "Produto criado.");
-      router.push(`/sistema/produtos/${res.id}`);
+      router.push(`/sistema/produtos/${produtoId}`);
       router.refresh();
     });
   }
@@ -245,6 +288,13 @@ export default function ProdutoForm({
           </div>
         </CardBody>
       </Card>
+
+      <VariacoesEditor
+        skuPai={skuAtual}
+        precoBrutoPai={parseNumeroBR(precoBrutoAtual ?? null)}
+        value={variacoes}
+        onChange={setVariacoes}
+      />
 
       <FormActions submitLabel={initial ? "Salvar alterações" : "Criar produto"} loading={pending} />
 

@@ -5,6 +5,7 @@ import { createSistemaClient, createSistemaAdminClient } from "@/lib/supabase/se
 import { getSistemaProfile, canManage } from "@/lib/sistema/auth";
 import { pedidoSchema } from "@/lib/sistema/schemas";
 import { calcPedido } from "@/lib/sistema/pedido-calc";
+import { brutoEfetivo } from "@/lib/sistema/preco";
 import { sincronizarComissaoPedido } from "@/lib/sistema/comissoes-sync";
 import type { ActionResult } from "@/lib/sistema/types";
 
@@ -87,6 +88,40 @@ export async function salvarPedido(
     if (!p.ativo) return { ok: false, error: `Produto ${p.sku} está inativo.` };
   }
 
+  // variações escolhidas: valida e pega o preço bruto próprio
+  const variacaoIds = [
+    ...new Set(v.itens.map((i) => i.variacao_id).filter((x): x is string => !!x)),
+  ];
+  const varMap = new Map<
+    string,
+    { id: string; produto_id: string; sku: string; atributos: Record<string, string>; preco_bruto: number | null; ativo: boolean }
+  >();
+  if (variacaoIds.length) {
+    const { data: vars } = await supabase
+      .from("produto_variacoes")
+      .select("id, produto_id, sku, atributos, preco_bruto, ativo")
+      .in("id", variacaoIds);
+    for (const x of vars ?? [])
+      varMap.set(x.id as string, {
+        id: x.id as string,
+        produto_id: x.produto_id as string,
+        sku: x.sku as string,
+        atributos: (x.atributos as Record<string, string>) ?? {},
+        preco_bruto: x.preco_bruto != null ? Number(x.preco_bruto) : null,
+        ativo: x.ativo as boolean,
+      });
+  }
+  for (const it of v.itens) {
+    if (!it.variacao_id) continue;
+    const vx = varMap.get(it.variacao_id);
+    if (!vx) return { ok: false, error: `Variação de ${it.sku_snapshot} não encontrada.` };
+    if (vx.produto_id !== it.produto_id)
+      return { ok: false, error: `Variação ${vx.sku} não pertence ao produto informado.` };
+    if (!vx.ativo) return { ok: false, error: `Variação ${vx.sku} está inativa.` };
+  }
+  const varLabel = (atributos: Record<string, string>) =>
+    Object.values(atributos ?? {}).filter(Boolean).join(" / ");
+
   // override do preço líquido por produto nesta tabela
   const overrideMap = new Map<string, number>();
   if (v.tabela_preco_id) {
@@ -104,7 +139,10 @@ export async function salvarPedido(
     let preco = it.preco_tabela;
     if (v.tabela_preco_id) {
       const ov = overrideMap.get(it.produto_id);
-      const bruto = Number(prodMap.get(it.produto_id)?.preco_bruto ?? 0);
+      const vx = it.variacao_id ? varMap.get(it.variacao_id) : null;
+      const bruto = Number(
+        brutoEfetivo(vx?.preco_bruto ?? null, prodMap.get(it.produto_id)?.preco_bruto ?? null) ?? 0
+      );
       preco = ov != null ? ov : round2(bruto * (1 - descontoTabela / 100));
     }
     return {
@@ -162,10 +200,13 @@ export async function salvarPedido(
   const itensRows = v.itens.map((it, idx) => {
     const p = prodMap.get(it.produto_id)!;
     const ci = calc.itens[idx];
+    const vx = it.variacao_id ? varMap.get(it.variacao_id) : null;
+    const label = vx ? varLabel(vx.atributos) : "";
     return {
       produto_id: it.produto_id,
-      sku_snapshot: p.sku as string,
-      descricao_snapshot: p.nome as string,
+      variacao_id: it.variacao_id ?? null,
+      sku_snapshot: (vx?.sku ?? p.sku) as string,
+      descricao_snapshot: label ? `${p.nome as string} — ${label}` : (p.nome as string),
       quantidade: ci.quantidade,
       preco_tabela: ci.preco_tabela,
       desconto_item_percentual: ci.desconto_item_percentual,
@@ -303,6 +344,7 @@ export async function duplicarPedido(id: string): Promise<ActionResult<{ id?: st
       itens.map((it) => ({
         pedido_id: novo.id as string,
         produto_id: it.produto_id,
+        variacao_id: it.variacao_id ?? null,
         sku_snapshot: it.sku_snapshot,
         descricao_snapshot: it.descricao_snapshot,
         quantidade: it.quantidade,

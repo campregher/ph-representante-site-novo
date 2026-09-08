@@ -73,6 +73,12 @@ export const categoriaSchema = z.object({
   descricao: optionalText,
 });
 
+/** Um eixo de variação: nome + lista de valores possíveis. */
+export const variacaoEixoSchema = z.object({
+  nome: z.string().trim().min(1, "Informe o nome do eixo"),
+  valores: z.array(z.string().trim().min(1)).default([]),
+});
+
 // ───────────────────────────────── Produto ─────────────────────────────────
 export const produtoSchema = z.object({
   representada_id: z.string().uuid("Selecione a representada"),
@@ -102,9 +108,32 @@ export const produtoSchema = z.object({
   imagem_url: optionalText,
   observacoes: optionalText,
   ativo: z.boolean().default(true),
+  tem_variacoes: z.boolean().default(false),
+  variacao_eixos: z.array(variacaoEixoSchema).default([]),
 });
 export type ProdutoInput = z.input<typeof produtoSchema>;
 export type ProdutoValues = z.output<typeof produtoSchema>;
+
+// ─────────────────────────────── Variações ─────────────────────────────────
+export const produtoVariacaoSchema = z.object({
+  sku: z.string().trim().min(1, "Informe o SKU da variação"),
+  atributos: z.record(z.string(), z.string()).default({}),
+  preco_bruto: optionalNumber,
+  codigo_fabrica: optionalText,
+  ean: optionalText,
+  imagem_url: optionalText,
+  peso: optionalNumber,
+  ativo: z.boolean().default(true),
+  ordem: z.number().int().default(0),
+  observacoes: optionalText,
+});
+export type ProdutoVariacaoInput = z.input<typeof produtoVariacaoSchema>;
+
+export const salvarVariacoesSchema = z.object({
+  produto_id: z.string().uuid("Produto inválido"),
+  eixos: z.array(variacaoEixoSchema).default([]),
+  variacoes: z.array(produtoVariacaoSchema).default([]),
+});
 
 // ────────────────────────────── Tabela de Preço ─────────────────────────────
 export const tabelaSchema = z.object({
@@ -199,6 +228,12 @@ export const clienteRepresentadaSchema = z.object({
 // ───────────────────────────────── Pedido ──────────────────────────────────
 export const pedidoItemInput = z.object({
   produto_id: z.string().uuid(),
+  variacao_id: z
+    .string()
+    .uuid()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
   sku_snapshot: z.string(),
   descricao_snapshot: z.string(),
   quantidade: z.number().positive("Quantidade inválida"),

@@ -83,6 +83,33 @@ export interface Produto {
   imagem_url: string | null;
   ativo: boolean;
   observacoes: string | null;
+  tem_variacoes: boolean;
+  variacao_eixos: VariacaoEixo[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Um eixo de variação de um produto (ex.: "Estofado" → ["Couro","Tecido"]). */
+export interface VariacaoEixo {
+  nome: string;
+  valores: string[];
+}
+
+export interface ProdutoVariacao {
+  id: string;
+  produto_id: string;
+  sku: string;
+  /** { "Estofado": "Couro", "Costura": "Dupla vermelha" } */
+  atributos: Record<string, string>;
+  /** nulo = herda o preço bruto do produto pai */
+  preco_bruto: number | null;
+  codigo_fabrica: string | null;
+  ean: string | null;
+  imagem_url: string | null;
+  peso: number | null;
+  ativo: boolean;
+  ordem: number;
+  observacoes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -195,6 +222,7 @@ export interface PedidoItem {
   id: string;
   pedido_id: string;
   produto_id: string | null;
+  variacao_id: string | null;
   sku_snapshot: string | null;
   descricao_snapshot: string | null;
   quantidade: number;

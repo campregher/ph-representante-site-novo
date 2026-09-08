@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { getSistemaProfile } from "@/lib/sistema/auth";
 import { createSistemaClient } from "@/lib/supabase/server";
-import { precoLiquido } from "@/lib/sistema/preco";
+import { precoLiquido, brutoEfetivo } from "@/lib/sistema/preco";
 
 export const runtime = "nodejs";
 
 /**
  * Dados para o lançamento de pedido:
  * ?representada=<id>&cliente=<id>&tabela=<id>
- * Preço líquido = preço bruto do produto − desconto% da tabela (ou override).
+ * Preço líquido = preço bruto (da variação, senão do produto) − desconto% da
+ * tabela (ou override do produto). O override em `produtos_precos` é por produto
+ * e vale para todas as suas variações.
  */
 export async function GET(request: Request) {
   const profile = await getSistemaProfile();
@@ -35,11 +37,36 @@ export async function GET(request: Request) {
       .order("nome", { ascending: true }),
     supabase
       .from("produtos")
-      .select("id, sku, nome, aplicacao, ativo, preco_bruto")
+      .select("id, sku, nome, aplicacao, ativo, preco_bruto, tem_variacoes")
       .eq("representada_id", representadaId)
       .eq("ativo", true)
       .order("nome", { ascending: true }),
   ]);
+
+  const produtoIds = (produtos ?? []).map((p) => p.id as string);
+
+  const { data: variacoesRaw } = produtoIds.length
+    ? await supabase
+        .from("produto_variacoes")
+        .select("id, produto_id, sku, atributos, preco_bruto, ativo")
+        .in("produto_id", produtoIds)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true })
+    : { data: [] as Record<string, unknown>[] };
+
+  const variacoes: Record<
+    string,
+    { id: string; sku: string; atributos: Record<string, string>; preco_bruto: number | null }[]
+  > = {};
+  for (const v of variacoesRaw ?? []) {
+    const pid = v.produto_id as string;
+    (variacoes[pid] ??= []).push({
+      id: v.id as string,
+      sku: v.sku as string,
+      atributos: (v.atributos as Record<string, string>) ?? {},
+      preco_bruto: v.preco_bruto != null ? Number(v.preco_bruto) : null,
+    });
+  }
 
   let tabelaPadrao: string | null = null;
   if (clienteId) {
@@ -52,6 +79,7 @@ export async function GET(request: Request) {
     tabelaPadrao = (vinc?.tabela_preco_id as string) ?? null;
   }
 
+  // precos indexado por produto_id (produtos sem variação) e por variacao_id.
   const precos: Record<
     string,
     { preco: number; preco_minimo: number | null; desconto_maximo: number | null }
@@ -70,13 +98,23 @@ export async function GET(request: Request) {
     );
 
     for (const p of produtos ?? []) {
+      const pid = p.id as string;
       const bruto = p.preco_bruto != null ? Number(p.preco_bruto) : null;
-      const liq = precoLiquido(bruto, desc, overrideMap.get(p.id as string) ?? null);
-      precos[p.id as string] = {
-        preco: liq ?? 0,
+      const ov = overrideMap.get(pid) ?? null;
+
+      precos[pid] = {
+        preco: precoLiquido(bruto, desc, ov) ?? 0,
         preco_minimo: null,
         desconto_maximo: null,
       };
+
+      for (const v of variacoes[pid] ?? []) {
+        precos[v.id] = {
+          preco: precoLiquido(brutoEfetivo(v.preco_bruto, bruto), desc, ov) ?? 0,
+          preco_minimo: null,
+          desconto_maximo: null,
+        };
+      }
     }
   }
 
@@ -87,6 +125,7 @@ export async function GET(request: Request) {
     },
     tabelas: tabelas ?? [],
     produtos: produtos ?? [],
+    variacoes,
     tabelaPadrao,
     precos,
   });

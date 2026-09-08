@@ -37,9 +37,22 @@ export async function getSistemaProfile(): Promise<SistemaProfile | null> {
 
 /** Exige login + profile ativo. Redireciona caso contrário. Use no topo de páginas server. */
 export async function requireSistemaProfile(): Promise<SistemaProfile> {
-  const profile = await getSistemaProfile();
-  if (!profile) redirect("/sistema");
-  return profile;
+  const supabase = await createSistemaClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // sem sessão → login;  com sessão mas sem profile ativo → acesso-negado
+  // (nunca redireciona para "/sistema": isso causava loop infinito)
+  if (!user) redirect("/login?redirect=/sistema");
+
+  const { data } = await supabase
+    .from("profiles")
+    .select(PROFILE_COLS)
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!data || !data.ativo) redirect("/sistema/acesso-negado");
+  return data as SistemaProfile;
 }
 
 /** Exige um dos papéis informados. */

@@ -7,15 +7,18 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, Search } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/sistema/nav";
 import { ROLE_LABEL, type Role } from "@/lib/sistema/roles";
+import type { Notificacao } from "@/lib/sistema/notificacoes";
 import Breadcrumb from "./Breadcrumb";
 import SignOutButton from "./SignOutButton";
+import NotificacoesBell from "./NotificacoesBell";
 
 interface Props {
   profile: { nome: string | null; email: string | null; role: Role };
+  notificacoes?: { itens: Notificacao[]; naoLidas: number };
   children: React.ReactNode;
 }
 
-export default function AppShell({ profile, children }: Props) {
+export default function AppShell({ profile, notificacoes, children }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -127,7 +130,10 @@ export default function AppShell({ profile, children }: Props) {
             />
           </form>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            {notificacoes && (
+              <NotificacoesBell itens={notificacoes.itens} naoLidas={notificacoes.naoLidas} />
+            )}
             <div className="hidden text-right sm:block">
               <div className="text-xs font-semibold text-neutral-800">
                 {profile.nome ?? profile.email}

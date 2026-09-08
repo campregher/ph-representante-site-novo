@@ -7,7 +7,13 @@ import { pedidoSchema } from "@/lib/sistema/schemas";
 import { calcPedido } from "@/lib/sistema/pedido-calc";
 import { brutoEfetivo } from "@/lib/sistema/preco";
 import { sincronizarComissaoPedido } from "@/lib/sistema/comissoes-sync";
+import { criarNotificacao } from "@/lib/sistema/notificacoes";
+import { PEDIDO_STATUS_OPTIONS } from "@/lib/sistema/types";
 import type { ActionResult } from "@/lib/sistema/types";
+
+const STATUS_LABEL = new Map<string, string>(
+  PEDIDO_STATUS_OPTIONS.map((o) => [o.value, o.label])
+);
 
 async function guard() {
   const profile = await getSistemaProfile();
@@ -285,19 +291,33 @@ export async function alterarStatusPedido(
     });
   }
 
+  const { data: ped } = await supabase
+    .from("pedidos")
+    .select("numero, cliente_id, data_pedido, vendedor_id")
+    .eq("id", id)
+    .maybeSingle();
+
   // marca última compra do cliente quando fatura
-  if (status === "faturado") {
-    const { data: ped } = await supabase
-      .from("pedidos")
-      .select("cliente_id, data_pedido")
-      .eq("id", id)
-      .maybeSingle();
-    if (ped) {
-      await supabase
-        .from("clientes")
-        .update({ data_ultima_compra: String(ped.data_pedido).slice(0, 10), status: "ativo" })
-        .eq("id", ped.cliente_id as string);
-    }
+  if (status === "faturado" && ped) {
+    await supabase
+      .from("clientes")
+      .update({ data_ultima_compra: String(ped.data_pedido).slice(0, 10), status: "ativo" })
+      .eq("id", ped.cliente_id as string);
+  }
+
+  // avisa o vendedor do pedido (se não foi ele quem mudou)
+  if (
+    ped?.vendedor_id &&
+    ped.vendedor_id !== g.profile!.id &&
+    ["confirmado", "faturado", "cancelado", "rejeitado"].includes(status)
+  ) {
+    await criarNotificacao({
+      userId: ped.vendedor_id as string,
+      tipo: "pedido",
+      titulo: `Pedido #${ped.numero} — ${STATUS_LABEL.get(status) ?? status}`,
+      descricao: descricao || `Status alterado por ${g.profile!.nome ?? g.profile!.email}.`,
+      link: `/sistema/pedidos/${id}`,
+    });
   }
 
   await sincronizarComissaoPedido(id);

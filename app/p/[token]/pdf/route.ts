@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import { renderToBuffer } from "@react-pdf/renderer";
-import React from "react";
 import { getPedidoDocByToken } from "@/lib/sistema/pedido-doc";
-import { phLogoDataUri } from "@/lib/sistema/ph-logo";
-import PedidoPDF from "@/components/pdf/PedidoPDF";
+import { renderPedidoPdf } from "@/lib/sistema/pedido-pdf";
 
 export const runtime = "nodejs";
 
@@ -16,10 +13,7 @@ export async function GET(
   const doc = await getPedidoDocByToken(token);
   if (!doc) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
 
-  doc.empresa.logo = await phLogoDataUri();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buffer = await renderToBuffer(React.createElement(PedidoPDF, { d: doc }) as any);
+  const buffer = await renderPedidoPdf(doc);
 
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {

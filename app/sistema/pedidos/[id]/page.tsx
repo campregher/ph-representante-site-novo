@@ -12,6 +12,7 @@ import { Badge, PEDIDO_STATUS } from "@/components/sistema/ui/Badge";
 import CopiarPedidoButton from "@/components/sistema/pedidos/CopiarPedidoButton";
 import GerarPedidoButton from "@/components/sistema/pedidos/GerarPedidoButton";
 import EnviarLinkPedido from "@/components/sistema/pedidos/EnviarLinkPedido";
+import EnviarPedidoEmail from "@/components/sistema/pedidos/EnviarPedidoEmail";
 import {
   TableScroll,
   Table,
@@ -37,13 +38,14 @@ export default async function PedidoDetailPage({
   const { data } = await supabase
     .from("pedidos")
     .select(
-      "*, cliente:clientes(id, nome_fantasia, razao_social, cnpj, cpf, cidade, estado), representada:representadas(id, nome_fantasia, razao_social), tabela:tabelas_preco(nome)"
+      "*, cliente:clientes(id, nome_fantasia, razao_social, cnpj, cpf, cidade, estado, email), representada:representadas(id, nome_fantasia, razao_social), tabela:tabelas_preco(nome)"
     )
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
 
   const p = data as unknown as Pedido & {
+    enviado_email_at: string | null;
     cliente: {
       id: string;
       nome_fantasia: string | null;
@@ -52,6 +54,7 @@ export default async function PedidoDetailPage({
       cpf: string | null;
       cidade: string | null;
       estado: string | null;
+      email: string | null;
     } | null;
     representada: { id: string; nome_fantasia: string | null; razao_social: string } | null;
     tabela: { nome: string } | null;
@@ -125,6 +128,14 @@ export default async function PedidoDetailPage({
             <FileText size={14} /> Baixar PDF
           </a>
           {doc && <CopiarPedidoButton texto={pedidoDocToText(doc)} />}
+          {profile.role !== "consulta" && (
+            <EnviarPedidoEmail
+              pedidoId={p.id}
+              numero={p.numero}
+              clienteEmail={p.cliente?.email}
+              jaEnviado={!!p.enviado_email_at}
+            />
+          )}
           <PedidoActions id={p.id} status={p.status} canManage={canManage(profile.role)} />
         </div>
       </div>

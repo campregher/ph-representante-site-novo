@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createSistemaClient } from "@/lib/supabase/server";
+import { getMinhasNotificacoes } from "@/lib/sistema/notificacoes";
 import AppShell from "@/components/sistema/AppShell";
 import AccessDenied from "@/components/sistema/AccessDenied";
 import type { Role } from "@/lib/sistema/auth";
@@ -28,21 +29,28 @@ export default async function SistemaLayout({
     .eq("id", user.id)
     .maybeSingle();
 
+  if (!profile || !profile.ativo) {
+    return (
+      <div data-sistema className="min-h-screen bg-neutral-50 text-neutral-900">
+        <AccessDenied email={user.email ?? ""} />
+      </div>
+    );
+  }
+
+  const notificacoes = await getMinhasNotificacoes();
+
   return (
     <div data-sistema className="min-h-screen bg-neutral-50 text-neutral-900">
-      {!profile || !profile.ativo ? (
-        <AccessDenied email={user.email ?? ""} />
-      ) : (
-        <AppShell
-          profile={{
-            nome: profile.nome,
-            email: profile.email,
-            role: profile.role as Role,
-          }}
-        >
-          {children}
-        </AppShell>
-      )}
+      <AppShell
+        profile={{
+          nome: profile.nome,
+          email: profile.email,
+          role: profile.role as Role,
+        }}
+        notificacoes={notificacoes}
+      >
+        {children}
+      </AppShell>
     </div>
   );
 }

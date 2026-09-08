@@ -5,6 +5,7 @@
  */
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
+const RESEND_BATCH_ENDPOINT = "https://api.resend.com/emails/batch";
 
 export interface EmailAttachment {
   filename: string;
@@ -77,4 +78,48 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     );
   }
   return { id: (data?.id as string) ?? null };
+}
+
+export interface BatchEmail {
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+}
+
+/**
+ * Envio em lote (até 100 por chamada). Sem anexos. Retorna os ids na ordem
+ * dos e-mails enviados (ou null quando o provedor não devolver id).
+ */
+export async function sendEmailBatch(emails: BatchEmail[]): Promise<(string | null)[]> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY não configurada.");
+  if (!emails.length) return [];
+
+  const from = fromAddress();
+  const payload = emails.map((e) => ({
+    from,
+    to: e.to,
+    subject: e.subject,
+    html: e.html,
+    ...(e.replyTo ? { reply_to: e.replyTo } : {}),
+  }));
+
+  const res = await fetch(RESEND_BATCH_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `Resend batch: ${data?.message ?? data?.name ?? res.statusText} (${res.status})`
+    );
+  }
+  const items = (data?.data as { id?: string }[]) ?? [];
+  return emails.map((_, i) => items[i]?.id ?? null);
 }

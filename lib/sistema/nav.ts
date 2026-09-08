@@ -10,6 +10,7 @@ import {
   KanbanSquare,
   CheckSquare,
   BarChart3,
+  Megaphone,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Comissões", href: "/sistema/comissoes", icon: Wallet },
   { label: "CRM", href: "/sistema/crm", icon: KanbanSquare },
   { label: "Tarefas", href: "/sistema/tarefas", icon: CheckSquare },
+  { label: "Campanhas", href: "/sistema/campanhas", icon: Megaphone },
   { label: "Relatórios", href: "/sistema/relatorios", icon: BarChart3 },
   { label: "Configurações", href: "/sistema/configuracoes", icon: Settings },
 ];
@@ -48,6 +50,7 @@ export const SEGMENT_LABELS: Record<string, string> = {
   comissoes: "Comissões",
   crm: "CRM",
   tarefas: "Tarefas",
+  campanhas: "Campanhas",
   relatorios: "Relatórios",
   configuracoes: "Configurações",
   novo: "Novo",

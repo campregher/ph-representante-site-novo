@@ -2,7 +2,7 @@
 // CONFIGURAÇÕES — altere os valores abaixo
 // =============================================
 
-export const WHATSAPP_NUMBER = "5511599993968";
+export const WHATSAPP_NUMBER = "5511959993968";
 
 export const WHATSAPP_MESSAGE = encodeURIComponent(
   "Olá! Vim pelo site da PH Representante e gostaria de mais informações."

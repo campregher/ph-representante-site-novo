@@ -1,17 +1,25 @@
-import { NextResponse, NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 
+/**
+ * Callback de e-mails do Supabase Auth (recuperação de senha / convite / magic link).
+ * O template envia: /auth/callback?token_hash=...&type=recovery&next=/nova-senha
+ */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const next       = searchParams.get("next") ?? "/";
-  const tokenHash  = searchParams.get("token_hash");
-  const type       = searchParams.get("type") as "recovery" | "invite" | "signup" | "magiclink" | null;
+  const next = searchParams.get("next") ?? "/sistema";
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type") as
+    | "recovery"
+    | "invite"
+    | "signup"
+    | "magiclink"
+    | "email"
+    | null;
 
-  const errorUrl = next.startsWith("/marca")
-    ? `${origin}/marca/login?error=link_expired`
-    : `${origin}/portal/login?error=link_expired`;
+  const errorUrl = `${origin}/login?error=link_invalido`;
 
   if (!tokenHash || !type) {
     return NextResponse.redirect(errorUrl);
@@ -21,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),

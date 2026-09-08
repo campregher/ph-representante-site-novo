@@ -52,8 +52,14 @@ export default function RepresentadaForm({ initial }: { initial?: Representada }
           cidade: initial.cidade ?? "",
           estado: initial.estado ?? "",
           pedido_minimo: initial.pedido_minimo ?? "",
-          percentual_comissao_padrao: initial.percentual_comissao_padrao ?? "",
-          desconto_maximo_padrao: initial.desconto_maximo_padrao ?? "",
+          percentual_comissao_padrao:
+            initial.percentual_comissao_padrao != null
+              ? String(initial.percentual_comissao_padrao).replace(".", ",")
+              : "",
+          desconto_maximo_padrao:
+            initial.desconto_maximo_padrao != null
+              ? String(initial.desconto_maximo_padrao).replace(".", ",")
+              : "",
           prazo_pagamento_padrao: initial.prazo_pagamento_padrao ?? "",
           prazo_entrega: initial.prazo_entrega ?? "",
           logo_url: initial.logo_url ?? "",
@@ -265,10 +271,20 @@ export default function RepresentadaForm({ initial }: { initial?: Representada }
               <Input {...register("pedido_minimo")} type="number" step="0.01" min="0" />
             </Field>
             <Field label="Comissão padrão (%)" error={errors.percentual_comissao_padrao?.message}>
-              <Input {...register("percentual_comissao_padrao")} type="number" step="0.01" min="0" />
+              <Input
+                {...register("percentual_comissao_padrao")}
+                type="text"
+                inputMode="decimal"
+                placeholder="ex.: 5 ou 5,5"
+              />
             </Field>
             <Field label="Desconto máximo padrão (%)" error={errors.desconto_maximo_padrao?.message}>
-              <Input {...register("desconto_maximo_padrao")} type="number" step="0.01" min="0" />
+              <Input
+                {...register("desconto_maximo_padrao")}
+                type="text"
+                inputMode="decimal"
+                placeholder="ex.: 12 ou 12,5"
+              />
             </Field>
             <Field label="Prazo de pagamento padrão" error={errors.prazo_pagamento_padrao?.message}>
               <Input {...register("prazo_pagamento_padrao")} placeholder="ex.: 28/35/42 dias" />

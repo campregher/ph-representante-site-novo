@@ -1,10 +1,24 @@
 import { z } from "zod";
+import { parseNumeroBR } from "./format";
 
 /** string opcional que vira null quando vazia */
 const optionalText = z
   .string()
   .trim()
   .transform((v) => (v === "" ? null : v))
+  .nullable()
+  .optional();
+
+/**
+ * Percentual (comissão, desconto de tabela, etc.): aceita "12,5" ou "12.5"
+ * — o ponto é tratado como separador decimal (vira vírgula). Vazio → null.
+ */
+const percentualOpcional = z
+  .union([z.number(), z.string()])
+  .transform((v) => {
+    if (v === "" || v === null || v === undefined) return null;
+    return parseNumeroBR(v);
+  })
   .nullable()
   .optional();
 
@@ -51,8 +65,8 @@ export const representadaSchema = z.object({
   cidade: optionalText,
   estado: optionalText,
   pedido_minimo: optionalNumber,
-  percentual_comissao_padrao: optionalNumber,
-  desconto_maximo_padrao: optionalNumber,
+  percentual_comissao_padrao: percentualOpcional,
+  desconto_maximo_padrao: percentualOpcional,
   prazo_pagamento_padrao: optionalText,
   prazo_entrega: optionalText,
   logo_url: optionalText,
@@ -144,8 +158,8 @@ export const tabelaSchema = z.object({
   desconto_percentual: z
     .union([z.number(), z.string()])
     .transform((v) => {
-      const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
-      return Number.isFinite(n) ? Math.min(Math.max(n, 0), 100) : 0;
+      const n = typeof v === "number" ? v : parseNumeroBR(v);
+      return n != null && Number.isFinite(n) ? Math.min(Math.max(n, 0), 100) : 0;
     })
     .default(0),
   data_inicio: optionalText,
@@ -220,7 +234,7 @@ export const clienteRepresentadaSchema = z.object({
     .nullable()
     .optional(),
   condicao_pagamento: optionalText,
-  desconto_padrao: optionalNumber,
+  desconto_padrao: percentualOpcional,
   limite_credito: optionalNumber,
   observacoes: optionalText,
 });

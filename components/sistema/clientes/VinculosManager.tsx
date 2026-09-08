@@ -86,7 +86,7 @@ export default function VinculosManager({
       representada_id: v.representada_id,
       tabela_preco_id: v.tabela_preco_id ?? "",
       condicao_pagamento: v.condicao_pagamento ?? "",
-      desconto_padrao: v.desconto_padrao != null ? String(v.desconto_padrao) : "",
+      desconto_padrao: v.desconto_padrao != null ? String(v.desconto_padrao).replace(".", ",") : "",
       limite_credito: v.limite_credito != null ? String(v.limite_credito) : "",
       observacoes: v.observacoes ?? "",
     });
@@ -256,9 +256,9 @@ export default function VinculosManager({
           </Field>
           <Field label="Desconto padrão (%)">
             <Input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
+              placeholder="ex.: 5 ou 5,5"
               value={draft.desconto_padrao}
               onChange={(e) => setDraft({ ...draft, desconto_padrao: e.target.value })}
             />

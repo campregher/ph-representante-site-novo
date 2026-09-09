@@ -207,7 +207,7 @@ export default function NovoPedido({
         });
       }
     }
-    return out.slice(0, 30);
+    return out.slice(0, 50);
   }, [cat, busca, itens]);
 
   function addEntry(e: PickEntry) {

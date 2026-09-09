@@ -56,9 +56,10 @@ export default function ClienteForm({
           vendedor_id: initial.vendedor_id ?? "",
           limite_credito: initial.limite_credito ?? "",
           status: initial.status,
+          is_seller: initial.is_seller ?? false,
           observacoes: initial.observacoes ?? "",
         }
-      : { tipo_pessoa: "juridica", status: "prospect", vendedor_id: "" },
+      : { tipo_pessoa: "juridica", status: "prospect", vendedor_id: "", is_seller: false },
   });
 
   const tipo = (useWatch({ control, name: "tipo_pessoa" }) ?? "juridica") as string;
@@ -174,6 +175,14 @@ export default function ClienteForm({
               <Input {...register("limite_credito")} type="number" step="0.01" min="0" />
             </Field>
           </FormGrid>
+          <label className="mt-3 flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              {...register("is_seller")}
+              className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
+            />
+            Seller (revendedor da linha própria — pode receber pedidos drop)
+          </label>
         </CardBody>
       </Card>
 

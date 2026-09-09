@@ -206,6 +206,7 @@ export const clienteSchema = z
     status: z
       .enum(["prospect", "ativo", "inativo", "bloqueado", "reativacao"])
       .default("prospect"),
+    is_seller: z.coerce.boolean().default(false),
     observacoes: optionalText,
   })
   .refine((d) => !!(d.razao_social || d.nome_fantasia), {
@@ -361,4 +362,109 @@ export const importRowSchema = z.object({
   nome: z.string().trim().optional().default(""),
   descricao: z.string().trim().optional().default(""),
   preco: z.number().nullable().optional(),
+});
+
+// ═══════════════════════════ Linha Própria ════════════════════════════════
+
+export const fornecedorSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome"),
+  razao_social: optionalText,
+  cnpj: optionalText,
+  telefone: optionalText,
+  whatsapp: optionalText,
+  email: optionalEmail,
+  site: optionalText,
+  cep: optionalText,
+  logradouro: optionalText,
+  numero: optionalText,
+  complemento: optionalText,
+  bairro: optionalText,
+  cidade: optionalText,
+  estado: optionalText,
+  observacoes: optionalText,
+  ativo: z.boolean().default(true),
+});
+
+export const produtoProprioSchema = z.object({
+  sku: z.string().trim().min(1, "Informe o SKU"),
+  nome: z.string().trim().min(2, "Informe o nome"),
+  descricao: optionalText,
+  fornecedor_id: optionalText,
+  ncm: optionalText,
+  ean: optionalText,
+  unidade: optionalText,
+  imagem_url: optionalText,
+  custo: optionalNumber,
+  preco_bruto: optionalNumber, // preço de venda ao seller
+  estoque_minimo: optionalNumber,
+  peso: optionalNumber,
+  altura: optionalNumber,
+  largura: optionalNumber,
+  comprimento: optionalNumber,
+  ativo: z.boolean().default(true),
+  observacoes: optionalText,
+});
+
+export const compraItemSchema = z.object({
+  produto_id: z.string().uuid("Selecione o produto"),
+  quantidade: z.coerce.number().int().positive("Qtd inválida"),
+  custo_unitario: z.coerce.number().nonnegative(),
+});
+
+export const compraSchema = z.object({
+  fornecedor_id: optionalText,
+  numero_nota: optionalText,
+  data_compra: optionalText,
+  frete: optionalNumber,
+  outras_despesas: optionalNumber,
+  observacoes: optionalText,
+  itens: z.array(compraItemSchema).min(1, "Adicione ao menos um item"),
+});
+
+export const ajusteEstoqueSchema = z.object({
+  produto_id: z.string().uuid(),
+  novo_saldo: z.coerce.number().int().min(0, "Saldo inválido"),
+  motivo: z.string().trim().min(2, "Informe o motivo"),
+});
+
+export const pedidoDropItemSchema = z.object({
+  produto_id: z.string().uuid(),
+  quantidade: z.coerce.number().int().positive(),
+  preco_venda: z.coerce.number().nonnegative(),
+});
+
+export const pedidoDropSchema = z.object({
+  cliente_id: z.string().uuid("Selecione o seller"),
+  canal: optionalText,
+  pedido_externo: optionalText,
+  entrega_nome: optionalText,
+  entrega_documento: optionalText,
+  entrega_telefone: optionalText,
+  entrega_cep: optionalText,
+  entrega_logradouro: optionalText,
+  entrega_numero: optionalText,
+  entrega_complemento: optionalText,
+  entrega_bairro: optionalText,
+  entrega_cidade: optionalText,
+  entrega_uf: optionalText,
+  observacao_interna: optionalText,
+  frete: optionalNumber,
+  itens: z.array(pedidoDropItemSchema).min(1, "Adicione ao menos um produto"),
+});
+
+export const contaReceberSchema = z.object({
+  cliente_id: optionalText,
+  pedido_id: optionalText,
+  descricao: z.string().trim().min(2, "Informe a descrição"),
+  valor: z.coerce.number().positive("Valor inválido"),
+  vencimento: optionalText,
+  forma: optionalText,
+  observacoes: optionalText,
+});
+
+export const marcarPagoSchema = z.object({
+  id: z.string().uuid(),
+  valor_pago: optionalNumber,
+  pago_em: optionalText,
+  forma: optionalText,
 });

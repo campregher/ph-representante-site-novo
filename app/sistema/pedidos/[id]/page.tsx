@@ -13,6 +13,8 @@ import CopiarPedidoButton from "@/components/sistema/pedidos/CopiarPedidoButton"
 import GerarPedidoButton from "@/components/sistema/pedidos/GerarPedidoButton";
 import EnviarLinkPedido from "@/components/sistema/pedidos/EnviarLinkPedido";
 import EnviarPedidoEmail from "@/components/sistema/pedidos/EnviarPedidoEmail";
+import PedidoDropActions from "@/components/sistema/estoque/PedidoDropActions";
+import { canFinance } from "@/lib/sistema/roles";
 import {
   TableScroll,
   Table,
@@ -70,6 +72,23 @@ export default async function PedidoDetailPage({
     getPedidoDoc(id),
   ]);
 
+  const pd = p as unknown as {
+    tipo?: string;
+    canal?: string | null;
+    pedido_externo?: string | null;
+    entrega_nome?: string | null;
+    entrega_documento?: string | null;
+    entrega_telefone?: string | null;
+    entrega_logradouro?: string | null;
+    entrega_numero?: string | null;
+    entrega_complemento?: string | null;
+    entrega_bairro?: string | null;
+    entrega_cidade?: string | null;
+    entrega_uf?: string | null;
+    entrega_cep?: string | null;
+  };
+  const isDrop = pd.tipo === "drop_proprio";
+
   const st = PEDIDO_STATUS[p.status] ?? { label: p.status, tone: "neutral" as const };
   const podeEditarStatus = profile.role !== "consulta";
   const terminal = ["faturado", "em_transporte", "entregue", "cancelado", "rejeitado"].includes(
@@ -110,7 +129,10 @@ export default async function PedidoDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {podeGerar && <GerarPedidoButton id={p.id} />}
+          {isDrop && (
+            <PedidoDropActions id={p.id} status={p.status} podeFaturar={canFinance(profile.role)} />
+          )}
+          {!isDrop && podeGerar && <GerarPedidoButton id={p.id} />}
           {editavel && (
             <Link
               href={`/sistema/pedidos/${p.id}/editar`}
@@ -140,19 +162,43 @@ export default async function PedidoDetailPage({
         </div>
       </div>
 
+      {isDrop && (
+        <Card className="mb-4">
+          <CardHeader
+            title="Entrega ao consumidor (drop)"
+            description={[pd.canal, pd.pedido_externo && `Pedido ${pd.pedido_externo}`].filter(Boolean).join(" · ") || undefined}
+          />
+          <CardBody className="text-sm text-neutral-700">
+            <div className="font-semibold text-neutral-900">{pd.entrega_nome || "—"}</div>
+            {pd.entrega_documento && <div className="text-xs text-neutral-500">{pd.entrega_documento}</div>}
+            <div>
+              {[pd.entrega_logradouro, pd.entrega_numero, pd.entrega_complemento].filter(Boolean).join(", ")}
+            </div>
+            <div>
+              {[pd.entrega_bairro, [pd.entrega_cidade, pd.entrega_uf].filter(Boolean).join("/"), pd.entrega_cep]
+                .filter(Boolean)
+                .join(" — ")}
+            </div>
+            {pd.entrega_telefone && <div className="text-xs text-neutral-500">Tel: {pd.entrega_telefone}</div>}
+          </CardBody>
+        </Card>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Info + Cliente */}
         <div className="space-y-4 lg:col-span-1">
-          <Card>
-            <CardHeader title="Link do pedido" description="Envie ao cliente sem precisar de login." />
-            <CardBody>
-              <EnviarLinkPedido
-                token={p.share_token}
-                numero={p.numero}
-                whatsapp={doc?.cliente.telefone ?? null}
-              />
-            </CardBody>
-          </Card>
+          {!isDrop && (
+            <Card>
+              <CardHeader title="Link do pedido" description="Envie ao cliente sem precisar de login." />
+              <CardBody>
+                <EnviarLinkPedido
+                  token={p.share_token}
+                  numero={p.numero}
+                  whatsapp={doc?.cliente.telefone ?? null}
+                />
+              </CardBody>
+            </Card>
+          )}
 
           <Card>
             <CardHeader title="Cliente" />

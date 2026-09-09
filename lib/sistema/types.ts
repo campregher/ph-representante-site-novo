@@ -162,6 +162,7 @@ export interface Cliente {
   limite_credito: number | null;
   status: "prospect" | "ativo" | "inativo" | "bloqueado" | "reativacao";
   data_ultima_compra: string | null;
+  is_seller: boolean;
   observacoes: string | null;
   created_at: string;
   updated_at: string;
@@ -327,4 +328,108 @@ export const CRM_ETAPA_OPTIONS = [
   { value: "primeiro_pedido", label: "Primeiro pedido" },
   { value: "cliente_ativo", label: "Cliente ativo" },
   { value: "perdido", label: "Perdido" },
+] as const;
+
+// ═══════════════════════════ Linha Própria (estoque + drop) ════════════════
+
+export interface Fornecedor {
+  id: string;
+  nome: string;
+  razao_social: string | null;
+  cnpj: string | null;
+  telefone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  site: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Compra {
+  id: string;
+  fornecedor_id: string | null;
+  numero_nota: string | null;
+  data_compra: string;
+  frete: number;
+  outras_despesas: number;
+  valor_total: number;
+  status: "rascunho" | "recebida" | "cancelada";
+  observacoes: string | null;
+  created_at: string;
+}
+
+export interface CompraItem {
+  id: string;
+  compra_id: string;
+  produto_id: string | null;
+  descricao: string | null;
+  quantidade: number;
+  custo_unitario: number;
+  subtotal: number;
+}
+
+export interface EstoqueMovimento {
+  id: string;
+  produto_id: string;
+  tipo: "entrada" | "saida" | "ajuste";
+  quantidade: number;
+  saldo_apos: number;
+  origem_tipo: string | null;
+  origem_id: string | null;
+  observacao: string | null;
+  created_at: string;
+}
+
+export interface ContaReceber {
+  id: string;
+  pedido_id: string | null;
+  cliente_id: string | null;
+  descricao: string;
+  valor: number;
+  vencimento: string | null;
+  forma: string | null;
+  status: "aberto" | "pago" | "vencido" | "cancelado";
+  valor_pago: number | null;
+  pago_em: string | null;
+  observacoes: string | null;
+  created_at: string;
+}
+
+export const PEDIDO_TIPO_OPTIONS = [
+  { value: "representacao", label: "Representação" },
+  { value: "drop_proprio", label: "Drop (linha própria)" },
+] as const;
+
+export const CANAL_VENDA_OPTIONS = [
+  "Mercado Livre",
+  "Shopee",
+  "Amazon",
+  "Site próprio",
+  "WhatsApp",
+  "Outro",
+] as const;
+
+export const FORMA_RECEBIMENTO_OPTIONS = [
+  { value: "pix", label: "Pix" },
+  { value: "boleto", label: "Boleto" },
+  { value: "dinheiro", label: "Dinheiro" },
+  { value: "cartao", label: "Cartão" },
+  { value: "transferencia", label: "Transferência" },
+  { value: "outro", label: "Outro" },
+] as const;
+
+export const CONTA_RECEBER_STATUS = [
+  { value: "aberto", label: "Em aberto" },
+  { value: "pago", label: "Pago" },
+  { value: "vencido", label: "Vencido" },
+  { value: "cancelado", label: "Cancelado" },
 ] as const;

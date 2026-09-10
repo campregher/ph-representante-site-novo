@@ -873,26 +873,22 @@ export default function NovoPedido({
                             )}
                           </Td>
                           <Td className="text-right tabular-nums">
-                            {precoManual ? (
-                              <span className="text-neutral-500">
-                                manual
-                                {ci && ci.desconto_item_percentual > 0 && (
-                                  <div className="text-[11px] text-neutral-400">
-                                    = {ci.desconto_item_percentual.toFixed(2)}%
-                                  </div>
-                                )}
-                              </span>
-                            ) : ci && ci.desconto_item_percentual > 0 ? (
-                              <span>
-                                {ci.desconto_item_percentual.toFixed(2)}%
-                                {it.desconto_cascata.length > 1 && (
-                                  <div className="text-[11px] text-neutral-400">
-                                    {it.desconto_cascata
-                                      .map((n) => String(n).replace(".", ","))
-                                      .join("+")}
-                                  </div>
-                                )}
-                              </span>
+                            {ci && ci.desconto_item_percentual > 0 ? (
+                              <>
+                                <span className="text-red-600">
+                                  − {formatBRL(ci.preco_tabela - ci.preco_unitario_final)}
+                                  <span className="text-neutral-400">/un</span>
+                                </span>
+                                <div className="text-[11px] text-neutral-400">
+                                  {precoManual ? "manual · " : ""}
+                                  {ci.desconto_item_percentual.toFixed(2)}%
+                                  {!precoManual && it.desconto_cascata.length > 1
+                                    ? ` · ${it.desconto_cascata
+                                        .map((n) => String(n).replace(".", ","))
+                                        .join("+")}`
+                                    : ""}
+                                </div>
+                              </>
                             ) : (
                               "—"
                             )}

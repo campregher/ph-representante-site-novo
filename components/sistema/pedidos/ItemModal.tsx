@@ -63,6 +63,7 @@ export default function ItemModal({
     desconto_cascata: temManual ? [] : cascNums,
     preco_liquido_manual: temManual ? manual : null,
   });
+  const descUnit = Math.round((base - ci.preco_unitario_final) * 100) / 100;
 
   function confirm() {
     const q = Math.max(Number(String(qtd).replace(",", ".")) || 0, 0);
@@ -137,11 +138,6 @@ export default function ItemModal({
             </label>
           </div>
 
-          <div className="flex justify-between rounded-lg bg-neutral-50 px-3 py-2 text-sm">
-            <span className="text-neutral-500">Preço de tabela</span>
-            <span className="font-medium tabular-nums">{formatBRL(base)}</span>
-          </div>
-
           <div>
             <span className="mb-1 block text-sm font-medium text-neutral-700">
               Descontos % (cascata)
@@ -156,31 +152,54 @@ export default function ItemModal({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <label className="text-sm">
-              <span className="mb-1 block font-medium text-neutral-700">Preço líquido (R$)</span>
-              <input
-                value={liq}
-                onChange={(e) => setLiq(e.target.value)}
-                inputMode="decimal"
-                placeholder={formatBRL(ci.preco_unitario_final)}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-right text-sm focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10"
-              />
-            </label>
-            <div className="text-sm">
-              <span className="mb-1 block font-medium text-neutral-700">Subtotal</span>
-              <div className="rounded-lg bg-neutral-50 px-3 py-2 text-right font-semibold tabular-nums">
-                {formatBRL(ci.valor_total)}
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-neutral-700">
+              Preço líquido por unidade (R$)
+            </span>
+            <input
+              value={liq}
+              onChange={(e) => setLiq(e.target.value)}
+              inputMode="decimal"
+              placeholder={formatBRL(ci.preco_unitario_final)}
+              className="w-full max-w-[220px] rounded-lg border border-neutral-300 px-3 py-2 text-right text-sm focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10"
+            />
+          </label>
+
+          <div className="rounded-lg border border-neutral-200 text-sm">
+            <div className="border-b border-neutral-100 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+              Por unidade
+            </div>
+            <div className="space-y-1 px-3 py-2 tabular-nums">
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Preço de tabela</span>
+                <span>{formatBRL(base)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Desconto</span>
+                <span className="text-red-600">
+                  − {formatBRL(descUnit)}
+                  {ci.desconto_item_percentual > 0 && (
+                    <span className="ml-1 text-xs text-neutral-400">
+                      (−{ci.desconto_item_percentual.toFixed(2)}%)
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-neutral-100 pt-1 font-semibold text-neutral-900">
+                <span>Preço líquido</span>
+                <span>{formatBRL(ci.preco_unitario_final)}</span>
               </div>
             </div>
+            <div className="flex justify-between border-t border-neutral-200 bg-neutral-50 px-3 py-2 font-semibold tabular-nums">
+              <span>
+                Subtotal{" "}
+                <span className="font-normal text-neutral-400">
+                  ({formatBRL(ci.preco_unitario_final)} × {ci.quantidade || 0})
+                </span>
+              </span>
+              <span>{formatBRL(ci.valor_total)}</span>
+            </div>
           </div>
-
-          <p className="text-xs text-neutral-500">
-            Unitário líquido <strong>{formatBRL(ci.preco_unitario_final)}</strong>
-            {ci.desconto_item_percentual > 0 && (
-              <> · desconto efetivo {ci.desconto_item_percentual.toFixed(2)}%</>
-            )}
-          </p>
         </div>
       </div>
 

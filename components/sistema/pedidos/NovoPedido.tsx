@@ -4,16 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  Plus,
-  Trash2,
-  Search,
-  AlertTriangle,
-  Pencil,
-  SlidersHorizontal,
-  ArrowDown,
-  ArrowUp,
-} from "lucide-react";
+import { Plus, Trash2, Search, AlertTriangle, Pencil, ArrowDown, ArrowUp } from "lucide-react";
 import { formatBRL } from "@/lib/sistema/format";
 import { calcPedido, parseCascata } from "@/lib/sistema/pedido-calc";
 import { salvarPedido, alterarStatusPedido } from "@/lib/sistema/actions/pedidos";
@@ -168,16 +159,13 @@ export default function NovoPedido({
 
   const [itens, setItens] = useState<Item[]>(initial?.itens ?? []);
   const [busca, setBusca] = useState("");
-  // atalho de teclado: busca → Enter → (quickPick) → digita qtd → Enter → adiciona
+  // atalho de teclado: busca → ↑/↓ → Enter → abre o modal do produto
   const [hi, setHi] = useState(0); // linha destacada no dropdown
-  const [quickPick, setQuickPick] = useState<PickEntry | null>(null);
-  const [quickQty, setQuickQty] = useState("1");
   // modal de item detalhado (estilo Mercos)
   const [modal, setModal] = useState<
     { mode: "new"; entry: PickEntry } | { mode: "edit"; key: string } | null
   >(null);
   const buscaRef = useRef<HTMLInputElement>(null);
-  const qtyRef = useRef<HTMLInputElement>(null);
   const [descModo, setDescModo] = useState<"percentual" | "valor">("percentual");
   const [descInput, setDescInput] = useState(initial ? String(initial.desconto_percentual) : "0");
   const [cascPedido, setCascPedido] = useState<string[]>(() => {
@@ -361,69 +349,12 @@ export default function NovoPedido({
     });
   }
 
-  function addEntry(e: PickEntry, qtd = 1) {
-    const add = qtd > 0 ? qtd : 1;
-    const key = e.variacao?.id ?? e.produto.id;
-    setItens((prev) => {
-      const idx = prev.findIndex((it) => itemKey(it) === key);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], quantidade: next[idx].quantidade + add };
-        return next;
-      }
-      return [
-        ...prev,
-        {
-          produto_id: e.produto.id,
-          variacao_id: e.variacao?.id ?? null,
-          sku: e.sku,
-          nome: e.label,
-          quantidade: add,
-          preco_tabela: e.preco ?? 0,
-          desconto_item_percentual: 0,
-          desconto_cascata: [],
-          acrescimo_cascata: [],
-          preco_liquido_manual: null,
-          tabela_preco_id: null,
-          observacao: null,
-        },
-      ];
-    });
-    setBusca("");
-  }
-
-  // ── atalho de teclado ────────────────────────────────────────────────
-  // Foca a quantidade assim que um produto é "pré-selecionado" na busca.
-  useEffect(() => {
-    if (quickPick) qtyRef.current?.select();
-  }, [quickPick]);
-
-  /** Enter na busca: pré-seleciona (SKU exato > linha destacada > 1ª) e vai p/ qtd. */
+  /** Enter na busca: abre o modal do produto (SKU exato > linha destacada > 1ª). */
   function pegarBusca() {
     if (pickEntries.length === 0) return;
     const alvo = busca.trim().toLowerCase();
     const exato = pickEntries.find((e) => e.sku.toLowerCase() === alvo);
-    const escolha = exato ?? pickEntries[hi] ?? pickEntries[0];
-    setQuickPick(escolha);
-    setQuickQty("1");
-  }
-
-  /** Enter na quantidade: adiciona e volta o foco para a busca. */
-  function confirmarQuick() {
-    if (!quickPick) return;
-    const n = Math.floor(Number(String(quickQty).replace(",", ".")) || 1);
-    addEntry(quickPick, n > 0 ? n : 1);
-    setQuickPick(null);
-    setQuickQty("1");
-    setBusca("");
-    setHi(0);
-    setTimeout(() => buscaRef.current?.focus(), 0);
-  }
-
-  function cancelarQuick() {
-    setQuickPick(null);
-    setQuickQty("1");
-    setTimeout(() => buscaRef.current?.focus(), 0);
+    abrirModalNovo(exato ?? pickEntries[hi] ?? pickEntries[0]);
   }
 
   function updateItem(key: string, patch: Partial<Item>) {
@@ -449,7 +380,7 @@ export default function NovoPedido({
   function abrirModalNovo(e: PickEntry) {
     setModal({ mode: "new", entry: e });
     setBusca("");
-    setQuickPick(null);
+    setHi(0);
   }
 
   function fecharModal() {
@@ -667,7 +598,13 @@ export default function NovoPedido({
                     value={clienteId}
                     options={clienteOptions}
                     onChange={setClienteId}
-                    placeholder="Buscar por nome, razão social ou CNPJ…"
+                    onSelected={() => {
+                      setTimeout(
+                        () => document.getElementById("pedido-representada")?.focus(),
+                        0
+                      );
+                    }}
+                    placeholder="Buscar por nome, razão social ou CNPJ… (Enter seleciona)"
                   />
                 </div>
                 <Link
@@ -681,13 +618,13 @@ export default function NovoPedido({
             </Field>
             <Field label="Representada" required>
               <Select
+                id="pedido-representada"
                 value={representadaId}
                 onChange={(e) => {
                   setRepresentadaId(e.target.value);
                   setTabelaId("");
                   setItens([]);
                   setCat(null);
-                  setQuickPick(null);
                   setBusca("");
                 }}
               >
@@ -760,94 +697,40 @@ export default function NovoPedido({
                   } else if (e.key === "Enter") {
                     e.preventDefault();
                     pegarBusca();
-                  } else if (e.key === "Tab" && !e.shiftKey && pickEntries.length > 0) {
-                    e.preventDefault();
-                    abrirModalNovo(pickEntries[hi] ?? pickEntries[0]);
                   } else if (e.key === "Escape") {
                     setBusca("");
                   }
                 }}
-                placeholder="SKU ou nome — Enter add rápido · Tab abre detalhes"
+                placeholder="SKU ou nome — ↑/↓ e Enter abre a tela do produto"
                 className="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10"
               />
-              {busca && !quickPick && pickEntries.length > 0 && (
+              {busca && pickEntries.length > 0 && (
                 <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white shadow-lg">
                   {pickEntries.map((e, i) => (
-                    <div
+                    <button
                       key={e.key}
+                      type="button"
                       onMouseEnter={() => setHi(i)}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-sm ${
+                      onClick={() => abrirModalNovo(e)}
+                      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm ${
                         i === hi ? "bg-brand/10" : "hover:bg-neutral-50"
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setQuickPick(e);
-                          setQuickQty("1");
-                        }}
-                        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
-                      >
-                        <span className="min-w-0 truncate">
-                          <span className="font-mono text-xs text-neutral-500">{e.sku}</span>{" "}
-                          <span className="text-neutral-800">{e.label}</span>
-                        </span>
-                        <span className="shrink-0 text-xs text-neutral-500">
-                          {e.preco != null ? formatBRL(e.preco) : "sem preço"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => abrirModalNovo(e)}
-                        title="Detalhes (tabela, descontos, preço líquido)"
-                        aria-label="Abrir detalhes do item"
-                        className="shrink-0 rounded-md p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
-                      >
-                        <SlidersHorizontal size={14} />
-                      </button>
-                    </div>
+                      <span className="min-w-0 truncate">
+                        <span className="font-mono text-xs text-neutral-500">{e.sku}</span>{" "}
+                        <span className="text-neutral-800">{e.label}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-neutral-500">
+                        {e.preco != null ? formatBRL(e.preco) : "sem preço"}
+                      </span>
+                    </button>
                   ))}
                 </div>
               )}
-              {busca && !quickPick && pickEntries.length === 0 && (
+              {busca && pickEntries.length === 0 && (
                 <p className="mt-1 text-xs text-neutral-400">Nenhum produto para “{busca}”.</p>
               )}
             </div>
-
-            {quickPick && (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-sm">
-                <span className="font-mono text-xs text-neutral-500">{quickPick.sku}</span>
-                <span className="min-w-0 flex-1 truncate text-neutral-800">{quickPick.label}</span>
-                <span className="text-neutral-500">Qtd</span>
-                <input
-                  ref={qtyRef}
-                  value={quickQty}
-                  onChange={(e) => setQuickQty(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      confirmarQuick();
-                    } else if (e.key === "Escape") {
-                      e.preventDefault();
-                      cancelarQuick();
-                    }
-                  }}
-                  inputMode="numeric"
-                  className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
-                />
-                <Button type="button" size="sm" onClick={confirmarQuick}>
-                  <Plus size={14} /> Adicionar
-                </Button>
-                <button
-                  type="button"
-                  onClick={cancelarQuick}
-                  className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-                  aria-label="Cancelar"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            )}
 
             <TableScroll>
               <Table>

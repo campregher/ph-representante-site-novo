@@ -133,6 +133,9 @@ async function buildPedidoDoc(
       qtd: Number(it.quantidade),
       preco: Number(it.preco_tabela),
       descPct: Number(it.desconto_item_percentual),
+      cascata: Array.isArray(it.desconto_cascata)
+        ? it.desconto_cascata.map(Number).filter((n) => n > 0)
+        : [],
       precoFinal:
         Number(it.preco_unitario_final) ||
         Number(it.preco_tabela) * (1 - (Number(it.desconto_item_percentual) || 0) / 100),
@@ -141,9 +144,17 @@ async function buildPedidoDoc(
     subtotal: Number(p.subtotal),
     descontoPct: Number(p.desconto_percentual),
     descontoValor: Number(p.desconto_valor),
+    descontoCascata: Array.isArray(p.desconto_cascata)
+      ? p.desconto_cascata.map(Number).filter((n) => n > 0)
+      : [],
     total: Number(p.valor_total),
     observacaoCliente: p.observacao_cliente,
   };
+}
+
+/** "50+6,66+4" a partir de [50, 6.66, 4] */
+export function cascataLabel(cascata: number[] | null | undefined): string {
+  return (cascata ?? []).map((c) => String(c).replace(".", ",")).join("+");
 }
 
 /** Versão texto (para "Copiar pedido"). */
@@ -164,17 +175,25 @@ export function pedidoDocToText(d: PedidoPDFData): string {
   L.push("");
   L.push("*Itens:*");
   for (const it of d.itens) {
-    L.push(
-      `• ${it.sku} — ${it.descricao} | ${it.qtd} x ${formatBRL(it.preco)}` +
-        (it.descPct > 0
+    const descTxt =
+      it.cascata && it.cascata.length > 1
+        ? ` (-${cascataLabel(it.cascata)} = ${formatPercent(it.descPct)} = ${formatBRL(it.precoFinal)}/un)`
+        : it.descPct > 0
           ? ` (-${formatPercent(it.descPct)} = ${formatBRL(it.precoFinal)}/un)`
-          : "") +
-        ` = ${formatBRL(it.total)}`
+          : "";
+    L.push(
+      `• ${it.sku} — ${it.descricao} | ${it.qtd} x ${formatBRL(it.preco)}${descTxt} = ${formatBRL(it.total)}`
     );
   }
   L.push("");
   L.push(`Subtotal: ${formatBRL(d.subtotal)}`);
-  L.push(`Desconto adicional (${formatPercent(d.descontoPct)}): -${formatBRL(d.descontoValor)}`);
+  L.push(
+    `Desconto adicional (${
+      d.descontoCascata && d.descontoCascata.length > 1
+        ? `${cascataLabel(d.descontoCascata)} = `
+        : ""
+    }${formatPercent(d.descontoPct)}): -${formatBRL(d.descontoValor)}`
+  );
   L.push(`*TOTAL: ${formatBRL(d.total)}*`);
   if (d.observacaoCliente) {
     L.push("");

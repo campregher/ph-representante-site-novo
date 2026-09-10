@@ -273,6 +273,11 @@ export default async function PedidoDetailPage({
                       <Td className="text-right">{formatBRL(it.preco)}</Td>
                       <Td className="text-right">
                         {it.descPct > 0 ? formatPercent(it.descPct) : "—"}
+                        {it.cascata && it.cascata.length > 1 && (
+                          <div className="text-[11px] text-neutral-400">
+                            {it.cascata.map((c) => String(c).replace(".", ",")).join("+")}
+                          </div>
+                        )}
                       </Td>
                       <Td className="text-right">{formatBRL(it.precoFinal)}</Td>
                       <Td className="text-right font-medium">{formatBRL(it.total)}</Td>
@@ -289,7 +294,11 @@ export default async function PedidoDetailPage({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">
-                    Desconto adicional ({formatPercent(Number(p.desconto_percentual))})
+                    Desconto adicional (
+                    {Array.isArray(p.desconto_cascata) && p.desconto_cascata.length > 1
+                      ? `${p.desconto_cascata.map((c) => String(c).replace(".", ",")).join("+")} = `
+                      : ""}
+                    {formatPercent(Number(p.desconto_percentual))})
                   </span>
                   <span className="text-red-600">− {formatBRL(Number(p.desconto_valor))}</span>
                 </div>

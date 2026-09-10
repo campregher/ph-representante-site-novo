@@ -163,6 +163,7 @@ export interface Cliente {
   status: "prospect" | "ativo" | "inativo" | "bloqueado" | "reativacao";
   data_ultima_compra: string | null;
   is_seller: boolean;
+  desconto_cascata: number[];
   observacoes: string | null;
   created_at: string;
   updated_at: string;
@@ -206,6 +207,7 @@ export interface Pedido {
   subtotal: number;
   desconto_percentual: number;
   desconto_valor: number;
+  desconto_cascata: number[];
   valor_total: number;
   condicao_pagamento: string | null;
   forma_pagamento: string | null;
@@ -229,6 +231,7 @@ export interface PedidoItem {
   quantidade: number;
   preco_tabela: number;
   desconto_item_percentual: number;
+  desconto_cascata: number[];
   desconto_item_valor: number;
   preco_unitario_final: number;
   valor_total: number;

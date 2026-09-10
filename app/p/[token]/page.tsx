@@ -113,6 +113,11 @@ export default async function PedidoPublicoPage({
                   <td className="py-1.5 pr-2 text-right">{formatBRL(it.preco)}</td>
                   <td className="py-1.5 pr-2 text-right">
                     {it.descPct > 0 ? formatPercent(it.descPct) : "—"}
+                    {it.cascata && it.cascata.length > 1 && (
+                      <div className="text-[11px] text-neutral-400">
+                        {it.cascata.map((c) => String(c).replace(".", ",")).join("+")}
+                      </div>
+                    )}
                   </td>
                   <td className="py-1.5 pr-2 text-right">{formatBRL(it.precoFinal)}</td>
                   <td className="py-1.5 text-right font-medium">{formatBRL(it.total)}</td>
@@ -130,7 +135,11 @@ export default async function PedidoPublicoPage({
             </div>
             <div className="flex justify-between">
               <span className="text-neutral-500">
-                Desconto adicional ({formatPercent(d.descontoPct)})
+                Desconto adicional (
+                {d.descontoCascata && d.descontoCascata.length > 1
+                  ? `${d.descontoCascata.map((c) => String(c).replace(".", ",")).join("+")} = `
+                  : ""}
+                {formatPercent(d.descontoPct)})
               </span>
               <span className="text-red-600">− {formatBRL(d.descontoValor)}</span>
             </div>

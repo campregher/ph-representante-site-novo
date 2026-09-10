@@ -1,15 +1,17 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { clienteSchema, type ClienteInput } from "@/lib/sistema/schemas";
+import { parseCascata, cascataEfetiva } from "@/lib/sistema/pedido-calc";
 import { saveCliente } from "@/lib/sistema/actions/clientes";
 import { CLIENTE_STATUS_OPTIONS, UF_LIST, type Cliente } from "@/lib/sistema/types";
 import { Field, Input, Textarea, Select, FormGrid } from "@/components/sistema/ui/Field";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
+import CascataFields from "@/components/sistema/pedidos/CascataFields";
 import FormActions from "@/components/sistema/FormActions";
 import CnpjLookup from "@/components/sistema/CnpjLookup";
 import type { CnpjData } from "@/lib/sistema/cnpj";
@@ -25,6 +27,11 @@ export default function ClienteForm({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [casc, setCasc] = useState<string[]>(() => {
+    const a = initial?.desconto_cascata ?? [];
+    return [0, 1, 2, 3].map((i) => (a[i] != null ? String(a[i]).replace(".", ",") : ""));
+  });
+  const cascNums = parseCascata(casc);
 
   const {
     register,
@@ -57,9 +64,16 @@ export default function ClienteForm({
           limite_credito: initial.limite_credito ?? "",
           status: initial.status,
           is_seller: initial.is_seller ?? false,
+          desconto_cascata: initial.desconto_cascata ?? [],
           observacoes: initial.observacoes ?? "",
         }
-      : { tipo_pessoa: "juridica", status: "prospect", vendedor_id: "", is_seller: false },
+      : {
+          tipo_pessoa: "juridica",
+          status: "prospect",
+          vendedor_id: "",
+          is_seller: false,
+          desconto_cascata: [],
+        },
   });
 
   const tipo = (useWatch({ control, name: "tipo_pessoa" }) ?? "juridica") as string;
@@ -88,7 +102,10 @@ export default function ClienteForm({
 
   function onSubmit(values: ClienteInput) {
     startTransition(async () => {
-      const res = await saveCliente(initial?.id ?? null, values);
+      const res = await saveCliente(initial?.id ?? null, {
+        ...values,
+        desconto_cascata: cascNums,
+      });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -183,6 +200,22 @@ export default function ClienteForm({
             />
             Seller (revendedor da linha própria — pode receber pedidos drop)
           </label>
+
+          <Field
+            label="Desconto padrão (cascata %)"
+            hint="Aplicados um sobre o outro nos pedidos deste cliente. Ex.: 50 · 6,66 · 4"
+            className="mt-4"
+          >
+            <div className="max-w-xs">
+              <CascataFields value={casc} onChange={setCasc} />
+              {cascNums.length > 0 && (
+                <p className="mt-1 text-xs text-neutral-400">
+                  {cascNums.map((n) => String(n).replace(".", ",")).join(" + ")} = efetivo{" "}
+                  <strong>{cascataEfetiva(cascNums).toFixed(2)}%</strong>
+                </p>
+              )}
+            </div>
+          </Field>
         </CardBody>
       </Card>
 

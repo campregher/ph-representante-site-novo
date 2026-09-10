@@ -12,6 +12,10 @@ import { CONDICAO_PAGAMENTO_OPTIONS } from "@/lib/sistema/types";
 import { Card, CardBody, CardHeader } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
 import Combobox from "@/components/sistema/ui/Combobox";
+import ImportarItensPedido, {
+  type ResolvedRef,
+  type ItemImportado,
+} from "@/components/sistema/pedidos/ImportarItensPedido";
 import { Field, Input, Select, Textarea, FormGrid } from "@/components/sistema/ui/Field";
 import {
   TableScroll,
@@ -214,6 +218,67 @@ export default function NovoPedido({
     }
     return out.slice(0, 50);
   }, [cat, busca, itens]);
+
+  // Índice SKU -> referência do catálogo (para importação de itens por planilha)
+  const skuIndex = useMemo<Map<string, ResolvedRef>>(() => {
+    const m = new Map<string, ResolvedRef>();
+    if (!cat) return m;
+    for (const p of cat.produtos) {
+      const vs = cat.variacoes[p.id] ?? [];
+      if (p.tem_variacoes && vs.length > 0) {
+        // SKU do pai fica ambíguo; cada variação entra pelo seu SKU
+        if (p.sku) m.set(p.sku.toLowerCase(), { produto_id: p.id, variacao_id: null, sku: p.sku, nome: p.nome, preco: null, ambiguo: true });
+        for (const v of vs) {
+          m.set(v.sku.toLowerCase(), {
+            produto_id: p.id,
+            variacao_id: v.id,
+            sku: v.sku,
+            nome: `${p.nome} — ${atributosLabel(v.atributos)}`,
+            preco: cat.precos[v.id]?.preco ?? null,
+          });
+        }
+      } else {
+        m.set(p.sku.toLowerCase(), {
+          produto_id: p.id,
+          variacao_id: null,
+          sku: p.sku,
+          nome: p.nome,
+          preco: cat.precos[p.id]?.preco ?? null,
+        });
+      }
+    }
+    return m;
+  }, [cat]);
+
+  const skusNoPedido = useMemo(
+    () => new Set(itens.map((i) => i.sku.toLowerCase())),
+    [itens]
+  );
+
+  function importarItens(novos: ItemImportado[]) {
+    setItens((prev) => {
+      const next = [...prev];
+      for (const n of novos) {
+        const idx = next.findIndex(
+          (it) => itemKey(it) === (n.variacao_id ?? n.produto_id)
+        );
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], quantidade: next[idx].quantidade + n.quantidade };
+        } else {
+          next.push({
+            produto_id: n.produto_id,
+            variacao_id: n.variacao_id,
+            sku: n.sku,
+            nome: n.nome,
+            quantidade: n.quantidade > 0 ? n.quantidade : 1,
+            preco_tabela: n.preco,
+            desconto_item_percentual: 0,
+          });
+        }
+      }
+      return next;
+    });
+  }
 
   function addEntry(e: PickEntry, qtd = 1) {
     setItens((prev) => [
@@ -474,7 +539,18 @@ export default function NovoPedido({
 
       {representadaId && (
         <Card>
-          <CardHeader title="Produtos" />
+          <CardHeader
+            title="Produtos"
+            action={
+              cat ? (
+                <ImportarItensPedido
+                  skuIndex={skuIndex}
+                  skusNoPedido={skusNoPedido}
+                  onImport={importarItens}
+                />
+              ) : null
+            }
+          />
           <CardBody className="space-y-3">
             <div className="relative">
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />

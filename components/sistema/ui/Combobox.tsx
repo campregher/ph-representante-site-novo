@@ -6,6 +6,8 @@ import { Search, X } from "lucide-react";
 export interface ComboOption {
   id: string;
   label: string;
+  /** texto extra pesquisável (ex.: razão social, CNPJ) além do label */
+  keywords?: string;
 }
 
 export default function Combobox({
@@ -30,7 +32,13 @@ export default function Combobox({
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const base = s ? options.filter((o) => o.label.toLowerCase().includes(s)) : options;
+    if (!s) return options.slice(0, limit);
+    const digits = s.replace(/\D/g, "");
+    const base = options.filter((o) => {
+      const hay = `${o.label} ${o.keywords ?? ""}`.toLowerCase();
+      if (hay.includes(s)) return true;
+      return digits.length >= 2 && hay.replace(/\D/g, "").includes(digits);
+    });
     return base.slice(0, limit);
   }, [q, options, limit]);
 

@@ -81,19 +81,31 @@ export async function listVendedorOptions(): Promise<{ id: string; label: string
     .map((p) => ({ id: p.id as string, label: (p.nome as string) || (p.email as string) }));
 }
 
-/** Clientes para <select> (respeita RLS: vendedor vê só os seus). */
-export async function listClienteOptions(): Promise<{ id: string; label: string }[]> {
+/** Clientes para <select> / Combobox (respeita RLS: vendedor vê só os seus).
+ *  `keywords` permite buscar por nome fantasia, razão social ou CNPJ/CPF. */
+export async function listClienteOptions(): Promise<
+  { id: string; label: string; keywords: string }[]
+> {
   const supabase = await createSistemaClient();
   const { data } = await supabase
     .from("clientes")
-    .select("id, nome_fantasia, razao_social, status")
+    .select("id, nome_fantasia, razao_social, cnpj, cpf, status")
     .neq("status", "bloqueado")
     .order("nome_fantasia", { ascending: true, nullsFirst: false })
     .limit(2000);
-  return (data ?? []).map((c) => ({
-    id: c.id as string,
-    label: (c.nome_fantasia as string) || (c.razao_social as string) || "—",
-  }));
+  return (data ?? []).map((c) => {
+    const fantasia = (c.nome_fantasia as string) || "";
+    const razao = (c.razao_social as string) || "";
+    const cnpj = (c.cnpj as string) || "";
+    const cpf = (c.cpf as string) || "";
+    const doc = cnpj || cpf;
+    const label = fantasia || razao || "—";
+    return {
+      id: c.id as string,
+      label: razao && fantasia && razao !== fantasia ? `${fantasia} — ${razao}` : label,
+      keywords: [fantasia, razao, doc, doc.replace(/\D/g, "")].filter(Boolean).join(" "),
+    };
+  });
 }
 
 export async function profileLabelMap(): Promise<Map<string, string>> {

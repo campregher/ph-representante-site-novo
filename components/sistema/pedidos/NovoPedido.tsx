@@ -31,6 +31,7 @@ import {
 interface Opt {
   id: string;
   label: string;
+  keywords?: string;
 }
 interface CatProduto {
   id: string;
@@ -496,7 +497,7 @@ export default function NovoPedido({
                     value={clienteId}
                     options={clienteOptions}
                     onChange={setClienteId}
-                    placeholder="Buscar cliente por nome…"
+                    placeholder="Buscar por nome, razão social ou CNPJ…"
                   />
                 </div>
                 <Link

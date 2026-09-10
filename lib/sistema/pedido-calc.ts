@@ -6,10 +6,13 @@ export interface CalcItemInput {
   desconto_item_percentual: number;
   /** Descontos sucessivos, em %. Ex.: [50, 6.66, 4]. Tem prioridade sobre desconto_item_percentual. */
   desconto_cascata?: number[] | null;
+  /** Preço unitário final digitado à mão. Quando > 0, ignora descontos. */
+  preco_liquido_manual?: number | null;
 }
 
 export interface CalcItemResult extends CalcItemInput {
   desconto_cascata: number[];
+  preco_liquido_manual: number | null;
   preco_unitario_final: number;
   desconto_item_valor: number;
   valor_total: number;
@@ -55,11 +58,19 @@ export function cascataEfetiva(cascata: number[]): number {
 export function calcItem(item: CalcItemInput): CalcItemResult {
   const qtd = Number(item.quantidade) || 0;
   const base = Number(item.preco_tabela) || 0;
-  const cascata = normalizarCascata(item.desconto_cascata);
+  const manual =
+    item.preco_liquido_manual != null && Number(item.preco_liquido_manual) >= 0
+      ? round2(Number(item.preco_liquido_manual))
+      : null;
+  let cascata = normalizarCascata(item.desconto_cascata);
 
   let pct: number;
   let unitFinal: number;
-  if (cascata.length > 0) {
+  if (manual != null) {
+    cascata = [];
+    unitFinal = manual;
+    pct = base > 0 ? round2((1 - unitFinal / base) * 100) : 0;
+  } else if (cascata.length > 0) {
     unitFinal = aplicarCascata(base, cascata);
     pct = base > 0 ? round2((1 - unitFinal / base) * 100) : cascataEfetiva(cascata);
   } else {
@@ -73,6 +84,7 @@ export function calcItem(item: CalcItemInput): CalcItemResult {
     preco_tabela: base,
     desconto_item_percentual: pct,
     desconto_cascata: cascata,
+    preco_liquido_manual: manual,
     preco_unitario_final: unitFinal,
     desconto_item_valor: round2(descValorUnit * qtd),
     valor_total: round2(unitFinal * qtd),

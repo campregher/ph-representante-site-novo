@@ -208,6 +208,7 @@ export interface PedidoPDFData {
     preco: number;
     descPct: number;
     cascata?: number[];
+    precoManual?: boolean;
     precoFinal: number;
     total: number;
   }[];
@@ -322,6 +323,11 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
                   <View style={[s.tdDescCell, s.cDesc]}>
                     <Text style={s.tdDescMain}>{pct(it.descPct)}</Text>
                     <Text style={s.tdMini}>{cascataTxt(it.cascata)}</Text>
+                  </View>
+                ) : it.precoManual ? (
+                  <View style={[s.tdDescCell, s.cDesc]}>
+                    <Text style={s.tdDescMain}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+                    <Text style={s.tdMini}>preço manual</Text>
                   </View>
                 ) : (
                   <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>

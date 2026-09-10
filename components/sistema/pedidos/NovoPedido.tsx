@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Search, AlertTriangle, Pencil, SlidersHorizontal } from "lucide-react";
 import { formatBRL } from "@/lib/sistema/format";
 import { calcPedido, parseCascata } from "@/lib/sistema/pedido-calc";
 import { salvarPedido, alterarStatusPedido } from "@/lib/sistema/actions/pedidos";
@@ -13,6 +13,7 @@ import { Card, CardBody, CardHeader } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
 import Combobox from "@/components/sistema/ui/Combobox";
 import CascataFields from "@/components/sistema/pedidos/CascataFields";
+import ItemModal, { type ItemModalValue } from "@/components/sistema/pedidos/ItemModal";
 import ImportarItensPedido, {
   type ResolvedRef,
   type ItemImportado,
@@ -55,6 +56,7 @@ interface Catalogo {
   tabelaPadrao: string | null;
   descontoCascataCliente?: number[];
   precos: Record<string, { preco: number; preco_minimo: number | null; desconto_maximo: number | null }>;
+  precosPorTabela?: Record<string, Record<string, { preco: number }>>;
 }
 
 interface Item {
@@ -66,6 +68,8 @@ interface Item {
   preco_tabela: number;
   desconto_item_percentual: number;
   desconto_cascata: number[];
+  preco_liquido_manual: number | null;
+  tabela_preco_id: string | null;
 }
 
 /** number[] -> 4 campos de texto ("50", "6,66", "", "") para os inputs. */
@@ -135,6 +139,10 @@ export default function NovoPedido({
   const [hi, setHi] = useState(0); // linha destacada no dropdown
   const [quickPick, setQuickPick] = useState<PickEntry | null>(null);
   const [quickQty, setQuickQty] = useState("1");
+  // modal de item detalhado (estilo Mercos)
+  const [modal, setModal] = useState<
+    { mode: "new"; entry: PickEntry } | { mode: "edit"; key: string } | null
+  >(null);
   const buscaRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const [descModo, setDescModo] = useState<"percentual" | "valor">("percentual");
@@ -185,10 +193,15 @@ export default function NovoPedido({
           setCascPedido(toStr4(data.descontoCascataCliente));
         }
         setItens((prev) =>
-          prev.map((it) => ({
-            ...it,
-            preco_tabela: data.precos[itemKey(it)]?.preco ?? it.preco_tabela,
-          }))
+          prev.map((it) => {
+            if (it.preco_liquido_manual != null) return it;
+            const src =
+              (it.tabela_preco_id && data.precosPorTabela?.[it.tabela_preco_id]) || data.precos;
+            return {
+              ...it,
+              preco_tabela: src[itemKey(it)]?.preco ?? it.preco_tabela,
+            };
+          })
         );
       } finally {
         if (!cancelled) setLoadingCat(false);
@@ -304,6 +317,8 @@ export default function NovoPedido({
             preco_tabela: n.preco,
             desconto_item_percentual: 0,
             desconto_cascata: [],
+            preco_liquido_manual: null,
+            tabela_preco_id: null,
           });
         }
       }
@@ -332,6 +347,8 @@ export default function NovoPedido({
           preco_tabela: e.preco ?? 0,
           desconto_item_percentual: 0,
           desconto_cascata: [],
+          preco_liquido_manual: null,
+          tabela_preco_id: null,
         },
       ];
     });
@@ -379,6 +396,77 @@ export default function NovoPedido({
     setItens((prev) => prev.filter((it) => itemKey(it) !== key));
   }
 
+  /** Preço de tabela de uma entrada/linha para uma dada tabela (null = tabela do pedido). */
+  function precoBase(entryKey: string, tid: string | null): number {
+    if (!cat) return 0;
+    const src = (tid && cat.precosPorTabela?.[tid]) || cat.precos;
+    return src?.[entryKey]?.preco ?? 0;
+  }
+
+  const tabelasAtivasParaModal = useMemo(
+    () => (cat?.tabelas ?? []).map((t) => ({ id: t.id, nome: t.nome, ativa: t.ativa })),
+    [cat]
+  );
+
+  /** Abre o modal detalhado para um resultado da busca. */
+  function abrirModalNovo(e: PickEntry) {
+    setModal({ mode: "new", entry: e });
+    setBusca("");
+    setQuickPick(null);
+  }
+
+  function fecharModal() {
+    setModal(null);
+    setTimeout(() => buscaRef.current?.focus(), 0);
+  }
+
+  function confirmarModal(v: ItemModalValue) {
+    if (!modal) return;
+    if (modal.mode === "new") {
+      const e = modal.entry;
+      const key = e.variacao?.id ?? e.produto.id;
+      const base = precoBase(key, v.tabela_preco_id ?? tabelaId ?? null);
+      setItens((prev) => {
+        const idx = prev.findIndex((it) => itemKey(it) === key);
+        const novo: Item = {
+          produto_id: e.produto.id,
+          variacao_id: e.variacao?.id ?? null,
+          sku: e.sku,
+          nome: e.label,
+          quantidade: v.quantidade,
+          preco_tabela: base,
+          desconto_item_percentual: 0,
+          desconto_cascata: v.desconto_cascata,
+          preco_liquido_manual: v.preco_liquido_manual,
+          tabela_preco_id: v.tabela_preco_id,
+        };
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...novo, quantidade: next[idx].quantidade + v.quantidade };
+          return next;
+        }
+        return [...prev, novo];
+      });
+    } else {
+      const key = modal.key;
+      setItens((prev) =>
+        prev.map((it) => {
+          if (itemKey(it) !== key) return it;
+          const base = precoBase(key, v.tabela_preco_id ?? tabelaId ?? null);
+          return {
+            ...it,
+            quantidade: v.quantidade,
+            tabela_preco_id: v.tabela_preco_id,
+            desconto_cascata: v.desconto_cascata,
+            preco_liquido_manual: v.preco_liquido_manual,
+            preco_tabela: v.preco_liquido_manual != null ? it.preco_tabela : base,
+          };
+        })
+      );
+    }
+    fecharModal();
+  }
+
   const calc = useMemo(
     () =>
       calcPedido({
@@ -387,6 +475,7 @@ export default function NovoPedido({
           preco_tabela: Number(i.preco_tabela) || 0,
           desconto_item_percentual: Number(i.desconto_item_percentual) || 0,
           desconto_cascata: i.desconto_cascata,
+          preco_liquido_manual: i.preco_liquido_manual,
         })),
         desconto_modo: descModo,
         desconto_input: Number(descInput.replace(",", ".")) || 0,
@@ -432,6 +521,8 @@ export default function NovoPedido({
         preco_tabela: Number(i.preco_tabela) || 0,
         desconto_item_percentual: Number(i.desconto_item_percentual) || 0,
         desconto_cascata: Array.isArray(i.desconto_cascata) ? i.desconto_cascata : [],
+        preco_liquido_manual: i.preco_liquido_manual ?? null,
+        tabela_preco_id: i.tabela_preco_id ?? null,
       })),
     };
   }
@@ -625,36 +716,52 @@ export default function NovoPedido({
                   } else if (e.key === "Enter") {
                     e.preventDefault();
                     pegarBusca();
+                  } else if (e.key === "Tab" && !e.shiftKey && pickEntries.length > 0) {
+                    e.preventDefault();
+                    abrirModalNovo(pickEntries[hi] ?? pickEntries[0]);
                   } else if (e.key === "Escape") {
                     setBusca("");
                   }
                 }}
-                placeholder="SKU ou nome — Enter escolhe, digita a qtd, Enter adiciona"
+                placeholder="SKU ou nome — Enter add rápido · Tab abre detalhes"
                 className="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10"
               />
               {busca && !quickPick && pickEntries.length > 0 && (
                 <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white shadow-lg">
                   {pickEntries.map((e, i) => (
-                    <button
+                    <div
                       key={e.key}
-                      type="button"
-                      onClick={() => {
-                        setQuickPick(e);
-                        setQuickQty("1");
-                      }}
                       onMouseEnter={() => setHi(i)}
-                      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm ${
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-sm ${
                         i === hi ? "bg-brand/10" : "hover:bg-neutral-50"
                       }`}
                     >
-                      <span>
-                        <span className="font-mono text-xs text-neutral-500">{e.sku}</span>{" "}
-                        <span className="text-neutral-800">{e.label}</span>
-                      </span>
-                      <span className="text-xs text-neutral-500">
-                        {e.preco != null ? formatBRL(e.preco) : "sem preço"}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickPick(e);
+                          setQuickQty("1");
+                        }}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                      >
+                        <span className="min-w-0 truncate">
+                          <span className="font-mono text-xs text-neutral-500">{e.sku}</span>{" "}
+                          <span className="text-neutral-800">{e.label}</span>
+                        </span>
+                        <span className="shrink-0 text-xs text-neutral-500">
+                          {e.preco != null ? formatBRL(e.preco) : "sem preço"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => abrirModalNovo(e)}
+                        title="Detalhes (tabela, descontos, preço líquido)"
+                        aria-label="Abrir detalhes do item"
+                        className="shrink-0 rounded-md p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+                      >
+                        <SlidersHorizontal size={14} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -705,24 +812,37 @@ export default function NovoPedido({
                     <Th>Produto</Th>
                     <Th className="text-right">Qtd</Th>
                     <Th className="text-right">Preço tabela</Th>
-                    <Th className="text-right">Descontos % (cascata)</Th>
-                    <Th className="text-right">Unit. c/ desc.</Th>
+                    <Th className="text-right">Desconto</Th>
+                    <Th className="text-right">Unit. líq.</Th>
                     <Th className="text-right">Total</Th>
                     <Th />
                   </Tr>
                 </Thead>
                 <Tbody>
                   {itens.length === 0 ? (
-                    <TableEmpty colSpan={7}>Use a busca acima para adicionar produtos.</TableEmpty>
+                    <TableEmpty colSpan={7}>
+                      Busque acima — Enter adiciona rápido, Tab abre os detalhes (tabela, descontos,
+                      preço líquido).
+                    </TableEmpty>
                   ) : (
                     itens.map((it, idx) => {
                       const ci = calc.itens[idx];
                       const key = itemKey(it);
+                      const tabLinha = it.tabela_preco_id
+                        ? cat?.tabelas.find((t) => t.id === it.tabela_preco_id)?.nome
+                        : null;
+                      const precoManual = it.preco_liquido_manual != null;
+                      const precoEditavel = !it.tabela_preco_id && !tabelaId && !precoManual;
                       return (
                         <Tr key={key}>
                           <Td>
                             <span className="font-mono text-xs text-neutral-500">{it.sku}</span>
                             <div className="text-neutral-800">{it.nome}</div>
+                            {tabLinha && (
+                              <span className="mt-0.5 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500">
+                                tabela: {tabLinha}
+                              </span>
+                            )}
                           </Td>
                           <Td className="text-right">
                             <input
@@ -735,34 +855,47 @@ export default function NovoPedido({
                             />
                           </Td>
                           <Td className="text-right">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={it.preco_tabela}
-                              onChange={(e) => updateItem(key, { preco_tabela: Number(e.target.value) })}
-                              className="w-24 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
-                              disabled={!!tabelaId}
-                            />
-                          </Td>
-                          <Td className="text-right align-top">
-                            <div className="inline-flex flex-col items-end gap-0.5">
-                              <CascataFields
-                                compact
-                                value={toStr4(it.desconto_cascata)}
-                                onChange={(v) =>
-                                  updateItem(key, {
-                                    desconto_cascata: parseCascata(v),
-                                    desconto_item_percentual: 0,
-                                  })
+                            {precoEditavel ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={it.preco_tabela}
+                                onChange={(e) =>
+                                  updateItem(key, { preco_tabela: Number(e.target.value) })
                                 }
+                                className="w-24 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
                               />
-                              {ci && ci.desconto_item_percentual > 0 && (
-                                <span className="text-[11px] text-neutral-400">
-                                  = {ci.desconto_item_percentual.toFixed(2)}%
-                                </span>
-                              )}
-                            </div>
+                            ) : (
+                              <span className="tabular-nums">
+                                {formatBRL(Number(it.preco_tabela) || 0)}
+                              </span>
+                            )}
+                          </Td>
+                          <Td className="text-right tabular-nums">
+                            {precoManual ? (
+                              <span className="text-neutral-500">
+                                manual
+                                {ci && ci.desconto_item_percentual > 0 && (
+                                  <div className="text-[11px] text-neutral-400">
+                                    = {ci.desconto_item_percentual.toFixed(2)}%
+                                  </div>
+                                )}
+                              </span>
+                            ) : ci && ci.desconto_item_percentual > 0 ? (
+                              <span>
+                                {ci.desconto_item_percentual.toFixed(2)}%
+                                {it.desconto_cascata.length > 1 && (
+                                  <div className="text-[11px] text-neutral-400">
+                                    {it.desconto_cascata
+                                      .map((n) => String(n).replace(".", ","))
+                                      .join("+")}
+                                  </div>
+                                )}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
                           </Td>
                           <Td className="text-right tabular-nums">
                             {formatBRL(ci?.preco_unitario_final ?? (Number(it.preco_tabela) || 0))}
@@ -774,13 +907,23 @@ export default function NovoPedido({
                           </Td>
                           <Td className="text-right font-medium">{formatBRL(ci?.valor_total ?? 0)}</Td>
                           <Td className="text-right">
-                            <button
-                              type="button"
-                              onClick={() => removeItem(key)}
-                              className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-red-600"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setModal({ mode: "edit", key })}
+                                title="Editar item (tabela, descontos, preço líquido)"
+                                className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-brand"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeItem(key)}
+                                className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-red-600"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </Td>
                         </Tr>
                       );
@@ -921,6 +1064,45 @@ export default function NovoPedido({
           Cancelar
         </Button>
       </div>
+
+      {modal &&
+        (() => {
+          const tabs = tabelasAtivasParaModal;
+          if (modal.mode === "new") {
+            const e = modal.entry;
+            const ek = e.variacao?.id ?? e.produto.id;
+            return (
+              <ItemModal
+                titulo={e.label}
+                sku={e.sku}
+                tabelas={tabs}
+                defaultTabelaId={tabelaId || null}
+                precoBaseFor={(tid) => precoBase(ek, tid ?? tabelaId ?? null)}
+                onConfirm={confirmarModal}
+                onCancel={fecharModal}
+              />
+            );
+          }
+          const it = itens.find((x) => itemKey(x) === modal.key);
+          if (!it) return null;
+          return (
+            <ItemModal
+              titulo={it.nome}
+              sku={it.sku}
+              tabelas={tabs}
+              defaultTabelaId={tabelaId || null}
+              precoBaseFor={(tid) => precoBase(modal.key, tid ?? tabelaId ?? null)}
+              initial={{
+                quantidade: it.quantidade,
+                tabela_preco_id: it.tabela_preco_id,
+                desconto_cascata: it.desconto_cascata,
+                preco_liquido_manual: it.preco_liquido_manual,
+              }}
+              onConfirm={confirmarModal}
+              onCancel={fecharModal}
+            />
+          );
+        })()}
     </div>
   );
 }

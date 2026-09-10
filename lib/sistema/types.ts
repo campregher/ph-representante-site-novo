@@ -208,6 +208,7 @@ export interface Pedido {
   desconto_percentual: number;
   desconto_valor: number;
   desconto_cascata: number[];
+  acrescimo_cascata: number[];
   valor_total: number;
   condicao_pagamento: string | null;
   forma_pagamento: string | null;
@@ -232,8 +233,10 @@ export interface PedidoItem {
   preco_tabela: number;
   desconto_item_percentual: number;
   desconto_cascata: number[];
+  acrescimo_cascata: number[];
   preco_liquido_manual: number | null;
   tabela_preco_id: string | null;
+  observacao: string | null;
   desconto_item_valor: number;
   preco_unitario_final: number;
   valor_total: number;

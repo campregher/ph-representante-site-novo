@@ -4,7 +4,16 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, AlertTriangle, Pencil, SlidersHorizontal } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Search,
+  AlertTriangle,
+  Pencil,
+  SlidersHorizontal,
+  ArrowDown,
+  ArrowUp,
+} from "lucide-react";
 import { formatBRL } from "@/lib/sistema/format";
 import { calcPedido, parseCascata } from "@/lib/sistema/pedido-calc";
 import { salvarPedido, alterarStatusPedido } from "@/lib/sistema/actions/pedidos";
@@ -41,6 +50,11 @@ interface CatProduto {
   nome: string;
   aplicacao: string | null;
   tem_variacoes: boolean;
+  unidade?: string | null;
+  peso?: number | null;
+  altura?: number | null;
+  largura?: number | null;
+  comprimento?: number | null;
 }
 interface CatVariacao {
   id: string;
@@ -68,14 +82,33 @@ interface Item {
   preco_tabela: number;
   desconto_item_percentual: number;
   desconto_cascata: number[];
+  acrescimo_cascata: number[];
   preco_liquido_manual: number | null;
   tabela_preco_id: string | null;
+  observacao: string | null;
 }
+
+const num5 = (n: number) =>
+  new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 5 }).format(
+    Number(n) || 0
+  );
 
 /** number[] -> 4 campos de texto ("50", "6,66", "", "") para os inputs. */
 function toStr4(nums?: number[] | null): string[] {
   const a = Array.isArray(nums) ? nums : [];
   return [0, 1, 2, 3].map((i) => (a[i] != null ? String(a[i]).replace(".", ",") : ""));
+}
+
+/** "16x51x78" a partir das dimensões (cm) do produto, quando todas presentes. */
+function dimTexto(p?: CatProduto | null): string | null {
+  if (!p || p.altura == null || p.largura == null || p.comprimento == null) return null;
+  const f = (n: number) => String(Number(n)).replace(".", ",");
+  return `${f(p.altura)}x${f(p.largura)}x${f(p.comprimento)}`;
+}
+/** volume em m³ (dimensões em cm). */
+function volumeM3(p?: CatProduto | null): number | null {
+  if (!p || p.altura == null || p.largura == null || p.comprimento == null) return null;
+  return (Number(p.altura) * Number(p.largura) * Number(p.comprimento)) / 1_000_000;
 }
 
 /** Entrada "adicionável" na busca: produto sem variação, ou 1 por variação ativa. */
@@ -317,8 +350,10 @@ export default function NovoPedido({
             preco_tabela: n.preco,
             desconto_item_percentual: 0,
             desconto_cascata: [],
+            acrescimo_cascata: [],
             preco_liquido_manual: null,
             tabela_preco_id: null,
+            observacao: null,
           });
         }
       }
@@ -347,8 +382,10 @@ export default function NovoPedido({
           preco_tabela: e.preco ?? 0,
           desconto_item_percentual: 0,
           desconto_cascata: [],
+          acrescimo_cascata: [],
           preco_liquido_manual: null,
           tabela_preco_id: null,
+          observacao: null,
         },
       ];
     });
@@ -437,8 +474,10 @@ export default function NovoPedido({
           preco_tabela: base,
           desconto_item_percentual: 0,
           desconto_cascata: v.desconto_cascata,
+          acrescimo_cascata: v.acrescimo_cascata,
           preco_liquido_manual: v.preco_liquido_manual,
           tabela_preco_id: v.tabela_preco_id,
+          observacao: v.observacao,
         };
         if (idx >= 0) {
           const next = [...prev];
@@ -458,7 +497,9 @@ export default function NovoPedido({
             quantidade: v.quantidade,
             tabela_preco_id: v.tabela_preco_id,
             desconto_cascata: v.desconto_cascata,
+            acrescimo_cascata: v.acrescimo_cascata,
             preco_liquido_manual: v.preco_liquido_manual,
+            observacao: v.observacao,
             preco_tabela: v.preco_liquido_manual != null ? it.preco_tabela : base,
           };
         })
@@ -475,6 +516,7 @@ export default function NovoPedido({
           preco_tabela: Number(i.preco_tabela) || 0,
           desconto_item_percentual: Number(i.desconto_item_percentual) || 0,
           desconto_cascata: i.desconto_cascata,
+          acrescimo_cascata: i.acrescimo_cascata,
           preco_liquido_manual: i.preco_liquido_manual,
         })),
         desconto_modo: descModo,
@@ -521,8 +563,10 @@ export default function NovoPedido({
         preco_tabela: Number(i.preco_tabela) || 0,
         desconto_item_percentual: Number(i.desconto_item_percentual) || 0,
         desconto_cascata: Array.isArray(i.desconto_cascata) ? i.desconto_cascata : [],
+        acrescimo_cascata: Array.isArray(i.acrescimo_cascata) ? i.acrescimo_cascata : [],
         preco_liquido_manual: i.preco_liquido_manual ?? null,
         tabela_preco_id: i.tabela_preco_id ?? null,
+        observacao: i.observacao ?? null,
       })),
     };
   }
@@ -809,52 +853,67 @@ export default function NovoPedido({
               <Table>
                 <Thead>
                   <Tr>
-                    <Th>Produto</Th>
-                    <Th className="text-right">Qtd</Th>
-                    <Th className="text-right">Preço tabela</Th>
-                    <Th className="text-right">Desconto</Th>
-                    <Th className="text-right">Unit. líq.</Th>
-                    <Th className="text-right">Total</Th>
+                    <Th className="w-10" />
+                    <Th>Código</Th>
+                    <Th>Descrição</Th>
+                    <Th className="text-right">Qtde.</Th>
+                    <Th className="text-right">Preço tab.</Th>
+                    <Th className="text-right">Desc. / Acrés.</Th>
+                    <Th className="text-right">Preço líq.</Th>
+                    <Th className="text-right">Subtotal</Th>
                     <Th />
                   </Tr>
                 </Thead>
                 <Tbody>
                   {itens.length === 0 ? (
-                    <TableEmpty colSpan={7}>
+                    <TableEmpty colSpan={9}>
                       Busque acima — Enter adiciona rápido, Tab abre os detalhes (tabela, descontos,
-                      preço líquido).
+                      acréscimos, preço líquido).
                     </TableEmpty>
                   ) : (
                     itens.map((it, idx) => {
                       const ci = calc.itens[idx];
                       const key = itemKey(it);
+                      const prod = cat?.produtos.find((p) => p.id === it.produto_id) ?? null;
+                      const un = prod?.unidade || "UN";
                       const tabLinha = it.tabela_preco_id
                         ? cat?.tabelas.find((t) => t.id === it.tabela_preco_id)?.nome
                         : null;
                       const precoManual = it.preco_liquido_manual != null;
                       const precoEditavel = !it.tabela_preco_id && !tabelaId && !precoManual;
+                      const temPassos =
+                        it.desconto_cascata.length > 0 || it.acrescimo_cascata.length > 0;
                       return (
                         <Tr key={key}>
-                          <Td>
-                            <span className="font-mono text-xs text-neutral-500">{it.sku}</span>
-                            <div className="text-neutral-800">{it.nome}</div>
-                            {tabLinha && (
-                              <span className="mt-0.5 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500">
-                                tabela: {tabLinha}
-                              </span>
-                            )}
+                          <Td className="align-top">
+                            <div className="h-9 w-9 rounded border border-neutral-200 bg-neutral-100" />
                           </Td>
-                          <Td className="text-right">
+                          <Td className="align-top font-mono text-xs text-neutral-500">{it.sku}</Td>
+                          <Td className="align-top">
+                            <div className="text-neutral-800">{it.nome}</div>
+                            <div className="mt-0.5 flex flex-wrap gap-1">
+                              {tabLinha && (
+                                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-500">
+                                  tabela: {tabLinha}
+                                </span>
+                              )}
+                              {it.observacao && (
+                                <span className="text-[11px] text-neutral-400">{it.observacao}</span>
+                              )}
+                            </div>
+                          </Td>
+                          <Td className="whitespace-nowrap text-right align-top">
                             <input
                               type="number"
                               min="0"
                               step="1"
                               value={it.quantidade}
                               onChange={(e) => updateItem(key, { quantidade: Number(e.target.value) })}
-                              className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
+                              className="w-14 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
                             />
+                            <span className="ml-1 text-xs text-neutral-400">{un}</span>
                           </Td>
-                          <Td className="text-right">
+                          <Td className="text-right align-top">
                             {precoEditavel ? (
                               <input
                                 type="number"
@@ -872,46 +931,45 @@ export default function NovoPedido({
                               </span>
                             )}
                           </Td>
-                          <Td className="text-right tabular-nums">
+                          <Td className="text-right align-top">
                             {precoManual ? (
-                              <span className="text-neutral-500">
-                                manual
-                                {ci && ci.desconto_item_percentual > 0 && (
-                                  <div className="text-[11px] text-neutral-400">
-                                    = {ci.desconto_item_percentual.toFixed(2)}%
+                              <span className="text-xs text-neutral-500">preço manual</span>
+                            ) : temPassos ? (
+                              <div className="space-y-0.5 text-xs tabular-nums">
+                                {it.desconto_cascata.map((n, i) => (
+                                  <div key={`d${i}`} className="text-red-600">
+                                    {String(n).replace(".", ",")}%{" "}
+                                    <ArrowDown className="inline" size={11} />
                                   </div>
-                                )}
-                              </span>
+                                ))}
+                                {it.acrescimo_cascata.map((n, i) => (
+                                  <div key={`a${i}`} className="text-emerald-600">
+                                    {String(n).replace(".", ",")}%{" "}
+                                    <ArrowUp className="inline" size={11} />
+                                  </div>
+                                ))}
+                              </div>
                             ) : ci && ci.desconto_item_percentual > 0 ? (
-                              <span>
-                                {ci.desconto_item_percentual.toFixed(2)}%
-                                {it.desconto_cascata.length > 1 && (
-                                  <div className="text-[11px] text-neutral-400">
-                                    {it.desconto_cascata
-                                      .map((n) => String(n).replace(".", ","))
-                                      .join("+")}
-                                  </div>
-                                )}
+                              <span className="text-xs text-red-600">
+                                {ci.desconto_item_percentual.toFixed(2)}%{" "}
+                                <ArrowDown className="inline" size={11} />
                               </span>
                             ) : (
                               "—"
                             )}
                           </Td>
-                          <Td className="text-right tabular-nums">
-                            {formatBRL(ci?.preco_unitario_final ?? (Number(it.preco_tabela) || 0))}
-                            {ci && ci.desconto_item_percentual > 0 && (
-                              <div className="text-[11px] text-neutral-400">
-                                de {formatBRL(Number(it.preco_tabela) || 0)}
-                              </div>
-                            )}
+                          <Td className="text-right align-top tabular-nums">
+                            R$ {num5(ci?.preco_unitario_final ?? (Number(it.preco_tabela) || 0))}
                           </Td>
-                          <Td className="text-right font-medium">{formatBRL(ci?.valor_total ?? 0)}</Td>
-                          <Td className="text-right">
+                          <Td className="text-right align-top font-medium tabular-nums">
+                            {formatBRL(ci?.valor_total ?? 0)}
+                          </Td>
+                          <Td className="text-right align-top">
                             <div className="flex justify-end gap-1">
                               <button
                                 type="button"
                                 onClick={() => setModal({ mode: "edit", key })}
-                                title="Editar item (tabela, descontos, preço líquido)"
+                                title="Editar item"
                                 className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-brand"
                               >
                                 <Pencil size={14} />
@@ -932,6 +990,57 @@ export default function NovoPedido({
                 </Tbody>
               </Table>
             </TableScroll>
+
+            {itens.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-2 border-t border-neutral-200 pt-3 text-sm">
+                <div>
+                  <div className="text-neutral-500">Itens no pedido</div>
+                  <div className="font-semibold text-neutral-900">{itens.length}</div>
+                </div>
+                <div>
+                  <div className="text-neutral-500">Quantidade total</div>
+                  <div className="font-semibold text-neutral-900">
+                    {itens.reduce((s, i) => s + (Number(i.quantidade) || 0), 0)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-500">Peso bruto total</div>
+                  <div className="font-semibold text-neutral-900">
+                    {new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(
+                      itens.reduce((s, i) => {
+                        const p = cat?.produtos.find((x) => x.id === i.produto_id);
+                        return s + (Number(p?.peso) || 0) * (Number(i.quantidade) || 0);
+                      }, 0)
+                    )}{" "}
+                    kg
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-500">Volume total</div>
+                  <div className="font-semibold text-neutral-900">
+                    {new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(
+                      itens.reduce((s, i) => {
+                        const p = cat?.produtos.find((x) => x.id === i.produto_id);
+                        return s + (volumeM3(p) || 0) * (Number(i.quantidade) || 0);
+                      }, 0)
+                    )}{" "}
+                    m³
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-500">Desconto médio</div>
+                  <div className="font-semibold text-neutral-900">
+                    {calc.desconto_medio.toFixed(4)}%
+                  </div>
+                </div>
+                <div className="ml-auto text-right">
+                  <div className="text-neutral-500">Valor total</div>
+                  <div className="text-lg font-bold text-neutral-900">
+                    {formatBRL(calc.valor_total)}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardBody>
         </Card>
       )}
@@ -1073,8 +1182,14 @@ export default function NovoPedido({
             const ek = e.variacao?.id ?? e.produto.id;
             return (
               <ItemModal
-                titulo={e.label}
+                modo="novo"
+                titulo={e.produto.nome}
                 sku={e.sku}
+                unidade={e.produto.unidade || "UN"}
+                produtoId={e.produto.id}
+                pesoKg={e.produto.peso ?? null}
+                volumeM3={volumeM3(e.produto)}
+                dimensoes={dimTexto(e.produto)}
                 tabelas={tabs}
                 defaultTabelaId={tabelaId || null}
                 precoBaseFor={(tid) => precoBase(ek, tid ?? tabelaId ?? null)}
@@ -1085,10 +1200,17 @@ export default function NovoPedido({
           }
           const it = itens.find((x) => itemKey(x) === modal.key);
           if (!it) return null;
+          const prod = cat?.produtos.find((p) => p.id === it.produto_id) ?? null;
           return (
             <ItemModal
+              modo="editar"
               titulo={it.nome}
               sku={it.sku}
+              unidade={prod?.unidade || "UN"}
+              produtoId={it.produto_id}
+              pesoKg={prod?.peso ?? null}
+              volumeM3={volumeM3(prod)}
+              dimensoes={dimTexto(prod)}
               tabelas={tabs}
               defaultTabelaId={tabelaId || null}
               precoBaseFor={(tid) => precoBase(modal.key, tid ?? tabelaId ?? null)}
@@ -1096,7 +1218,9 @@ export default function NovoPedido({
                 quantidade: it.quantidade,
                 tabela_preco_id: it.tabela_preco_id,
                 desconto_cascata: it.desconto_cascata,
+                acrescimo_cascata: it.acrescimo_cascata,
                 preco_liquido_manual: it.preco_liquido_manual,
+                observacao: it.observacao,
               }}
               onConfirm={confirmarModal}
               onCancel={fecharModal}

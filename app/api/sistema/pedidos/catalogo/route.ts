@@ -32,6 +32,11 @@ type ProdutoRow = {
   ativo: boolean;
   preco_bruto: number | null;
   tem_variacoes: boolean;
+  unidade: string | null;
+  peso: number | null;
+  altura: number | null;
+  largura: number | null;
+  comprimento: number | null;
 };
 
 type VariacaoRow = {
@@ -78,7 +83,9 @@ export async function GET(request: Request) {
     const produtos = await fetchAll<ProdutoRow>((from, to) =>
       supabase
         .from("produtos")
-        .select("id, sku, nome, aplicacao, ativo, preco_bruto, tem_variacoes")
+        .select(
+          "id, sku, nome, aplicacao, ativo, preco_bruto, tem_variacoes, unidade, peso, altura, largura, comprimento"
+        )
         .eq("representada_id", representadaId)
         .eq("ativo", true)
         .order("nome", { ascending: true })

@@ -272,10 +272,18 @@ export default async function PedidoDetailPage({
                       <Td className="text-right">{it.qtd}</Td>
                       <Td className="text-right">{formatBRL(it.preco)}</Td>
                       <Td className="text-right">
-                        {it.descPct > 0 ? formatPercent(it.descPct) : "—"}
-                        {it.cascata && it.cascata.length > 1 && (
+                        {it.descPct !== 0
+                          ? `${it.descPct > 0 ? "" : "+"}${formatPercent(Math.abs(it.descPct))}`
+                          : it.precoManual
+                            ? "manual"
+                            : "—"}
+                        {((it.cascata && it.cascata.length > 0) ||
+                          (it.acrescimo && it.acrescimo.length > 0)) && (
                           <div className="text-[11px] text-neutral-400">
-                            {it.cascata.map((c) => String(c).replace(".", ",")).join("+")}
+                            {[
+                              ...(it.cascata ?? []).map((c) => `−${String(c).replace(".", ",")}%`),
+                              ...(it.acrescimo ?? []).map((c) => `+${String(c).replace(".", ",")}%`),
+                            ].join("  ")}
                           </div>
                         )}
                       </Td>

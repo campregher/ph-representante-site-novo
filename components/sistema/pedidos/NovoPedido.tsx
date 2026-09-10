@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Trash2, Search, AlertTriangle } from "lucide-react";
 import { formatBRL } from "@/lib/sistema/format";
-import { calcPedido } from "@/lib/sistema/pedido-calc";
+import { calcPedido, parseCascata } from "@/lib/sistema/pedido-calc";
 import { salvarPedido, alterarStatusPedido } from "@/lib/sistema/actions/pedidos";
 import { CONDICAO_PAGAMENTO_OPTIONS } from "@/lib/sistema/types";
 import { Card, CardBody, CardHeader } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
 import Combobox from "@/components/sistema/ui/Combobox";
+import CascataFields from "@/components/sistema/pedidos/CascataFields";
 import ImportarItensPedido, {
   type ResolvedRef,
   type ItemImportado,
@@ -52,6 +53,7 @@ interface Catalogo {
   produtos: CatProduto[];
   variacoes: Record<string, CatVariacao[]>;
   tabelaPadrao: string | null;
+  descontoCascataCliente?: number[];
   precos: Record<string, { preco: number; preco_minimo: number | null; desconto_maximo: number | null }>;
 }
 
@@ -63,6 +65,13 @@ interface Item {
   quantidade: number;
   preco_tabela: number;
   desconto_item_percentual: number;
+  desconto_cascata: number[];
+}
+
+/** number[] -> 4 campos de texto ("50", "6,66", "", "") para os inputs. */
+function toStr4(nums?: number[] | null): string[] {
+  const a = Array.isArray(nums) ? nums : [];
+  return [0, 1, 2, 3].map((i) => (a[i] != null ? String(a[i]).replace(".", ",") : ""));
 }
 
 /** Entrada "adicionável" na busca: produto sem variação, ou 1 por variação ativa. */
@@ -98,6 +107,7 @@ export interface PedidoInitial {
   observacao_cliente: string | null;
   observacao_interna: string | null;
   desconto_percentual: number;
+  desconto_cascata: number[];
   itens: Item[];
 }
 
@@ -129,6 +139,18 @@ export default function NovoPedido({
   const qtyRef = useRef<HTMLInputElement>(null);
   const [descModo, setDescModo] = useState<"percentual" | "valor">("percentual");
   const [descInput, setDescInput] = useState(initial ? String(initial.desconto_percentual) : "0");
+  const [cascPedido, setCascPedido] = useState<string[]>(() => {
+    if (initial?.desconto_cascata?.length) return toStr4(initial.desconto_cascata);
+    if (initial && Number(initial.desconto_percentual) > 0)
+      return toStr4([Number(initial.desconto_percentual)]);
+    return ["", "", "", ""];
+  });
+  const cascPedidoTouched = useRef(!!initial);
+  const cascPedidoNums = useMemo(() => parseCascata(cascPedido), [cascPedido]);
+  function alterarCascPedido(v: string[]) {
+    cascPedidoTouched.current = true;
+    setCascPedido(v);
+  }
   const [cond, setCond] = useState(initial?.condicao_pagamento ?? "");
   const [forma, setForma] = useState(initial?.forma_pagamento ?? "");
   const [previsao, setPrevisao] = useState(initial?.previsao_entrega ?? "");
@@ -155,6 +177,13 @@ export default function NovoPedido({
         }
         setCat(data);
         if (!tabelaId && data.tabelaPadrao) setTabelaId(data.tabelaPadrao);
+        if (
+          !cascPedidoTouched.current &&
+          Array.isArray(data.descontoCascataCliente) &&
+          data.descontoCascataCliente.length > 0
+        ) {
+          setCascPedido(toStr4(data.descontoCascataCliente));
+        }
         setItens((prev) =>
           prev.map((it) => ({
             ...it,
@@ -274,6 +303,7 @@ export default function NovoPedido({
             quantidade: n.quantidade > 0 ? n.quantidade : 1,
             preco_tabela: n.preco,
             desconto_item_percentual: 0,
+            desconto_cascata: [],
           });
         }
       }
@@ -301,6 +331,7 @@ export default function NovoPedido({
           quantidade: add,
           preco_tabela: e.preco ?? 0,
           desconto_item_percentual: 0,
+          desconto_cascata: [],
         },
       ];
     });
@@ -355,11 +386,13 @@ export default function NovoPedido({
           quantidade: Number(i.quantidade) || 0,
           preco_tabela: Number(i.preco_tabela) || 0,
           desconto_item_percentual: Number(i.desconto_item_percentual) || 0,
+          desconto_cascata: i.desconto_cascata,
         })),
         desconto_modo: descModo,
         desconto_input: Number(descInput.replace(",", ".")) || 0,
+        desconto_cascata: descModo === "percentual" ? cascPedidoNums : [],
       }),
-    [itens, descModo, descInput]
+    [itens, descModo, descInput, cascPedidoNums]
   );
 
   const avisos: string[] = [];
@@ -389,6 +422,7 @@ export default function NovoPedido({
       observacao_interna: obsInterna,
       desconto_modo: descModo,
       desconto_input: Number(descInput.replace(",", ".")) || 0,
+      desconto_cascata: descModo === "percentual" ? cascPedidoNums : [],
       itens: itens.map((i) => ({
         produto_id: i.produto_id,
         variacao_id: i.variacao_id,
@@ -397,6 +431,7 @@ export default function NovoPedido({
         quantidade: Number(i.quantidade) || 0,
         preco_tabela: Number(i.preco_tabela) || 0,
         desconto_item_percentual: Number(i.desconto_item_percentual) || 0,
+        desconto_cascata: Array.isArray(i.desconto_cascata) ? i.desconto_cascata : [],
       })),
     };
   }
@@ -670,7 +705,7 @@ export default function NovoPedido({
                     <Th>Produto</Th>
                     <Th className="text-right">Qtd</Th>
                     <Th className="text-right">Preço tabela</Th>
-                    <Th className="text-right">Desc. %</Th>
+                    <Th className="text-right">Descontos % (cascata)</Th>
                     <Th className="text-right">Unit. c/ desc.</Th>
                     <Th className="text-right">Total</Th>
                     <Th />
@@ -710,22 +745,28 @@ export default function NovoPedido({
                               disabled={!!tabelaId}
                             />
                           </Td>
-                          <Td className="text-right">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              value={it.desconto_item_percentual}
-                              onChange={(e) =>
-                                updateItem(key, { desconto_item_percentual: Number(e.target.value) })
-                              }
-                              className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
-                            />
+                          <Td className="text-right align-top">
+                            <div className="inline-flex flex-col items-end gap-0.5">
+                              <CascataFields
+                                compact
+                                value={toStr4(it.desconto_cascata)}
+                                onChange={(v) =>
+                                  updateItem(key, {
+                                    desconto_cascata: parseCascata(v),
+                                    desconto_item_percentual: 0,
+                                  })
+                                }
+                              />
+                              {ci && ci.desconto_item_percentual > 0 && (
+                                <span className="text-[11px] text-neutral-400">
+                                  = {ci.desconto_item_percentual.toFixed(2)}%
+                                </span>
+                              )}
+                            </div>
                           </Td>
                           <Td className="text-right tabular-nums">
                             {formatBRL(ci?.preco_unitario_final ?? (Number(it.preco_tabela) || 0))}
-                            {(Number(it.desconto_item_percentual) || 0) > 0 && (
+                            {ci && ci.desconto_item_percentual > 0 && (
                               <div className="text-[11px] text-neutral-400">
                                 de {formatBRL(Number(it.preco_tabela) || 0)}
                               </div>
@@ -758,21 +799,33 @@ export default function NovoPedido({
           <CardBody>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-3">
-                <Field label="Desconto adicional">
-                  <div className="flex gap-2">
+                <Field label="Desconto adicional (sobre o subtotal)">
+                  <div className="space-y-2">
                     <Select
                       value={descModo}
                       onChange={(e) => setDescModo(e.target.value as "percentual" | "valor")}
-                      className="w-28"
+                      className="w-full sm:w-44"
                     >
-                      <option value="percentual">%</option>
-                      <option value="valor">R$</option>
+                      <option value="percentual">Cascata (%)</option>
+                      <option value="valor">Valor fixo (R$)</option>
                     </Select>
-                    <Input
-                      inputMode="decimal"
-                      value={descInput}
-                      onChange={(e) => setDescInput(e.target.value)}
-                    />
+                    {descModo === "percentual" ? (
+                      <>
+                        <CascataFields value={cascPedido} onChange={alterarCascPedido} />
+                        <p className="text-xs text-neutral-400">
+                          Aplicados um sobre o outro (não somados).
+                          {cascPedidoNums.length > 0 && (
+                            <> Efetivo: <strong>{calc.desconto_percentual.toFixed(2)}%</strong></>
+                          )}
+                        </p>
+                      </>
+                    ) : (
+                      <Input
+                        inputMode="decimal"
+                        value={descInput}
+                        onChange={(e) => setDescInput(e.target.value)}
+                      />
+                    )}
                   </div>
                 </Field>
               </div>
@@ -791,7 +844,11 @@ export default function NovoPedido({
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-neutral-500">
-                    Desconto adicional ({calc.desconto_percentual.toFixed(2)}%)
+                    Desconto adicional (
+                    {descModo === "percentual" && cascPedidoNums.length > 1
+                      ? `${cascPedidoNums.map((n) => String(n).replace(".", ",")).join("+")} = `
+                      : ""}
+                    {calc.desconto_percentual.toFixed(2)}%)
                   </span>
                   <span className="font-medium text-red-600">− {formatBRL(calc.desconto_valor)}</span>
                 </div>

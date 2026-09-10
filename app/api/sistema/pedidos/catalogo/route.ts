@@ -112,14 +112,21 @@ export async function GET(request: Request) {
     }
 
     let tabelaPadrao: string | null = null;
+    let descontoCascataCliente: number[] = [];
     if (clienteId) {
-      const { data: vinc } = await supabase
-        .from("cliente_representada")
-        .select("tabela_preco_id")
-        .eq("cliente_id", clienteId)
-        .eq("representada_id", representadaId)
-        .maybeSingle();
+      const [{ data: vinc }, { data: cli }] = await Promise.all([
+        supabase
+          .from("cliente_representada")
+          .select("tabela_preco_id")
+          .eq("cliente_id", clienteId)
+          .eq("representada_id", representadaId)
+          .maybeSingle(),
+        supabase.from("clientes").select("desconto_cascata").eq("id", clienteId).maybeSingle(),
+      ]);
       tabelaPadrao = (vinc?.tabela_preco_id as string) ?? null;
+      descontoCascataCliente = Array.isArray(cli?.desconto_cascata)
+        ? (cli!.desconto_cascata as number[]).map(Number).filter((n) => n > 0)
+        : [];
     }
 
     // precos indexado por produto_id (produtos sem variação) e por variacao_id.
@@ -173,6 +180,7 @@ export async function GET(request: Request) {
       produtos,
       variacoes,
       tabelaPadrao,
+      descontoCascataCliente,
       precos,
     });
   } catch (e) {

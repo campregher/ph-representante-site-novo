@@ -85,6 +85,9 @@ const s = StyleSheet.create({
   },
   td: { fontSize: 9.5, paddingVertical: 9, paddingHorizontal: 7, color: "#374151" },
   tdStrong: { fontFamily: "Helvetica-Bold", color: DARK },
+  tdDescCell: { paddingVertical: 9, paddingHorizontal: 7, alignItems: "flex-end" },
+  tdDescMain: { fontSize: 9.5, color: "#374151" },
+  tdMini: { fontSize: 7, color: GRAY, marginTop: 1 },
 
   cNum: { width: "4%", textAlign: "right" },
   cCod: { width: "11%" },
@@ -172,6 +175,8 @@ const brl = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n) || 0);
 const pct = (n: number) =>
   `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(Number(n) || 0)}%`;
+const cascataTxt = (c?: number[] | null) =>
+  (c ?? []).map((x) => String(x).replace(".", ",")).join(" + ");
 
 export interface PedidoPDFData {
   numero: number;
@@ -202,12 +207,14 @@ export interface PedidoPDFData {
     qtd: number;
     preco: number;
     descPct: number;
+    cascata?: number[];
     precoFinal: number;
     total: number;
   }[];
   subtotal: number;
   descontoPct: number;
   descontoValor: number;
+  descontoCascata?: number[];
   total: number;
   observacaoCliente?: string | null;
 }
@@ -311,7 +318,14 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
                 <Text style={[s.td, s.cProd]}>{it.descricao}</Text>
                 <Text style={[s.td, s.cQtd]}>{it.qtd}</Text>
                 <Text style={[s.td, s.cPreco]}>{brl(it.preco)}</Text>
-                <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+                {it.cascata && it.cascata.length > 1 ? (
+                  <View style={[s.tdDescCell, s.cDesc]}>
+                    <Text style={s.tdDescMain}>{pct(it.descPct)}</Text>
+                    <Text style={s.tdMini}>{cascataTxt(it.cascata)}</Text>
+                  </View>
+                ) : (
+                  <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+                )}
                 <Text style={[s.td, s.cLiq]}>{brl(it.precoFinal)}</Text>
                 <Text style={[s.td, s.cSub, s.tdStrong]}>{brl(it.total)}</Text>
               </View>
@@ -336,7 +350,13 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
                 <Text style={s.resumoVal}>{brl(d.subtotal)}</Text>
               </View>
               <View style={s.resumoRow}>
-                <Text style={s.resumoKey}>Desconto adicional ({pct(d.descontoPct)})</Text>
+                <Text style={s.resumoKey}>
+                  Desconto adicional (
+                  {d.descontoCascata && d.descontoCascata.length > 1
+                    ? `${cascataTxt(d.descontoCascata)} = ${pct(d.descontoPct)}`
+                    : pct(d.descontoPct)}
+                  )
+                </Text>
                 <Text style={s.resumoVal}>- {brl(d.descontoValor)}</Text>
               </View>
               <View style={s.resumoRow}>

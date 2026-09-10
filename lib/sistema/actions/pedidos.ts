@@ -155,6 +155,7 @@ export async function salvarPedido(
       quantidade: it.quantidade,
       preco_tabela: preco,
       desconto_item_percentual: it.desconto_item_percentual,
+      desconto_cascata: it.desconto_cascata,
     };
   });
 
@@ -162,6 +163,7 @@ export async function salvarPedido(
     itens: itensCalcInput,
     desconto_modo: v.desconto_modo,
     desconto_input: v.desconto_input,
+    desconto_cascata: v.desconto_cascata,
   });
 
   // validações de desconto / mínimo
@@ -199,6 +201,7 @@ export async function salvarPedido(
     subtotal: calc.subtotal,
     desconto_percentual: calc.desconto_percentual,
     desconto_valor: calc.desconto_valor,
+    desconto_cascata: calc.desconto_cascata,
     valor_total: calc.valor_total,
     updated_by: g.profile!.id,
   };
@@ -216,6 +219,7 @@ export async function salvarPedido(
       quantidade: ci.quantidade,
       preco_tabela: ci.preco_tabela,
       desconto_item_percentual: ci.desconto_item_percentual,
+      desconto_cascata: ci.desconto_cascata,
       desconto_item_valor: ci.desconto_item_valor,
       preco_unitario_final: ci.preco_unitario_final,
       valor_total: ci.valor_total,
@@ -348,6 +352,7 @@ export async function duplicarPedido(id: string): Promise<ActionResult<{ id?: st
       subtotal: ped.subtotal,
       desconto_percentual: ped.desconto_percentual,
       desconto_valor: ped.desconto_valor,
+      desconto_cascata: ped.desconto_cascata ?? [],
       valor_total: ped.valor_total,
       condicao_pagamento: ped.condicao_pagamento,
       forma_pagamento: ped.forma_pagamento,
@@ -370,6 +375,7 @@ export async function duplicarPedido(id: string): Promise<ActionResult<{ id?: st
         quantidade: it.quantidade,
         preco_tabela: it.preco_tabela,
         desconto_item_percentual: it.desconto_item_percentual,
+        desconto_cascata: it.desconto_cascata ?? [],
         desconto_item_valor: it.desconto_item_valor,
         preco_unitario_final: it.preco_unitario_final,
         valor_total: it.valor_total,

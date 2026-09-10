@@ -42,6 +42,12 @@ export default async function EditarPedidoPage({
       quantidade: Number(it.quantidade),
       preco_tabela: Number(it.preco_tabela),
       desconto_item_percentual: Number(it.desconto_item_percentual),
+      desconto_cascata:
+        Array.isArray(it.desconto_cascata) && it.desconto_cascata.length
+          ? it.desconto_cascata.map(Number)
+          : Number(it.desconto_item_percentual) > 0
+            ? [Number(it.desconto_item_percentual)]
+            : [],
     }));
 
   const initial: PedidoInitial = {
@@ -56,6 +62,7 @@ export default async function EditarPedidoPage({
     observacao_cliente: p.observacao_cliente,
     observacao_interna: p.observacao_interna,
     desconto_percentual: Number(p.desconto_percentual),
+    desconto_cascata: Array.isArray(p.desconto_cascata) ? p.desconto_cascata.map(Number) : [],
     itens,
   };
 

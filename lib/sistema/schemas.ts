@@ -207,6 +207,7 @@ export const clienteSchema = z
       .enum(["prospect", "ativo", "inativo", "bloqueado", "reativacao"])
       .default("prospect"),
     is_seller: z.coerce.boolean().default(false),
+    desconto_cascata: z.array(z.number().min(0).max(100)).max(6).default([]),
     observacoes: optionalText,
   })
   .refine((d) => !!(d.razao_social || d.nome_fantasia), {
@@ -254,6 +255,7 @@ export const pedidoItemInput = z.object({
   quantidade: z.number().positive("Quantidade inválida"),
   preco_tabela: z.number().nonnegative(),
   desconto_item_percentual: z.number().min(0).max(100).default(0),
+  desconto_cascata: z.array(z.number().min(0).max(100)).max(6).default([]),
 });
 
 export const pedidoSchema = z.object({
@@ -277,6 +279,7 @@ export const pedidoSchema = z.object({
   observacao_interna: optionalText,
   desconto_modo: z.enum(["percentual", "valor"]).default("percentual"),
   desconto_input: z.number().min(0).default(0),
+  desconto_cascata: z.array(z.number().min(0).max(100)).max(6).default([]),
   itens: z.array(pedidoItemInput).min(1, "Adicione ao menos um produto"),
 });
 export type PedidoFormValues = z.infer<typeof pedidoSchema>;

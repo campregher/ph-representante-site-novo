@@ -281,18 +281,28 @@ export default function NovoPedido({
   }
 
   function addEntry(e: PickEntry, qtd = 1) {
-    setItens((prev) => [
-      ...prev,
-      {
-        produto_id: e.produto.id,
-        variacao_id: e.variacao?.id ?? null,
-        sku: e.sku,
-        nome: e.label,
-        quantidade: qtd > 0 ? qtd : 1,
-        preco_tabela: e.preco ?? 0,
-        desconto_item_percentual: 0,
-      },
-    ]);
+    const add = qtd > 0 ? qtd : 1;
+    const key = e.variacao?.id ?? e.produto.id;
+    setItens((prev) => {
+      const idx = prev.findIndex((it) => itemKey(it) === key);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantidade: next[idx].quantidade + add };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          produto_id: e.produto.id,
+          variacao_id: e.variacao?.id ?? null,
+          sku: e.sku,
+          nome: e.label,
+          quantidade: add,
+          preco_tabela: e.preco ?? 0,
+          desconto_item_percentual: 0,
+        },
+      ];
+    });
     setBusca("");
   }
 
@@ -541,6 +551,14 @@ export default function NovoPedido({
         <Card>
           <CardHeader
             title="Produtos"
+            description={
+              itens.length > 0
+                ? `${itens.length} ${itens.length === 1 ? "item" : "itens"} · ${itens.reduce(
+                    (s, i) => s + (Number(i.quantidade) || 0),
+                    0
+                  )} un.`
+                : undefined
+            }
             action={
               cat ? (
                 <ImportarItensPedido
@@ -749,6 +767,14 @@ export default function NovoPedido({
                 </Field>
               </div>
               <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm">
+                <div className="flex justify-between py-1">
+                  <span className="text-neutral-500">
+                    Itens ({itens.length} {itens.length === 1 ? "linha" : "linhas"})
+                  </span>
+                  <span className="font-medium">
+                    {itens.reduce((s, i) => s + (Number(i.quantidade) || 0), 0)} un.
+                  </span>
+                </div>
                 <div className="flex justify-between py-1">
                   <span className="text-neutral-500">Subtotal</span>
                   <span className="font-medium">{formatBRL(calc.subtotal)}</span>

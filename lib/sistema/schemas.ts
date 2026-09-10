@@ -256,6 +256,18 @@ export const pedidoItemInput = z.object({
   preco_tabela: z.number().nonnegative(),
   desconto_item_percentual: z.number().min(0).max(100).default(0),
   desconto_cascata: z.array(z.number().min(0).max(100)).max(6).default([]),
+  preco_liquido_manual: z
+    .number()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+  tabela_preco_id: z
+    .string()
+    .uuid()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
 });
 
 export const pedidoSchema = z.object({

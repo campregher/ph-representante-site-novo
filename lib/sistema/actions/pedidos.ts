@@ -62,20 +62,30 @@ export async function salvarPedido(
   if (!rep) return { ok: false, error: "Representada não encontrada." };
   if (!rep.ativa) return { ok: false, error: "Representada inativa." };
 
-  // tabela (consistência já garantida por trigger; validação amigável aqui)
+  // tabelas usadas: a do pedido + as específicas de linha
+  const tabelaIds = [
+    ...new Set(
+      [v.tabela_preco_id, ...v.itens.map((i) => i.tabela_preco_id)].filter(
+        (x): x is string => !!x
+      )
+    ),
+  ];
+  const tabInfo = new Map<string, { desconto_percentual: number; vencida: boolean }>();
   let tabelaVencida = false;
-  let descontoTabela = 0;
-  if (v.tabela_preco_id) {
-    const { data: tab } = await supabase
+  if (tabelaIds.length) {
+    const { data: tabs } = await supabase
       .from("tabelas_preco")
       .select("id, representada_id, data_fim, ativa, desconto_percentual")
-      .eq("id", v.tabela_preco_id)
-      .maybeSingle();
-    if (!tab) return { ok: false, error: "Tabela de preço não encontrada." };
-    if (tab.representada_id !== v.representada_id)
-      return { ok: false, error: "A tabela de preço é de outra representada." };
-    if (tab.data_fim && new Date(tab.data_fim as string) < new Date()) tabelaVencida = true;
-    descontoTabela = Number(tab.desconto_percentual ?? 0);
+      .in("id", tabelaIds);
+    for (const id of tabelaIds) {
+      const tab = (tabs ?? []).find((t) => t.id === id);
+      if (!tab) return { ok: false, error: "Tabela de preço não encontrada." };
+      if (tab.representada_id !== v.representada_id)
+        return { ok: false, error: "A tabela de preço é de outra representada." };
+      const vencida = !!(tab.data_fim && new Date(tab.data_fim as string) < new Date());
+      if (vencida) tabelaVencida = true;
+      tabInfo.set(id, { desconto_percentual: Number(tab.desconto_percentual ?? 0), vencida });
+    }
   }
 
   // produtos: valida representada + pega preço bruto autoritativo
@@ -128,34 +138,37 @@ export async function salvarPedido(
   const varLabel = (atributos: Record<string, string>) =>
     Object.values(atributos ?? {}).filter(Boolean).join(" / ");
 
-  // override do preço líquido por produto nesta tabela
-  const overrideMap = new Map<string, number>();
-  if (v.tabela_preco_id) {
+  // override do preço líquido por (tabela, produto)
+  const overrideMap = new Map<string, number>(); // chave: `${tabelaId}:${produtoId}`
+  if (tabelaIds.length) {
     const { data: ov } = await supabase
       .from("produtos_precos")
-      .select("produto_id, preco")
-      .eq("tabela_preco_id", v.tabela_preco_id)
+      .select("tabela_preco_id, produto_id, preco")
+      .in("tabela_preco_id", tabelaIds)
       .in("produto_id", produtoIds);
     for (const o of ov ?? [])
-      if (o.preco != null) overrideMap.set(o.produto_id as string, Number(o.preco));
+      if (o.preco != null)
+        overrideMap.set(`${o.tabela_preco_id}:${o.produto_id}`, Number(o.preco));
   }
 
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
   const itensCalcInput = v.itens.map((it) => {
+    const tid = it.tabela_preco_id ?? v.tabela_preco_id ?? null;
     let preco = it.preco_tabela;
-    if (v.tabela_preco_id) {
-      const ov = overrideMap.get(it.produto_id);
+    if (tid) {
+      const ov = overrideMap.get(`${tid}:${it.produto_id}`);
       const vx = it.variacao_id ? varMap.get(it.variacao_id) : null;
       const bruto = Number(
         brutoEfetivo(vx?.preco_bruto ?? null, prodMap.get(it.produto_id)?.preco_bruto ?? null) ?? 0
       );
-      preco = ov != null ? ov : round2(bruto * (1 - descontoTabela / 100));
+      preco = ov != null ? ov : round2(bruto * (1 - (tabInfo.get(tid)?.desconto_percentual ?? 0) / 100));
     }
     return {
       quantidade: it.quantidade,
       preco_tabela: preco,
       desconto_item_percentual: it.desconto_item_percentual,
       desconto_cascata: it.desconto_cascata,
+      preco_liquido_manual: it.preco_liquido_manual ?? null,
     };
   });
 
@@ -220,6 +233,8 @@ export async function salvarPedido(
       preco_tabela: ci.preco_tabela,
       desconto_item_percentual: ci.desconto_item_percentual,
       desconto_cascata: ci.desconto_cascata,
+      preco_liquido_manual: ci.preco_liquido_manual,
+      tabela_preco_id: it.tabela_preco_id ?? null,
       desconto_item_valor: ci.desconto_item_valor,
       preco_unitario_final: ci.preco_unitario_final,
       valor_total: ci.valor_total,
@@ -376,6 +391,8 @@ export async function duplicarPedido(id: string): Promise<ActionResult<{ id?: st
         preco_tabela: it.preco_tabela,
         desconto_item_percentual: it.desconto_item_percentual,
         desconto_cascata: it.desconto_cascata ?? [],
+        preco_liquido_manual: it.preco_liquido_manual ?? null,
+        tabela_preco_id: it.tabela_preco_id ?? null,
         desconto_item_valor: it.desconto_item_valor,
         preco_unitario_final: it.preco_unitario_final,
         valor_total: it.valor_total,

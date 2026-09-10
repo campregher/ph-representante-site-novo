@@ -136,6 +136,7 @@ async function buildPedidoDoc(
       cascata: Array.isArray(it.desconto_cascata)
         ? it.desconto_cascata.map(Number).filter((n) => n > 0)
         : [],
+      precoManual: it.preco_liquido_manual != null,
       precoFinal:
         Number(it.preco_unitario_final) ||
         Number(it.preco_tabela) * (1 - (Number(it.desconto_item_percentual) || 0) / 100),

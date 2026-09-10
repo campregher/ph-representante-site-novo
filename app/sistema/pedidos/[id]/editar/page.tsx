@@ -43,11 +43,16 @@ export default async function EditarPedidoPage({
       preco_tabela: Number(it.preco_tabela),
       desconto_item_percentual: Number(it.desconto_item_percentual),
       desconto_cascata:
-        Array.isArray(it.desconto_cascata) && it.desconto_cascata.length
-          ? it.desconto_cascata.map(Number)
-          : Number(it.desconto_item_percentual) > 0
-            ? [Number(it.desconto_item_percentual)]
-            : [],
+        it.preco_liquido_manual != null
+          ? []
+          : Array.isArray(it.desconto_cascata) && it.desconto_cascata.length
+            ? it.desconto_cascata.map(Number)
+            : Number(it.desconto_item_percentual) > 0
+              ? [Number(it.desconto_item_percentual)]
+              : [],
+      preco_liquido_manual:
+        it.preco_liquido_manual != null ? Number(it.preco_liquido_manual) : null,
+      tabela_preco_id: it.tabela_preco_id ?? null,
     }));
 
   const initial: PedidoInitial = {

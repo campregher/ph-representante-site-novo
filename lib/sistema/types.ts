@@ -232,6 +232,8 @@ export interface PedidoItem {
   preco_tabela: number;
   desconto_item_percentual: number;
   desconto_cascata: number[];
+  preco_liquido_manual: number | null;
+  tabela_preco_id: string | null;
   desconto_item_valor: number;
   preco_unitario_final: number;
   valor_total: number;

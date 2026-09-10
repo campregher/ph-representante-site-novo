@@ -130,45 +130,53 @@ export async function GET(request: Request) {
     }
 
     // precos indexado por produto_id (produtos sem variação) e por variacao_id.
-    const precos: Record<
-      string,
-      { preco: number; preco_minimo: number | null; desconto_maximo: number | null }
-    > = {};
+    type PrecoInfo = { preco: number; preco_minimo: number | null; desconto_maximo: number | null };
+    const precos: Record<string, PrecoInfo> = {};
+    // preços de TODAS as tabelas da representada (para tabela por item)
+    const precosPorTabela: Record<string, Record<string, PrecoInfo>> = {};
 
-    if (tabelaId) {
-      const tab = (tabelas ?? []).find((t) => t.id === tabelaId);
-      const desc = Number(tab?.desconto_percentual ?? 0);
-
-      const overrides = await fetchAll<{ produto_id: string; preco: number | null }>((from, to) =>
+    const tabelaList = tabelas ?? [];
+    if (tabelaList.length) {
+      const tabIds = tabelaList.map((t) => t.id as string);
+      const overrides = await fetchAll<{
+        tabela_preco_id: string;
+        produto_id: string;
+        preco: number | null;
+      }>((from, to) =>
         supabase
           .from("produtos_precos")
-          .select("produto_id, preco")
-          .eq("tabela_preco_id", tabelaId)
-          .order("produto_id", { ascending: true })
+          .select("tabela_preco_id, produto_id, preco")
+          .in("tabela_preco_id", tabIds)
+          .order("tabela_preco_id", { ascending: true })
           .range(from, to)
       );
-      const overrideMap = new Map(
-        overrides.map((o) => [o.produto_id, o.preco != null ? Number(o.preco) : null])
-      );
+      const overrideMap = new Map<string, number>(); // `${tabelaId}:${produtoId}`
+      for (const o of overrides)
+        if (o.preco != null) overrideMap.set(`${o.tabela_preco_id}:${o.produto_id}`, Number(o.preco));
 
-      for (const p of produtos) {
-        const bruto = p.preco_bruto != null ? Number(p.preco_bruto) : null;
-        const ov = overrideMap.get(p.id) ?? null;
-
-        precos[p.id] = {
-          preco: precoLiquido(bruto, desc, ov) ?? 0,
-          preco_minimo: null,
-          desconto_maximo: null,
-        };
-
-        for (const v of variacoes[p.id] ?? []) {
-          precos[v.id] = {
-            preco: precoLiquido(brutoEfetivo(v.preco_bruto, bruto), desc, ov) ?? 0,
+      for (const t of tabelaList) {
+        const tid = t.id as string;
+        const desc = Number(t.desconto_percentual ?? 0);
+        const mapa: Record<string, PrecoInfo> = {};
+        for (const p of produtos) {
+          const bruto = p.preco_bruto != null ? Number(p.preco_bruto) : null;
+          const ov = overrideMap.get(`${tid}:${p.id}`) ?? null;
+          mapa[p.id] = {
+            preco: precoLiquido(bruto, desc, ov) ?? 0,
             preco_minimo: null,
             desconto_maximo: null,
           };
+          for (const v of variacoes[p.id] ?? []) {
+            mapa[v.id] = {
+              preco: precoLiquido(brutoEfetivo(v.preco_bruto, bruto), desc, ov) ?? 0,
+              preco_minimo: null,
+              desconto_maximo: null,
+            };
+          }
         }
+        precosPorTabela[tid] = mapa;
       }
+      if (tabelaId && precosPorTabela[tabelaId]) Object.assign(precos, precosPorTabela[tabelaId]);
     }
 
     return NextResponse.json({
@@ -176,12 +184,13 @@ export async function GET(request: Request) {
         pedido_minimo: Number(rep?.pedido_minimo ?? 0),
         desconto_maximo_padrao: Number(rep?.desconto_maximo_padrao ?? 0),
       },
-      tabelas: tabelas ?? [],
+      tabelas: tabelaList,
       produtos,
       variacoes,
       tabelaPadrao,
       descontoCascataCliente,
       precos,
+      precosPorTabela,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao carregar o catálogo.";

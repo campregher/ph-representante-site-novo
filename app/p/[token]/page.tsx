@@ -112,10 +112,16 @@ export default async function PedidoPublicoPage({
                   <td className="py-1.5 pr-2 text-right">{it.qtd}</td>
                   <td className="py-1.5 pr-2 text-right">{formatBRL(it.preco)}</td>
                   <td className="py-1.5 pr-2 text-right">
-                    {it.descPct > 0 ? formatPercent(it.descPct) : "—"}
-                    {it.cascata && it.cascata.length > 1 && (
+                    {it.descPct !== 0
+                      ? `${it.descPct > 0 ? "" : "+"}${formatPercent(Math.abs(it.descPct))}`
+                      : "—"}
+                    {((it.cascata && it.cascata.length > 0) ||
+                      (it.acrescimo && it.acrescimo.length > 0)) && (
                       <div className="text-[11px] text-neutral-400">
-                        {it.cascata.map((c) => String(c).replace(".", ",")).join("+")}
+                        {[
+                          ...(it.cascata ?? []).map((c) => `−${String(c).replace(".", ",")}%`),
+                          ...(it.acrescimo ?? []).map((c) => `+${String(c).replace(".", ",")}%`),
+                        ].join("  ")}
                       </div>
                     )}
                   </td>

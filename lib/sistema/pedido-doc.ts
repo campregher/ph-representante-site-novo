@@ -136,6 +136,9 @@ async function buildPedidoDoc(
       cascata: Array.isArray(it.desconto_cascata)
         ? it.desconto_cascata.map(Number).filter((n) => n > 0)
         : [],
+      acrescimo: Array.isArray(it.acrescimo_cascata)
+        ? it.acrescimo_cascata.map(Number).filter((n) => n > 0)
+        : [],
       precoManual: it.preco_liquido_manual != null,
       precoFinal:
         Number(it.preco_unitario_final) ||
@@ -176,12 +179,15 @@ export function pedidoDocToText(d: PedidoPDFData): string {
   L.push("");
   L.push("*Itens:*");
   for (const it of d.itens) {
-    const descTxt =
-      it.cascata && it.cascata.length > 1
-        ? ` (-${cascataLabel(it.cascata)} = ${formatPercent(it.descPct)} = ${formatBRL(it.precoFinal)}/un)`
-        : it.descPct > 0
-          ? ` (-${formatPercent(it.descPct)} = ${formatBRL(it.precoFinal)}/un)`
-          : "";
+    const passos = [
+      ...(it.cascata ?? []).map((c) => `-${String(c).replace(".", ",")}%`),
+      ...(it.acrescimo ?? []).map((c) => `+${String(c).replace(".", ",")}%`),
+    ].join(" ");
+    const descTxt = passos
+      ? ` (${passos} = ${formatPercent(it.descPct)} = ${formatBRL(it.precoFinal)}/un)`
+      : it.descPct !== 0
+        ? ` (${it.descPct > 0 ? "-" : "+"}${formatPercent(Math.abs(it.descPct))} = ${formatBRL(it.precoFinal)}/un)`
+        : "";
     L.push(
       `• ${it.sku} — ${it.descricao} | ${it.qtd} x ${formatBRL(it.preco)}${descTxt} = ${formatBRL(it.total)}`
     );

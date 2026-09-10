@@ -255,7 +255,8 @@ export const pedidoItemInput = z.object({
   quantidade: z.number().positive("Quantidade inválida"),
   preco_tabela: z.number().nonnegative(),
   desconto_item_percentual: z.number().min(0).max(100).default(0),
-  desconto_cascata: z.array(z.number().min(0).max(100)).max(6).default([]),
+  desconto_cascata: z.array(z.number().min(0).max(100)).max(3).default([]),
+  acrescimo_cascata: z.array(z.number().min(0).max(1000)).max(2).default([]),
   preco_liquido_manual: z
     .number()
     .nonnegative()
@@ -268,6 +269,7 @@ export const pedidoItemInput = z.object({
     .nullable()
     .optional()
     .transform((v) => v ?? null),
+  observacao: optionalText,
 });
 
 export const pedidoSchema = z.object({

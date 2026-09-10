@@ -177,6 +177,11 @@ const pct = (n: number) =>
   `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(Number(n) || 0)}%`;
 const cascataTxt = (c?: number[] | null) =>
   (c ?? []).map((x) => String(x).replace(".", ",")).join(" + ");
+const passosTxt = (desc?: number[] | null, acr?: number[] | null) =>
+  [
+    ...(desc ?? []).map((x) => `−${String(x).replace(".", ",")}%`),
+    ...(acr ?? []).map((x) => `+${String(x).replace(".", ",")}%`),
+  ].join("  ");
 
 export interface PedidoPDFData {
   numero: number;
@@ -208,6 +213,7 @@ export interface PedidoPDFData {
     preco: number;
     descPct: number;
     cascata?: number[];
+    acrescimo?: number[];
     precoManual?: boolean;
     precoFinal: number;
     total: number;
@@ -319,18 +325,19 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
                 <Text style={[s.td, s.cProd]}>{it.descricao}</Text>
                 <Text style={[s.td, s.cQtd]}>{it.qtd}</Text>
                 <Text style={[s.td, s.cPreco]}>{brl(it.preco)}</Text>
-                {it.cascata && it.cascata.length > 1 ? (
+                {(it.cascata && it.cascata.length > 0) ||
+                (it.acrescimo && it.acrescimo.length > 0) ? (
                   <View style={[s.tdDescCell, s.cDesc]}>
                     <Text style={s.tdDescMain}>{pct(it.descPct)}</Text>
-                    <Text style={s.tdMini}>{cascataTxt(it.cascata)}</Text>
+                    <Text style={s.tdMini}>{passosTxt(it.cascata, it.acrescimo)}</Text>
                   </View>
                 ) : it.precoManual ? (
                   <View style={[s.tdDescCell, s.cDesc]}>
-                    <Text style={s.tdDescMain}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+                    <Text style={s.tdDescMain}>{it.descPct !== 0 ? pct(it.descPct) : "—"}</Text>
                     <Text style={s.tdMini}>preço manual</Text>
                   </View>
                 ) : (
-                  <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+                  <Text style={[s.td, s.cDesc]}>{it.descPct !== 0 ? pct(it.descPct) : "—"}</Text>
                 )}
                 <Text style={[s.td, s.cLiq]}>{brl(it.precoFinal)}</Text>
                 <Text style={[s.td, s.cSub, s.tdStrong]}>{brl(it.total)}</Text>

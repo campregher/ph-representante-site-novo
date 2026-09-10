@@ -260,6 +260,7 @@ export default async function PedidoDetailPage({
                     <Th className="text-right">Qtd</Th>
                     <Th className="text-right">Preço</Th>
                     <Th className="text-right">Desc.</Th>
+                    <Th className="text-right">Unit. líq.</Th>
                     <Th className="text-right">Total</Th>
                   </Tr>
                 </Thead>
@@ -273,6 +274,7 @@ export default async function PedidoDetailPage({
                       <Td className="text-right">
                         {it.descPct > 0 ? formatPercent(it.descPct) : "—"}
                       </Td>
+                      <Td className="text-right">{formatBRL(it.precoFinal)}</Td>
                       <Td className="text-right font-medium">{formatBRL(it.total)}</Td>
                     </Tr>
                   ))}

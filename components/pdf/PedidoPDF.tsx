@@ -14,100 +14,156 @@ Font.registerHyphenationCallback((word) => [word]);
 const RED = "#dc2626";
 const DARK = "#232323";
 const GRAY = "#6b7280";
-const BORDER = "#e5e7eb";
-const LIGHT = "#f3f4f6";
+const BORDER = "#d1d5db";
+const HAIR = "#e5e7eb";
+const HEAD = "#f3f4f6";
+const ZEBRA = "#fafafa";
 
 const s = StyleSheet.create({
   page: {
     backgroundColor: "#ffffff",
-    paddingHorizontal: 40,
-    paddingTop: 36,
-    paddingBottom: 56,
+    paddingHorizontal: 34,
+    paddingTop: 30,
+    paddingBottom: 46,
     fontFamily: "Helvetica",
-    fontSize: 9,
+    fontSize: 10,
     color: "#1f2937",
   },
+
+  /* Cabeçalho: logo PH | nome empresa + nº pedido | logo representada */
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 2,
     borderBottomColor: RED,
-    paddingBottom: 10,
-    marginBottom: 10,
+    paddingBottom: 12,
   },
-  logoWrap: { width: "45%" },
-  logoWrapRight: { width: "45%", alignItems: "flex-end" },
-  logo: { maxWidth: 170, maxHeight: 46, objectFit: "contain" },
-  brand: { fontSize: 15, fontFamily: "Helvetica-Bold", color: DARK },
-  brandRight: { fontSize: 13, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "right" },
-  brandSub: { fontSize: 7.5, color: GRAY, marginTop: 3 },
+  hLeft: { width: "30%" },
+  hCenter: { width: "40%", alignItems: "center" },
+  hRight: { width: "30%", alignItems: "flex-end" },
+  logo: { maxWidth: 150, maxHeight: 46, objectFit: "contain" },
+  empNome: { fontSize: 13, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "center" },
+  empContato: { fontSize: 8, color: GRAY, marginTop: 3 },
+  pedidoNum: { fontSize: 12, fontFamily: "Helvetica-Bold", color: RED, marginTop: 5 },
+  repNome: { fontSize: 13, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "right" },
 
-  pedidoBar: {
+  /* Faixa da representada */
+  band: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    paddingVertical: 7,
   },
-  pedidoNum: { fontSize: 14, fontFamily: "Helvetica-Bold", color: RED },
-  pedidoMeta: { fontSize: 8.5, color: GRAY },
+  bandKey: { fontSize: 9, fontFamily: "Helvetica-Bold", color: DARK },
+  bandVal: { fontSize: 9, color: "#374151" },
 
-  cols: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  box: { flex: 1, borderWidth: 1, borderColor: BORDER, borderRadius: 4, padding: 8 },
-  boxTitle: {
-    fontSize: 7.5,
+  /* Bloco do cliente — duas colunas de campos */
+  cliente: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    paddingVertical: 9,
+  },
+  cliCol: { width: "50%", paddingRight: 14 },
+  field: { flexDirection: "row", marginBottom: 3, lineHeight: 1.4 },
+  fKey: { fontSize: 9, fontFamily: "Helvetica-Bold", color: DARK },
+  fVal: { fontSize: 9, color: "#374151", flex: 1 },
+
+  /* Tabela de itens */
+  table: { marginTop: 14, borderWidth: 1, borderColor: BORDER },
+  tr: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: HAIR },
+  trHead: { backgroundColor: HEAD, borderBottomWidth: 1, borderBottomColor: BORDER },
+  trZebra: { backgroundColor: ZEBRA },
+  trLast: { borderBottomWidth: 0 },
+  th: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: DARK,
+    paddingVertical: 8,
+    paddingHorizontal: 7,
+  },
+  td: { fontSize: 9.5, paddingVertical: 9, paddingHorizontal: 7, color: "#374151" },
+  tdStrong: { fontFamily: "Helvetica-Bold", color: DARK },
+
+  cNum: { width: "4%", textAlign: "right" },
+  cCod: { width: "11%" },
+  cProd: { width: "35%" },
+  cQtd: { width: "7%", textAlign: "right" },
+  cPreco: { width: "12%", textAlign: "right" },
+  cDesc: { width: "9%", textAlign: "right" },
+  cLiq: { width: "11%", textAlign: "right" },
+  cSub: { width: "11%", textAlign: "right" },
+
+  /* Linha "Valor total" ancorada à tabela */
+  totalStripe: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: BORDER,
+    backgroundColor: HEAD,
+  },
+  totalStripeLabel: {
+    width: "78%",
+    textAlign: "right",
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: DARK,
+    paddingVertical: 9,
+    paddingHorizontal: 7,
+  },
+  totalStripeValue: {
+    width: "22%",
+    textAlign: "right",
+    fontSize: 11,
     fontFamily: "Helvetica-Bold",
     color: RED,
-    textTransform: "uppercase",
-    marginBottom: 5,
-    letterSpacing: 0.5,
+    paddingVertical: 9,
+    paddingHorizontal: 7,
   },
-  line: { fontSize: 8.5, marginBottom: 2, lineHeight: 1.4 },
-  label: { color: GRAY },
 
-  table: { borderWidth: 1, borderColor: BORDER, borderRadius: 4, marginBottom: 12 },
-  tr: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: BORDER },
-  trHead: { backgroundColor: LIGHT },
-  th: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: DARK, padding: 5 },
-  td: { fontSize: 8, padding: 5, color: "#374151" },
-  cCod: { width: "15%" },
-  cProd: { width: "30%" },
-  cQtd: { width: "8%", textAlign: "right" },
-  cPreco: { width: "12%", textAlign: "right" },
-  cDesc: { width: "8%", textAlign: "right" },
-  cUnit: { width: "13%", textAlign: "right" },
-  cTot: { width: "14%", textAlign: "right" },
+  /* Resumo (subtotal / desconto adicional) */
+  resumo: { flexDirection: "row", justifyContent: "flex-end", marginTop: 8 },
+  resumoBox: { width: "38%" },
+  resumoRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
+  resumoKey: { fontSize: 9.5, color: GRAY },
+  resumoVal: { fontSize: 9.5, color: "#374151" },
 
-  totals: { flexDirection: "row", justifyContent: "flex-end" },
-  totalsBox: { width: "45%" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
-  totalLabel: { fontSize: 9, color: GRAY },
-  totalValue: { fontSize: 9 },
-  grand: {
+  /* Faixa de pagamento / emissão */
+  pgto: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginTop: 14,
     borderTopWidth: 1,
-    borderTopColor: DARK,
-    marginTop: 3,
-    paddingTop: 4,
+    borderTopColor: BORDER,
+    paddingTop: 9,
   },
-  grandLabel: { fontSize: 11, fontFamily: "Helvetica-Bold", color: DARK },
-  grandValue: { fontSize: 11, fontFamily: "Helvetica-Bold", color: RED },
+  pgtoCol: { width: "48%" },
+  pgtoKey: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: GRAY, textTransform: "uppercase", letterSpacing: 0.4 },
+  pgtoVal: { fontSize: 10, color: "#374151", marginTop: 2 },
 
-  obs: { marginTop: 14, borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 8 },
-  obsTitle: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: GRAY, marginBottom: 3 },
+  obs: { marginTop: 12 },
+  obsTitle: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: GRAY,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  obsText: { fontSize: 9.5, lineHeight: 1.45, color: "#374151" },
 
   footer: {
     position: "absolute",
-    bottom: 22,
-    left: 40,
-    right: 40,
+    bottom: 18,
+    left: 34,
+    right: 34,
     flexDirection: "row",
     justifyContent: "space-between",
-    fontSize: 7,
+    fontSize: 7.5,
     color: "#9ca3af",
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: HAIR,
     paddingTop: 6,
   },
 });
@@ -163,165 +219,179 @@ function usableImg(src?: string | null): string | null {
   return src;
 }
 
+function Field({ k, v }: { k: string; v?: string | null }) {
+  if (!v) return null;
+  return (
+    <View style={s.field}>
+      <Text style={s.fKey}>{k}: </Text>
+      <Text style={s.fVal}>{v}</Text>
+    </View>
+  );
+}
+
 export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
   const empLogo = usableImg(d.empresa.logo);
   const repLogo = usableImg(d.representada.logo);
+  const totalUnidades = d.itens.reduce((acc, it) => acc + (Number(it.qtd) || 0), 0);
+  const temDescontoAdicional = Number(d.descontoValor) > 0 || Number(d.descontoPct) > 0;
+
   return (
     <Document title={`Pedido ${d.numero} — ${d.empresa.nome}`} author={d.empresa.nome}>
-      <Page size="A4" style={s.page}>
+      <Page size="A4" orientation="landscape" style={s.page}>
+        {/* Cabeçalho */}
         <View style={s.header}>
-          <View style={s.logoWrap}>
-            {empLogo ? (
-              <PdfImage src={empLogo} style={s.logo} />
-            ) : (
-              <Text style={s.brand}>{d.empresa.nome}</Text>
-            )}
-            <Text style={s.brandSub}>{d.empresa.contato}</Text>
+          <View style={s.hLeft}>
+            {empLogo ? <PdfImage src={empLogo} style={s.logo} /> : null}
           </View>
-          <View style={s.logoWrapRight}>
+          <View style={s.hCenter}>
+            <Text style={s.empNome}>{d.empresa.nome}</Text>
+            <Text style={s.empContato}>{d.empresa.contato}</Text>
+            <Text style={s.pedidoNum}>PEDIDO Nº {d.numero}</Text>
+          </View>
+          <View style={s.hRight}>
             {repLogo ? (
               <PdfImage src={repLogo} style={s.logo} />
             ) : (
-              <Text style={s.brandRight}>{d.representada.nome}</Text>
+              <Text style={s.repNome}>{d.representada.nome}</Text>
             )}
           </View>
         </View>
 
-        <View style={s.pedidoBar}>
-          <Text style={s.pedidoNum}>PEDIDO #{d.numero}</Text>
-          <Text style={s.pedidoMeta}>
-            {d.representada.nome}  ·  {d.data}  ·  {d.statusLabel}
+        {/* Representada + data/status */}
+        <View style={s.band}>
+          <Text style={s.bandKey}>
+            Representada: <Text style={s.bandVal}>{d.representada.nome}</Text>
+            {d.representada.cnpj ? <Text style={s.bandVal}>  ·  CNPJ {d.representada.cnpj}</Text> : null}
+          </Text>
+          <Text style={s.bandVal}>
+            {d.data}  ·  {d.statusLabel}
           </Text>
         </View>
 
-        <View style={s.cols}>
-          <View style={s.box}>
-            <Text style={s.boxTitle}>Cliente</Text>
-            <Text style={[s.line, { fontFamily: "Helvetica-Bold" }]}>{d.cliente.nome}</Text>
-            {d.cliente.razao ? <Text style={s.line}>{d.cliente.razao}</Text> : null}
-            {d.cliente.documento ? (
-              <Text style={s.line}>
-                <Text style={s.label}>CNPJ/CPF: </Text>
-                {d.cliente.documento}
-              </Text>
-            ) : null}
-            {d.cliente.inscricaoEstadual ? (
-              <Text style={s.line}>
-                <Text style={s.label}>IE: </Text>
-                {d.cliente.inscricaoEstadual}
-              </Text>
-            ) : null}
-            {d.cliente.endereco ? <Text style={s.line}>{d.cliente.endereco}</Text> : null}
-            {d.cliente.bairro || d.cliente.cidadeUf || d.cliente.cep ? (
-              <Text style={s.line}>
-                {[d.cliente.bairro, d.cliente.cidadeUf, d.cliente.cep && `CEP ${d.cliente.cep}`]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </Text>
-            ) : null}
-            {d.cliente.telefone ? (
-              <Text style={s.line}>
-                <Text style={s.label}>Tel: </Text>
-                {d.cliente.telefone}
-              </Text>
-            ) : null}
-            {d.cliente.email ? (
-              <Text style={s.line}>
-                <Text style={s.label}>E-mail: </Text>
-                {d.cliente.email}
-              </Text>
-            ) : null}
+        {/* Cliente */}
+        <View style={s.cliente}>
+          <View style={s.cliCol}>
+            <Field k="Cliente" v={d.cliente.razao || d.cliente.nome} />
+            <Field k="Nome fantasia" v={d.cliente.razao ? d.cliente.nome : null} />
+            <Field k="CNPJ/CPF" v={d.cliente.documento} />
+            <Field k="Inscr. estadual" v={d.cliente.inscricaoEstadual} />
+            <Field k="Endereço" v={d.cliente.endereco} />
           </View>
-          <View style={s.box}>
-            <Text style={s.boxTitle}>Condições</Text>
-            {d.tabela ? (
-              <Text style={s.line}>
-                <Text style={s.label}>Tabela: </Text>
-                {d.tabela}
-              </Text>
-            ) : null}
-            {d.vendedor ? (
-              <Text style={s.line}>
-                <Text style={s.label}>Vendedor: </Text>
-                {d.vendedor}
-              </Text>
-            ) : null}
-            {d.condicao_pagamento ? (
-              <Text style={s.line}>
-                <Text style={s.label}>Pagamento: </Text>
-                {d.condicao_pagamento}
-              </Text>
-            ) : null}
-            {d.forma_pagamento ? (
-              <Text style={s.line}>
-                <Text style={s.label}>Forma: </Text>
-                {d.forma_pagamento}
-              </Text>
-            ) : null}
-            {d.previsao_entrega ? (
-              <Text style={s.line}>
-                <Text style={s.label}>Previsão de entrega: </Text>
-                {d.previsao_entrega}
-              </Text>
-            ) : null}
-            {d.representada.cnpj ? (
-              <Text style={s.line}>
-                <Text style={s.label}>CNPJ representada: </Text>
-                {d.representada.cnpj}
-              </Text>
-            ) : null}
+          <View style={s.cliCol}>
+            <Field k="Bairro" v={d.cliente.bairro} />
+            <Field k="Cidade / UF" v={d.cliente.cidadeUf} />
+            <Field k="CEP" v={d.cliente.cep} />
+            <Field k="Telefone" v={d.cliente.telefone} />
+            <Field k="E-mail" v={d.cliente.email} />
           </View>
         </View>
 
+        {/* Itens */}
         <View style={s.table}>
-          <View style={[s.tr, s.trHead]}>
+          <View style={[s.tr, s.trHead]} fixed>
+            <Text style={[s.th, s.cNum]}>#</Text>
             <Text style={[s.th, s.cCod]}>Código</Text>
             <Text style={[s.th, s.cProd]}>Produto</Text>
-            <Text style={[s.th, s.cQtd]}>Qtd</Text>
-            <Text style={[s.th, s.cPreco]}>Preço</Text>
+            <Text style={[s.th, s.cQtd]}>Qtde.</Text>
+            <Text style={[s.th, s.cPreco]}>Preço tabela</Text>
             <Text style={[s.th, s.cDesc]}>Desc.</Text>
-            <Text style={[s.th, s.cUnit]}>Unit. líq.</Text>
-            <Text style={[s.th, s.cTot]}>Total</Text>
+            <Text style={[s.th, s.cLiq]}>Preço líq.</Text>
+            <Text style={[s.th, s.cSub]}>Subtotal</Text>
           </View>
-          {d.itens.map((it, i) => (
-            <View key={i} style={s.tr} wrap={false}>
-              <Text style={[s.td, s.cCod]}>{it.sku}</Text>
-              <Text style={[s.td, s.cProd]}>{it.descricao}</Text>
-              <Text style={[s.td, s.cQtd]}>{it.qtd}</Text>
-              <Text style={[s.td, s.cPreco]}>{brl(it.preco)}</Text>
-              <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
-              <Text style={[s.td, s.cUnit]}>{brl(it.precoFinal)}</Text>
-              <Text style={[s.td, s.cTot]}>{brl(it.total)}</Text>
-            </View>
-          ))}
+          {d.itens.map((it, i) => {
+            const rowStyle = [
+              s.tr,
+              i % 2 === 1 ? s.trZebra : {},
+              i === d.itens.length - 1 ? s.trLast : {},
+            ];
+            return (
+              <View key={i} style={rowStyle} wrap={false}>
+                <Text style={[s.td, s.cNum]}>{i + 1}</Text>
+                <Text style={[s.td, s.cCod, s.tdStrong]}>{it.sku}</Text>
+                <Text style={[s.td, s.cProd]}>{it.descricao}</Text>
+                <Text style={[s.td, s.cQtd]}>{it.qtd}</Text>
+                <Text style={[s.td, s.cPreco]}>{brl(it.preco)}</Text>
+                <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+                <Text style={[s.td, s.cLiq]}>{brl(it.precoFinal)}</Text>
+                <Text style={[s.td, s.cSub, s.tdStrong]}>{brl(it.total)}</Text>
+              </View>
+            );
+          })}
         </View>
 
-        <View style={s.totals}>
-          <View style={s.totalsBox}>
-            <View style={s.totalRow}>
-              <Text style={s.totalLabel}>Subtotal</Text>
-              <Text style={s.totalValue}>{brl(d.subtotal)}</Text>
+        {/* Linha do valor total, colada à tabela */}
+        <View style={s.totalStripe}>
+          <Text style={s.totalStripeLabel}>
+            {d.itens.length} {d.itens.length === 1 ? "item" : "itens"} · {totalUnidades} un. — VALOR TOTAL
+          </Text>
+          <Text style={s.totalStripeValue}>{brl(d.total)}</Text>
+        </View>
+
+        {/* Resumo (só quando há desconto adicional no pedido) */}
+        {temDescontoAdicional ? (
+          <View style={s.resumo}>
+            <View style={s.resumoBox}>
+              <View style={s.resumoRow}>
+                <Text style={s.resumoKey}>Subtotal dos itens</Text>
+                <Text style={s.resumoVal}>{brl(d.subtotal)}</Text>
+              </View>
+              <View style={s.resumoRow}>
+                <Text style={s.resumoKey}>Desconto adicional ({pct(d.descontoPct)})</Text>
+                <Text style={s.resumoVal}>- {brl(d.descontoValor)}</Text>
+              </View>
+              <View style={s.resumoRow}>
+                <Text style={[s.resumoKey, { fontFamily: "Helvetica-Bold", color: DARK }]}>Total</Text>
+                <Text style={[s.resumoVal, { fontFamily: "Helvetica-Bold", color: RED }]}>
+                  {brl(d.total)}
+                </Text>
+              </View>
             </View>
-            <View style={s.totalRow}>
-              <Text style={s.totalLabel}>Desconto adicional ({pct(d.descontoPct)})</Text>
-              <Text style={s.totalValue}>- {brl(d.descontoValor)}</Text>
-            </View>
-            <View style={s.grand}>
-              <Text style={s.grandLabel}>TOTAL</Text>
-              <Text style={s.grandValue}>{brl(d.total)}</Text>
-            </View>
+          </View>
+        ) : null}
+
+        {/* Pagamento / condições */}
+        <View style={s.pgto}>
+          <View style={s.pgtoCol}>
+            <Text style={s.pgtoKey}>Condição de pagamento</Text>
+            <Text style={s.pgtoVal}>
+              {[d.condicao_pagamento, d.forma_pagamento].filter(Boolean).join(" · ") || "—"}
+            </Text>
+            {d.tabela ? (
+              <>
+                <Text style={[s.pgtoKey, { marginTop: 8 }]}>Tabela de preços</Text>
+                <Text style={s.pgtoVal}>{d.tabela}</Text>
+              </>
+            ) : null}
+          </View>
+          <View style={s.pgtoCol}>
+            <Text style={s.pgtoKey}>Data de emissão</Text>
+            <Text style={s.pgtoVal}>{d.data}</Text>
+            {d.previsao_entrega ? (
+              <>
+                <Text style={[s.pgtoKey, { marginTop: 8 }]}>Previsão de entrega</Text>
+                <Text style={s.pgtoVal}>{d.previsao_entrega}</Text>
+              </>
+            ) : null}
+            {d.vendedor ? (
+              <>
+                <Text style={[s.pgtoKey, { marginTop: 8 }]}>Vendedor</Text>
+                <Text style={s.pgtoVal}>{d.vendedor}</Text>
+              </>
+            ) : null}
           </View>
         </View>
 
         {d.observacaoCliente ? (
           <View style={s.obs}>
-            <Text style={s.obsTitle}>OBSERVAÇÕES</Text>
-            <Text style={{ fontSize: 8.5, lineHeight: 1.4 }}>{d.observacaoCliente}</Text>
+            <Text style={s.obsTitle}>Observações</Text>
+            <Text style={s.obsText}>{d.observacaoCliente}</Text>
           </View>
         ) : null}
 
         <View style={s.footer} fixed>
-          <Text>{d.empresa.nome} · {d.empresa.contato}</Text>
+          <Text>
+            {d.empresa.nome} · {d.empresa.contato}
+          </Text>
           <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
         </View>
       </Page>

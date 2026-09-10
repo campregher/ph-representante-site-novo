@@ -70,12 +70,13 @@ const s = StyleSheet.create({
   trHead: { backgroundColor: LIGHT },
   th: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: DARK, padding: 5 },
   td: { fontSize: 8, padding: 5, color: "#374151" },
-  cCod: { width: "16%" },
-  cProd: { width: "40%" },
-  cQtd: { width: "10%", textAlign: "right" },
-  cPreco: { width: "13%", textAlign: "right" },
-  cDesc: { width: "9%", textAlign: "right" },
-  cTot: { width: "12%", textAlign: "right" },
+  cCod: { width: "15%" },
+  cProd: { width: "30%" },
+  cQtd: { width: "8%", textAlign: "right" },
+  cPreco: { width: "12%", textAlign: "right" },
+  cDesc: { width: "8%", textAlign: "right" },
+  cUnit: { width: "13%", textAlign: "right" },
+  cTot: { width: "14%", textAlign: "right" },
 
   totals: { flexDirection: "row", justifyContent: "flex-end" },
   totalsBox: { width: "45%" },
@@ -145,6 +146,7 @@ export interface PedidoPDFData {
     qtd: number;
     preco: number;
     descPct: number;
+    precoFinal: number;
     total: number;
   }[];
   subtotal: number;
@@ -278,6 +280,7 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
             <Text style={[s.th, s.cQtd]}>Qtd</Text>
             <Text style={[s.th, s.cPreco]}>Preço</Text>
             <Text style={[s.th, s.cDesc]}>Desc.</Text>
+            <Text style={[s.th, s.cUnit]}>Unit. líq.</Text>
             <Text style={[s.th, s.cTot]}>Total</Text>
           </View>
           {d.itens.map((it, i) => (
@@ -287,6 +290,7 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
               <Text style={[s.td, s.cQtd]}>{it.qtd}</Text>
               <Text style={[s.td, s.cPreco]}>{brl(it.preco)}</Text>
               <Text style={[s.td, s.cDesc]}>{it.descPct > 0 ? pct(it.descPct) : "—"}</Text>
+              <Text style={[s.td, s.cUnit]}>{brl(it.precoFinal)}</Text>
               <Text style={[s.td, s.cTot]}>{brl(it.total)}</Text>
             </View>
           ))}

@@ -670,13 +670,14 @@ export default function NovoPedido({
                     <Th className="text-right">Qtd</Th>
                     <Th className="text-right">Preço tabela</Th>
                     <Th className="text-right">Desc. %</Th>
+                    <Th className="text-right">Unit. c/ desc.</Th>
                     <Th className="text-right">Total</Th>
                     <Th />
                   </Tr>
                 </Thead>
                 <Tbody>
                   {itens.length === 0 ? (
-                    <TableEmpty colSpan={6}>Use a busca acima para adicionar produtos.</TableEmpty>
+                    <TableEmpty colSpan={7}>Use a busca acima para adicionar produtos.</TableEmpty>
                   ) : (
                     itens.map((it, idx) => {
                       const ci = calc.itens[idx];
@@ -720,6 +721,14 @@ export default function NovoPedido({
                               }
                               className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-right text-sm"
                             />
+                          </Td>
+                          <Td className="text-right tabular-nums">
+                            {formatBRL(ci?.preco_unitario_final ?? (Number(it.preco_tabela) || 0))}
+                            {(Number(it.desconto_item_percentual) || 0) > 0 && (
+                              <div className="text-[11px] text-neutral-400">
+                                de {formatBRL(Number(it.preco_tabela) || 0)}
+                              </div>
+                            )}
                           </Td>
                           <Td className="text-right font-medium">{formatBRL(ci?.valor_total ?? 0)}</Td>
                           <Td className="text-right">

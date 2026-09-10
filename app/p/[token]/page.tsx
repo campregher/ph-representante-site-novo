@@ -100,6 +100,7 @@ export default async function PedidoPublicoPage({
                 <th className="py-2 pr-2 text-right">Qtd</th>
                 <th className="py-2 pr-2 text-right">Preço</th>
                 <th className="py-2 pr-2 text-right">Desc.</th>
+                <th className="py-2 pr-2 text-right">Unit. líq.</th>
                 <th className="py-2 text-right">Total</th>
               </tr>
             </thead>
@@ -113,6 +114,7 @@ export default async function PedidoPublicoPage({
                   <td className="py-1.5 pr-2 text-right">
                     {it.descPct > 0 ? formatPercent(it.descPct) : "—"}
                   </td>
+                  <td className="py-1.5 pr-2 text-right">{formatBRL(it.precoFinal)}</td>
                   <td className="py-1.5 text-right font-medium">{formatBRL(it.total)}</td>
                 </tr>
               ))}

@@ -133,6 +133,9 @@ async function buildPedidoDoc(
       qtd: Number(it.quantidade),
       preco: Number(it.preco_tabela),
       descPct: Number(it.desconto_item_percentual),
+      precoFinal:
+        Number(it.preco_unitario_final) ||
+        Number(it.preco_tabela) * (1 - (Number(it.desconto_item_percentual) || 0) / 100),
       total: Number(it.valor_total),
     })),
     subtotal: Number(p.subtotal),
@@ -163,7 +166,9 @@ export function pedidoDocToText(d: PedidoPDFData): string {
   for (const it of d.itens) {
     L.push(
       `• ${it.sku} — ${it.descricao} | ${it.qtd} x ${formatBRL(it.preco)}` +
-        (it.descPct > 0 ? ` (-${formatPercent(it.descPct)})` : "") +
+        (it.descPct > 0
+          ? ` (-${formatPercent(it.descPct)} = ${formatBRL(it.precoFinal)}/un)`
+          : "") +
         ` = ${formatBRL(it.total)}`
     );
   }

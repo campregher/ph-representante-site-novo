@@ -4,6 +4,7 @@ import { createSistemaClient } from "@/lib/supabase/server";
 import { precoLiquido, brutoEfetivo } from "@/lib/sistema/preco";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 // O PostgREST limita cada resposta a 1.000 linhas. Para representadas com
 // catálogo grande, buscamos em páginas de 1.000 até esgotar.
@@ -80,30 +81,59 @@ export async function GET(request: Request) {
         .order("nome", { ascending: true }),
     ]);
 
-    const produtos = await fetchAll<ProdutoRow>((from, to) =>
-      supabase
-        .from("produtos")
-        .select(
-          "id, sku, nome, aplicacao, ativo, preco_bruto, tem_variacoes, unidade, peso, altura, largura, comprimento"
-        )
-        .eq("representada_id", representadaId)
-        .eq("ativo", true)
-        .order("nome", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to)
-    );
+    const tabelaList = tabelas ?? [];
+    const tabIds = tabelaList.map((t) => t.id as string);
 
-    // variações ativas dos produtos desta representada (via FK, sem .in gigante)
-    const variacoesRaw = await fetchAll<VariacaoRow & { produtos: unknown }>((from, to) =>
-      supabase
-        .from("produto_variacoes")
-        .select("id, produto_id, sku, atributos, preco_bruto, produtos!inner(representada_id)")
-        .eq("produtos.representada_id", representadaId)
-        .eq("ativo", true)
-        .order("produto_id", { ascending: true })
-        .order("ordem", { ascending: true })
-        .range(from, to)
-    );
+    // buscas independentes em paralelo (produtos, variações, overrides de preço,
+    // vínculo/desconto do cliente) — antes rodavam em série e isso somava vários
+    // segundos em representadas com catálogo grande.
+    const [produtos, variacoesRaw, overrides, clienteData] = await Promise.all([
+      fetchAll<ProdutoRow>((from, to) =>
+        supabase
+          .from("produtos")
+          .select(
+            "id, sku, nome, aplicacao, ativo, preco_bruto, tem_variacoes, unidade, peso, altura, largura, comprimento"
+          )
+          .eq("representada_id", representadaId)
+          .eq("ativo", true)
+          .order("nome", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
+      // variações ativas dos produtos desta representada (via FK, sem .in gigante)
+      fetchAll<VariacaoRow & { produtos: unknown }>((from, to) =>
+        supabase
+          .from("produto_variacoes")
+          .select("id, produto_id, sku, atributos, preco_bruto, produtos!inner(representada_id)")
+          .eq("produtos.representada_id", representadaId)
+          .eq("ativo", true)
+          .order("produto_id", { ascending: true })
+          .order("ordem", { ascending: true })
+          .range(from, to)
+      ),
+      tabIds.length
+        ? fetchAll<{ tabela_preco_id: string; produto_id: string; preco: number | null }>(
+            (from, to) =>
+              supabase
+                .from("produtos_precos")
+                .select("tabela_preco_id, produto_id, preco")
+                .in("tabela_preco_id", tabIds)
+                .order("tabela_preco_id", { ascending: true })
+                .range(from, to)
+          )
+        : Promise.resolve([]),
+      clienteId
+        ? Promise.all([
+            supabase
+              .from("cliente_representada")
+              .select("tabela_preco_id")
+              .eq("cliente_id", clienteId)
+              .eq("representada_id", representadaId)
+              .maybeSingle(),
+            supabase.from("clientes").select("desconto_cascata").eq("id", clienteId).maybeSingle(),
+          ])
+        : Promise.resolve(null),
+    ]);
 
     const variacoes: Record<
       string,
@@ -120,16 +150,8 @@ export async function GET(request: Request) {
 
     let tabelaPadrao: string | null = null;
     let descontoCascataCliente: number[] = [];
-    if (clienteId) {
-      const [{ data: vinc }, { data: cli }] = await Promise.all([
-        supabase
-          .from("cliente_representada")
-          .select("tabela_preco_id")
-          .eq("cliente_id", clienteId)
-          .eq("representada_id", representadaId)
-          .maybeSingle(),
-        supabase.from("clientes").select("desconto_cascata").eq("id", clienteId).maybeSingle(),
-      ]);
+    if (clienteData) {
+      const [{ data: vinc }, { data: cli }] = clienteData;
       tabelaPadrao = (vinc?.tabela_preco_id as string) ?? null;
       descontoCascataCliente = Array.isArray(cli?.desconto_cascata)
         ? (cli!.desconto_cascata as number[]).map(Number).filter((n) => n > 0)
@@ -142,21 +164,7 @@ export async function GET(request: Request) {
     // preços de TODAS as tabelas da representada (para tabela por item)
     const precosPorTabela: Record<string, Record<string, PrecoInfo>> = {};
 
-    const tabelaList = tabelas ?? [];
     if (tabelaList.length) {
-      const tabIds = tabelaList.map((t) => t.id as string);
-      const overrides = await fetchAll<{
-        tabela_preco_id: string;
-        produto_id: string;
-        preco: number | null;
-      }>((from, to) =>
-        supabase
-          .from("produtos_precos")
-          .select("tabela_preco_id, produto_id, preco")
-          .in("tabela_preco_id", tabIds)
-          .order("tabela_preco_id", { ascending: true })
-          .range(from, to)
-      );
       const overrideMap = new Map<string, number>(); // `${tabelaId}:${produtoId}`
       for (const o of overrides)
         if (o.preco != null) overrideMap.set(`${o.tabela_preco_id}:${o.produto_id}`, Number(o.preco));

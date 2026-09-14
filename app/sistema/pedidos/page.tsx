@@ -71,9 +71,10 @@ export default async function PedidosPage({
 
   let query = supabase
     .from("pedidos")
-    .select("id, numero, data_pedido, status, valor_total, cliente_id, representada_id, vendedor_id, share_token", {
-      count: "exact",
-    })
+    .select(
+      "id, numero, data_pedido, status, valor_total, cliente_id, representada_id, vendedor_id, share_token, clientes(nome_fantasia, razao_social)",
+      { count: "exact" }
+    )
     .order("data_pedido", { ascending: false });
 
   if (representada) query = query.eq("representada_id", representada);
@@ -100,17 +101,10 @@ export default async function PedidosPage({
   const rows = data ?? [];
   const total = count ?? 0;
 
-  // nomes de clientes da página
-  const clienteIds = [...new Set(rows.map((r) => r.cliente_id as string))];
-  const clienteMap = new Map<string, string>();
-  if (clienteIds.length) {
-    const { data: cs } = await supabase
-      .from("clientes")
-      .select("id, nome_fantasia, razao_social")
-      .in("id", clienteIds);
-    for (const c of cs ?? [])
-      clienteMap.set(c.id as string, (c.nome_fantasia as string) || (c.razao_social as string) || "—");
-  }
+  const nomeCliente = (r: (typeof rows)[number]): string => {
+    const c = r.clientes as unknown as { nome_fantasia: string | null; razao_social: string | null } | null;
+    return (c?.nome_fantasia || c?.razao_social) ?? "—";
+  };
 
   const isEmpty = total === 0 && !busca && !representada && !vendedor && !status && !periodo;
 
@@ -209,8 +203,8 @@ export default async function PedidosPage({
                         <Td className="whitespace-nowrap text-xs">
                           {formatDate(p.data_pedido as string)}
                         </Td>
-                        <Td className="truncate" title={clienteMap.get(p.cliente_id as string) ?? ""}>
-                          {clienteMap.get(p.cliente_id as string) ?? "—"}
+                        <Td className="truncate" title={nomeCliente(p)}>
+                          {nomeCliente(p)}
                         </Td>
                         <Td className="truncate" title={repMap.get(p.representada_id as string) ?? ""}>
                           {repMap.get(p.representada_id as string) ?? "—"}

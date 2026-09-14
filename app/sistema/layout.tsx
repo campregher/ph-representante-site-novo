@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createSistemaClient } from "@/lib/supabase/server";
 import { getMinhasNotificacoes } from "@/lib/sistema/notificacoes";
 import AppShell from "@/components/sistema/AppShell";
 import AccessDenied from "@/components/sistema/AccessDenied";
-import type { Role } from "@/lib/sistema/auth";
+import { getAuthedUserAndProfile, type Role } from "@/lib/sistema/auth";
 
 export const metadata: Metadata = {
   title: "Sistema Comercial | PH Representante",
@@ -16,18 +15,15 @@ export default async function SistemaLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createSistemaClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // dispara junto com a checagem de sessão/profile (economiza mais uma viagem
+  // sequencial); no caso raro de sessão inválida/perfil inativo, a busca é
+  // só descartada abaixo.
+  const [{ user, profile }, notificacoes] = await Promise.all([
+    getAuthedUserAndProfile(),
+    getMinhasNotificacoes(),
+  ]);
 
   if (!user) redirect("/login?redirect=/sistema");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, nome, email, telefone, avatar_url, role, ativo")
-    .eq("id", user.id)
-    .maybeSingle();
 
   if (!profile || !profile.ativo) {
     return (
@@ -36,8 +32,6 @@ export default async function SistemaLayout({
       </div>
     );
   }
-
-  const notificacoes = await getMinhasNotificacoes();
 
   return (
     <div data-sistema className="min-h-screen bg-neutral-50 text-neutral-900">

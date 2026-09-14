@@ -28,14 +28,16 @@ const stringArray = z.preprocess(
   z.array(z.string())
 );
 
-/** número opcional aceitando "" | number */
+/**
+ * Número opcional aceitando "" | number | string.
+ * Usa parseNumeroBR (só trata "." como milhar quando também há ",") — um
+ * input nativo type="number" sempre devolve o decimal com ponto (ex.:
+ * "150.5"), então remover todo ponto sem essa checagem multiplicava o
+ * valor por 10/100 (virava 15050).
+ */
 const optionalNumber = z
   .union([z.number(), z.string()])
-  .transform((v) => {
-    if (v === "" || v === null || v === undefined) return null;
-    const n = typeof v === "number" ? v : Number(String(v).replace(/\./g, "").replace(",", "."));
-    return Number.isFinite(n) ? n : null;
-  })
+  .transform((v) => (v === "" || v === null || v === undefined ? null : parseNumeroBR(v)))
   .nullable()
   .optional();
 
@@ -316,13 +318,10 @@ export const empresaConfigSchema = z.object({
   observacoes_padrao_pedido: optionalText,
 });
 
-const valorMeta = z
-  .union([z.number(), z.string()])
-  .transform((v) => {
-    const n =
-      typeof v === "number" ? v : Number(String(v).replace(/\./g, "").replace(",", "."));
-    return Number.isFinite(n) && n >= 0 ? n : 0;
-  });
+const valorMeta = z.union([z.number(), z.string()]).transform((v) => {
+  const n = typeof v === "number" ? v : parseNumeroBR(v);
+  return n != null && n >= 0 ? n : 0;
+});
 
 export const metaGeralSchema = z.object({
   ano: z.coerce.number().int().min(2020).max(2100),

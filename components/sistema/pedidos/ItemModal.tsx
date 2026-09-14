@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X, ArrowDown, ArrowUp, RotateCcw, Pencil } from "lucide-react";
-import { formatBRL } from "@/lib/sistema/format";
+import { formatBRL, parseNumeroBR } from "@/lib/sistema/format";
 import { calcItem, parseCascata } from "@/lib/sistema/pedido-calc";
 import { Button } from "@/components/sistema/ui/Button";
 
@@ -79,10 +79,7 @@ export default function ItemModal({
 
   const descNums = parseCascata(desc, 100);
   const acrNums = parseCascata(acr, 1000);
-  const manual =
-    manualLiq && liqStr.trim() !== ""
-      ? Number(liqStr.replace(/\s|\./g, "").replace(",", "."))
-      : null;
+  const manual = manualLiq && liqStr.trim() !== "" ? parseNumeroBR(liqStr) : null;
   const temManual = manual != null && Number.isFinite(manual) && manual >= 0;
 
   const base = precoBaseFor(tabelaId || defaultTabelaId || null);

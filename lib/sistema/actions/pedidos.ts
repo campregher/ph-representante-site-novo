@@ -8,7 +8,7 @@ import { calcPedido } from "@/lib/sistema/pedido-calc";
 import { brutoEfetivo } from "@/lib/sistema/preco";
 import { sincronizarComissaoPedido } from "@/lib/sistema/comissoes-sync";
 import { criarNotificacao } from "@/lib/sistema/notificacoes";
-import { PEDIDO_STATUS_OPTIONS } from "@/lib/sistema/types";
+import { PEDIDO_STATUS_OPTIONS, STATUS_VENDA } from "@/lib/sistema/types";
 import type { ActionResult } from "@/lib/sistema/types";
 
 const STATUS_LABEL = new Map<string, string>(
@@ -319,8 +319,10 @@ export async function alterarStatusPedido(
     .eq("id", id)
     .maybeSingle();
 
-  // marca última compra do cliente quando fatura
-  if (status === "faturado" && ped) {
+  // marca última compra do cliente quando a venda é realizada (mesmo conjunto de
+  // status usado nos relatórios/dashboard — não só "faturado", senão o cliente
+  // ficava marcado "inativo" com o pedido só confirmado, aguardando faturar)
+  if ((STATUS_VENDA as readonly string[]).includes(status) && ped) {
     await supabase
       .from("clientes")
       .update({ data_ultima_compra: String(ped.data_pedido).slice(0, 10), status: "ativo" })

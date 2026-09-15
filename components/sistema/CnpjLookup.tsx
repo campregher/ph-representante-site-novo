@@ -10,10 +10,13 @@ export default function CnpjLookup({
   cnpj,
   onData,
   size = "md",
+  endpoint = "/api/sistema/cnpj",
 }: {
   cnpj: string;
   onData: (data: CnpjData) => void;
   size?: "sm" | "md";
+  /** base da rota de consulta — a pública (sem login) usa "/api/drop/cnpj" */
+  endpoint?: string;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -25,7 +28,7 @@ export default function CnpjLookup({
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/sistema/cnpj/${clean}`);
+      const res = await fetch(`${endpoint}/${clean}`);
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error ?? "Falha na consulta.");

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Boxes, Truck, ClipboardList, ArrowLeftRight, AlertTriangle, Coins, Package } from "lucide-react";
+import { Plus, Boxes, Truck, ClipboardList, ArrowLeftRight, AlertTriangle, Coins, Package, BarChart3 } from "lucide-react";
 import { requireSistemaProfile } from "@/lib/sistema/auth";
 import { listProdutosProprios, estoqueKpis } from "@/lib/sistema/estoque";
 import { formatBRL, formatNumber } from "@/lib/sistema/format";
@@ -33,6 +33,7 @@ export default async function EstoquePage({
     { href: "/sistema/estoque/fornecedores", label: "Fornecedores", icon: <Truck size={15} /> },
     { href: "/sistema/estoque/compras", label: "Compras", icon: <ClipboardList size={15} /> },
     { href: "/sistema/estoque/movimentos", label: "Movimentos", icon: <ArrowLeftRight size={15} /> },
+    { href: "/sistema/estoque/relatorio", label: "Relatório", icon: <BarChart3 size={15} /> },
   ];
 
   return (

@@ -6,7 +6,8 @@ const INK = "#111827";
 const MUT = "#6b7280";
 
 export function pedidoEmailSubject(d: PedidoPDFData): string {
-  return `Pedido #${d.numero} — ${d.empresa.nome}`;
+  const rotulo = d.tipo === "drop_proprio" ? "Fatura" : "Pedido";
+  return `${rotulo} #${d.numero} — ${d.empresa.nome}`;
 }
 
 function esc(s: string | null | undefined): string {
@@ -19,6 +20,9 @@ export function pedidoEmailHtml(
   d: PedidoPDFData,
   opts: { linkPublico?: string | null; mensagem?: string | null; pdfAnexado?: boolean } = {}
 ): string {
+  const isDrop = d.tipo === "drop_proprio";
+  const rotulo = isDrop ? "Fatura" : "Pedido";
+
   const itens = d.itens
     .map(
       (it) => `
@@ -62,13 +66,17 @@ export function pedidoEmailHtml(
 
   <tr><td style="background:${INK};padding:22px 32px">
     <span style="font-size:18px;font-weight:800;color:#fff">${esc(d.empresa.nome)}</span>
-    <span style="float:right;font-size:13px;color:#9ca3af">Pedido #${d.numero} · ${esc(d.data)}</span>
+    <span style="float:right;font-size:13px;color:#9ca3af">${rotulo} #${d.numero} · ${esc(d.data)}</span>
   </td></tr>
 
   <tr><td style="padding:26px 32px 4px">
     <p style="margin:0;font-size:17px;font-weight:800;color:${INK}">Olá, ${esc(d.cliente.nome)}!</p>
     <p style="margin:8px 0 0;font-size:14px;color:${MUT};line-height:1.6">
-      Segue o resumo do seu pedido com a <strong>${esc(d.representada.nome)}</strong>.
+      ${
+        isDrop
+          ? "Segue o resumo da sua fatura."
+          : `Segue o resumo do seu pedido com a <strong>${esc(d.representada.nome)}</strong>.`
+      }
       ${opts.pdfAnexado ? "O PDF completo está anexado a este e-mail." : ""}
     </p>
   </td></tr>

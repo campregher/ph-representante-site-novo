@@ -187,6 +187,8 @@ export interface PedidoPDFData {
   numero: number;
   data: string;
   statusLabel: string;
+  /** drop_proprio = venda direta da linha própria (sem representada) — vira "Fatura". */
+  tipo?: string | null;
   empresa: { nome: string; contato: string; logo?: string | null };
   representada: { nome: string; cnpj?: string | null; logo?: string | null };
   cliente: {
@@ -244,13 +246,15 @@ function Field({ k, v }: { k: string; v?: string | null }) {
 }
 
 export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
+  const isDrop = d.tipo === "drop_proprio";
   const empLogo = usableImg(d.empresa.logo);
   const repLogo = usableImg(d.representada.logo);
   const totalUnidades = d.itens.reduce((acc, it) => acc + (Number(it.qtd) || 0), 0);
   const temDescontoAdicional = Number(d.descontoValor) > 0 || Number(d.descontoPct) > 0;
+  const titulo = isDrop ? "FATURA" : "PEDIDO";
 
   return (
-    <Document title={`Pedido ${d.numero} — ${d.empresa.nome}`} author={d.empresa.nome}>
+    <Document title={`${isDrop ? "Fatura" : "Pedido"} ${d.numero} — ${d.empresa.nome}`} author={d.empresa.nome}>
       <Page size="A4" orientation="landscape" style={s.page}>
         {/* Cabeçalho */}
         <View style={s.header}>
@@ -260,10 +264,10 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
           <View style={s.hCenter}>
             <Text style={s.empNome}>{d.empresa.nome}</Text>
             <Text style={s.empContato}>{d.empresa.contato}</Text>
-            <Text style={s.pedidoNum}>PEDIDO Nº {d.numero}</Text>
+            <Text style={s.pedidoNum}>{titulo} Nº {d.numero}</Text>
           </View>
           <View style={s.hRight}>
-            {repLogo ? (
+            {isDrop ? null : repLogo ? (
               <PdfImage src={repLogo} style={s.logo} />
             ) : (
               <Text style={s.repNome}>{d.representada.nome}</Text>
@@ -273,10 +277,14 @@ export default function PedidoPDF({ d }: { d: PedidoPDFData }) {
 
         {/* Representada + data/status */}
         <View style={s.band}>
-          <Text style={s.bandKey}>
-            Representada: <Text style={s.bandVal}>{d.representada.nome}</Text>
-            {d.representada.cnpj ? <Text style={s.bandVal}>  ·  CNPJ {d.representada.cnpj}</Text> : null}
-          </Text>
+          {isDrop ? (
+            <Text style={s.bandKey}>Venda direta — Linha Própria</Text>
+          ) : (
+            <Text style={s.bandKey}>
+              Representada: <Text style={s.bandVal}>{d.representada.nome}</Text>
+              {d.representada.cnpj ? <Text style={s.bandVal}>  ·  CNPJ {d.representada.cnpj}</Text> : null}
+            </Text>
+          )}
           <Text style={s.bandVal}>
             {d.data}  ·  {d.statusLabel}
           </Text>

@@ -29,9 +29,12 @@ export async function GET(req: Request) {
   // ---- perfis ativos (para e-mail) ----
   const { data: perfis } = await db
     .from("profiles")
-    .select("id, nome, email, ativo");
+    .select("id, nome, email, ativo, role");
   const perfilMap = new Map(
-    (perfis ?? []).map((p) => [p.id as string, p as { id: string; nome: string | null; email: string | null; ativo: boolean }])
+    (perfis ?? []).map((p) => [
+      p.id as string,
+      p as { id: string; nome: string | null; email: string | null; ativo: boolean; role: string },
+    ])
   );
 
   type Aviso = { userId: string; titulo: string; descricao: string; link: string; tipo: string };
@@ -80,6 +83,33 @@ export async function GET(req: Request) {
       descricao: "Veja a lista em Relatórios → Clientes sem comprar.",
       link: "/sistema/relatorios?tab=inatividade",
     });
+  }
+
+  // ---- linha própria: produtos abaixo do estoque mínimo → admin/gerente ----
+  // (PostgREST não compara coluna com coluna via filtro — busca e filtra em JS)
+  const { data: produtosProprios } = await db
+    .from("produtos")
+    .select("estoque_atual, estoque_minimo")
+    .eq("linha_propria", true)
+    .eq("ativo", true)
+    .gt("estoque_minimo", 0);
+  const baixoEstoque = (produtosProprios ?? []).filter(
+    (p) => Number(p.estoque_atual) <= Number(p.estoque_minimo)
+  );
+  if (baixoEstoque.length > 0) {
+    const gestores = (perfis ?? []).filter(
+      (p) => p.ativo && (p.role === "admin" || p.role === "gerente")
+    );
+    const qtd = baixoEstoque.length;
+    for (const g of gestores) {
+      avisos.push({
+        userId: g.id as string,
+        tipo: "estoque",
+        titulo: `${qtd} produto${qtd > 1 ? "s" : ""} da linha própria abaixo do estoque mínimo`,
+        descricao: "Veja a lista em Linha Própria (filtro 'Abaixo do mínimo').",
+        link: "/sistema/estoque?baixo=1",
+      });
+    }
   }
 
   // ---- grava notificações (dedupe por título / 20h) ----

@@ -1,5 +1,6 @@
 import { createSistemaClient } from "@/lib/supabase/server";
 import type { Fornecedor } from "@/lib/sistema/types";
+import { STATUS_VENDA } from "@/lib/sistema/types";
 
 export interface ProdutoProprioRow {
   id: string;
@@ -210,6 +211,134 @@ export interface ClienteDropOpt {
   bairro: string | null;
   cidade: string | null;
   estado: string | null;
+}
+
+export interface EstoqueParadoRow {
+  id: string;
+  sku: string;
+  nome: string;
+  estoqueAtual: number;
+  custo: number;
+  valorParado: number;
+}
+
+export interface EstoqueRelatorio {
+  dias: number;
+  receita: number;
+  custoVendido: number;
+  margem: number;
+  margemPct: number;
+  unidadesVendidas: number;
+  estoqueAtualUnidades: number;
+  giroAnualizado: number;
+  valorParadoTotal: number;
+  produtosParados: EstoqueParadoRow[];
+  topMargem: { id: string; sku: string; nome: string; margem: number }[];
+}
+
+/**
+ * Margem, giro e estoque parado da linha própria, com base nas vendas (pedidos
+ * tipo=drop_proprio, status de venda) dos últimos `dias` dias. `custo_unitario`
+ * usa o snapshot gravado no item na hora da venda (não o custo atual do produto).
+ */
+export async function estoqueRelatorio(dias = 90): Promise<EstoqueRelatorio> {
+  const supabase = await createSistemaClient();
+  const corte = new Date(Date.now() - dias * 86_400_000).toISOString().slice(0, 10);
+
+  const [{ data: produtos }, { data: itensRaw }] = await Promise.all([
+    supabase
+      .from("produtos")
+      .select("id, sku, nome, custo, estoque_atual")
+      .eq("linha_propria", true)
+      .eq("ativo", true)
+      .limit(5000),
+    supabase
+      .from("pedido_itens")
+      .select("produto_id, quantidade, valor_total, custo_unitario, pedidos!inner(tipo, status, data_pedido)")
+      .eq("pedidos.tipo", "drop_proprio")
+      .in("pedidos.status", [...STATUS_VENDA])
+      .gte("pedidos.data_pedido", corte)
+      .limit(10000),
+  ]);
+
+  const prods = produtos ?? [];
+  const itens = (itensRaw ?? []) as unknown as {
+    produto_id: string | null;
+    quantidade: number;
+    valor_total: number;
+    custo_unitario: number | null;
+  }[];
+
+  const porProduto = new Map<string, { unidades: number; receita: number; custo: number }>();
+  let receita = 0;
+  let custoVendido = 0;
+  let unidadesVendidas = 0;
+  for (const it of itens) {
+    if (!it.produto_id) continue;
+    const q = Number(it.quantidade) || 0;
+    const rec = Number(it.valor_total) || 0;
+    const cst = q * Number(it.custo_unitario ?? 0);
+    receita += rec;
+    custoVendido += cst;
+    unidadesVendidas += q;
+    const acc = porProduto.get(it.produto_id) ?? { unidades: 0, receita: 0, custo: 0 };
+    acc.unidades += q;
+    acc.receita += rec;
+    acc.custo += cst;
+    porProduto.set(it.produto_id, acc);
+  }
+  const margem = receita - custoVendido;
+  const margemPct = receita > 0 ? (margem / receita) * 100 : 0;
+
+  const estoqueAtualUnidades = prods.reduce((s, p) => s + Number(p.estoque_atual ?? 0), 0);
+  // giro anualizado ~ quantas vezes o estoque atual "viraria" por ano, no ritmo dos últimos `dias`
+  const giroAnualizado =
+    estoqueAtualUnidades > 0 ? (unidadesVendidas / dias) * 365 / estoqueAtualUnidades : 0;
+
+  const produtosParados: EstoqueParadoRow[] = [];
+  let valorParadoTotal = 0;
+  for (const p of prods) {
+    const saldo = Number(p.estoque_atual ?? 0);
+    if (saldo <= 0) continue;
+    if (porProduto.has(p.id as string)) continue; // vendeu no período
+    const custo = Number(p.custo ?? 0);
+    const valorParado = saldo * custo;
+    valorParadoTotal += valorParado;
+    produtosParados.push({
+      id: p.id as string,
+      sku: p.sku as string,
+      nome: p.nome as string,
+      estoqueAtual: saldo,
+      custo,
+      valorParado,
+    });
+  }
+  produtosParados.sort((a, b) => b.valorParado - a.valorParado);
+
+  const nomeMap = new Map(prods.map((p) => [p.id as string, { sku: p.sku as string, nome: p.nome as string }]));
+  const topMargem = [...porProduto.entries()]
+    .map(([id, v]) => ({
+      id,
+      sku: nomeMap.get(id)?.sku ?? "",
+      nome: nomeMap.get(id)?.nome ?? "—",
+      margem: v.receita - v.custo,
+    }))
+    .sort((a, b) => b.margem - a.margem)
+    .slice(0, 10);
+
+  return {
+    dias,
+    receita,
+    custoVendido,
+    margem,
+    margemPct,
+    unidadesVendidas,
+    estoqueAtualUnidades,
+    giroAnualizado,
+    valorParadoTotal,
+    produtosParados: produtosParados.slice(0, 20),
+    topMargem,
+  };
 }
 
 /** Todos os clientes (sellers + clientes da representação) para o pedido drop. */

@@ -216,6 +216,41 @@ export const clienteSchema = z
     message: "Informe a razão social ou o nome do cliente",
     path: ["razao_social"],
   });
+/** Auto-cadastro público de seller (/drop/cadastro) — só os campos que o próprio
+ *  seller pode preencher; status/is_seller/vendedor são fixados pela action. */
+export const sellerCadastroSchema = z
+  .object({
+    tipo_pessoa: z.enum(["juridica", "fisica"]).default("juridica"),
+    cnpj: optionalText,
+    cpf: optionalText,
+    razao_social: optionalText,
+    nome_fantasia: optionalText,
+    inscricao_estadual: optionalText,
+    telefone: optionalText,
+    whatsapp: optionalText,
+    email: optionalEmail,
+    cep: optionalText,
+    logradouro: optionalText,
+    numero: optionalText,
+    complemento: optionalText,
+    bairro: optionalText,
+    cidade: optionalText,
+    estado: optionalText,
+  })
+  .refine((d) => !!(d.razao_social || d.nome_fantasia), {
+    message: "Informe a razão social ou o nome",
+    path: ["razao_social"],
+  })
+  .refine((d) => !!(d.cnpj || d.cpf), {
+    message: "Informe o CNPJ ou o CPF",
+    path: ["cnpj"],
+  })
+  .refine((d) => !!(d.telefone || d.whatsapp || d.email), {
+    message: "Informe pelo menos um contato (telefone, whatsapp ou e-mail)",
+    path: ["email"],
+  });
+export type SellerCadastroInput = z.input<typeof sellerCadastroSchema>;
+
 export type ClienteInput = z.input<typeof clienteSchema>;
 export type ClienteValues = z.output<typeof clienteSchema>;
 

@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSistemaProfile } from "@/lib/sistema/auth";
 import { buscarCnpj } from "@/lib/sistema/cnpj";
 
 export const runtime = "nodejs";
 
+/** Mesma consulta de CNPJ da área interna, sem exigir login — usada no
+ *  auto-cadastro público de seller (/drop/cadastro). */
 export async function GET(_req: Request, { params }: { params: Promise<{ cnpj: string }> }) {
-  const profile = await getSistemaProfile();
-  if (!profile) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-
   const { cnpj } = await params;
   const clean = cnpj.replace(/\D/g, "");
   const resultado = await buscarCnpj(clean);

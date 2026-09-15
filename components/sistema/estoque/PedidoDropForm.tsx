@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { salvarPedidoDrop } from "@/lib/sistema/actions/pedido-drop";
+import type { ClienteDropOpt } from "@/lib/sistema/estoque";
 import { CANAL_VENDA_OPTIONS } from "@/lib/sistema/types";
 import { formatBRL, parseNumeroBR } from "@/lib/sistema/format";
 import { Card, CardBody, CardHeader } from "@/components/sistema/ui/Card";
@@ -15,15 +16,18 @@ interface ProdOpt { id: string; sku: string; nome: string; preco: number; custo:
 interface Linha { produto_id: string; quantidade: string; preco_venda: string }
 
 export default function PedidoDropForm({
-  sellers,
+  clientes,
   produtos,
 }: {
-  sellers: { id: string; label: string }[];
+  clientes: ClienteDropOpt[];
   produtos: ProdOpt[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [cliente, setCliente] = useState(sellers[0]?.id ?? "");
+  const [cliente, setCliente] = useState(clientes[0]?.id ?? "");
+  const cmap = useMemo(() => new Map(clientes.map((c) => [c.id, c])), [clientes]);
+  const sellers = clientes.filter((c) => c.is_seller);
+  const outros = clientes.filter((c) => !c.is_seller);
   const [canal, setCanal] = useState("");
   const [pedidoExterno, setPedidoExterno] = useState("");
   const [frete, setFrete] = useState("");
@@ -79,9 +83,18 @@ export default function PedidoDropForm({
         <CardHeader title="Pedido" />
         <CardBody>
           <FormGrid>
-            <Field label="Seller" required>
+            <Field label="Cliente / Seller" required>
               <Select value={cliente} onChange={(e) => setCliente(e.target.value)}>
-                {sellers.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                {sellers.length > 0 && (
+                  <optgroup label="Sellers">
+                    {sellers.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </optgroup>
+                )}
+                {outros.length > 0 && (
+                  <optgroup label="Clientes cadastrados">
+                    {outros.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </optgroup>
+                )}
               </Select>
             </Field>
             <Field label="Canal">
@@ -141,7 +154,33 @@ export default function PedidoDropForm({
       </Card>
 
       <Card>
-        <CardHeader title="Entrega (consumidor final)" />
+        <CardHeader
+          title="Entrega (consumidor final)"
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                const c = cmap.get(cliente);
+                if (!c) return;
+                setEnt({
+                  entrega_nome: clientes.find((x) => x.id === cliente)?.label ?? "",
+                  entrega_documento: c.documento ?? "",
+                  entrega_telefone: c.telefone ?? "",
+                  entrega_cep: c.cep ?? "",
+                  entrega_logradouro: c.logradouro ?? "",
+                  entrega_numero: c.numero ?? "",
+                  entrega_complemento: c.complemento ?? "",
+                  entrega_bairro: c.bairro ?? "",
+                  entrega_cidade: c.cidade ?? "",
+                  entrega_uf: c.estado ?? "",
+                });
+              }}
+              className="text-xs font-medium text-brand hover:underline"
+            >
+              Usar endereço do cliente
+            </button>
+          }
+        />
         <CardBody>
           <FormGrid>
             <Field label="Nome"><Input value={ent.entrega_nome} onChange={(e) => setE("entrega_nome", e.target.value)} /></Field>

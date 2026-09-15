@@ -197,17 +197,45 @@ export async function listMovimentos(opts: { produtoId?: string; limit?: number 
   }));
 }
 
-export async function sellerOptions(): Promise<{ id: string; label: string }[]> {
+export interface ClienteDropOpt {
+  id: string;
+  label: string;
+  is_seller: boolean;
+  documento: string | null;
+  telefone: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+}
+
+/** Todos os clientes (sellers + clientes da representação) para o pedido drop. */
+export async function clientesParaDrop(): Promise<ClienteDropOpt[]> {
   const supabase = await createSistemaClient();
   const { data } = await supabase
     .from("clientes")
-    .select("id, nome_fantasia, razao_social, is_seller, status")
-    .eq("is_seller", true)
+    .select(
+      "id, nome_fantasia, razao_social, cnpj, cpf, is_seller, status, telefone, whatsapp, cep, logradouro, numero, complemento, bairro, cidade, estado"
+    )
     .neq("status", "bloqueado")
+    .order("is_seller", { ascending: false })
     .order("nome_fantasia", { ascending: true, nullsFirst: false })
-    .limit(2000);
+    .limit(3000);
   return (data ?? []).map((c) => ({
     id: c.id as string,
     label: (c.nome_fantasia as string) || (c.razao_social as string) || "—",
+    is_seller: !!c.is_seller,
+    documento: (c.cnpj as string) || (c.cpf as string) || null,
+    telefone: (c.telefone as string) || (c.whatsapp as string) || null,
+    cep: (c.cep as string) ?? null,
+    logradouro: (c.logradouro as string) ?? null,
+    numero: (c.numero as string) ?? null,
+    complemento: (c.complemento as string) ?? null,
+    bairro: (c.bairro as string) ?? null,
+    cidade: (c.cidade as string) ?? null,
+    estado: (c.estado as string) ?? null,
   }));
 }

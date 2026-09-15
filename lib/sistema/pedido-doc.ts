@@ -56,6 +56,7 @@ async function buildPedidoDoc(
   publico: boolean
 ): Promise<PedidoPDFData> {
   const p = data as unknown as Pedido & {
+    tipo: string | null;
     cliente: {
       nome_fantasia: string | null;
       razao_social: string | null;
@@ -100,6 +101,7 @@ async function buildPedidoDoc(
     numero: p.numero,
     data: formatDate(p.data_pedido),
     statusLabel: PEDIDO_STATUS[p.status]?.label ?? p.status,
+    tipo: p.tipo,
     empresa: { nome: emp.empresa_nome, contato: empresaContato(emp), logo: null },
     representada: {
       nome: p.representada

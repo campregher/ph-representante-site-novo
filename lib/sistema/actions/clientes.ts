@@ -43,8 +43,10 @@ export async function saveCliente(id: string | null, raw: unknown): Promise<Acti
 
   const payload: Record<string, unknown> = {
     ...v,
-    cnpj: v.cnpj ? onlyDigits(v.cnpj) : null,
-    cpf: v.cpf ? onlyDigits(v.cpf) : null,
+    // o campo escondido pelo toggle PJ/PF pode chegar com valor antigo (RHF não
+    // limpa input desmontado por padrão) — ignora o que não corresponde ao tipo escolhido
+    cnpj: v.tipo_pessoa === "juridica" && v.cnpj ? onlyDigits(v.cnpj) : null,
+    cpf: v.tipo_pessoa === "fisica" && v.cpf ? onlyDigits(v.cpf) : null,
     updated_by: g.profile!.id,
   };
   // vendedor só cadastra cliente pra si

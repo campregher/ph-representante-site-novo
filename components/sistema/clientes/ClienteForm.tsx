@@ -41,6 +41,7 @@ export default function ClienteForm({
     formState: { errors },
   } = useForm<ClienteInput>({
     resolver: zodResolver(clienteSchema),
+    shouldUnregister: true, // limpa cnpj/cpf ao trocar o toggle PJ/PF
     defaultValues: initial
       ? {
           tipo_pessoa: initial.tipo_pessoa,

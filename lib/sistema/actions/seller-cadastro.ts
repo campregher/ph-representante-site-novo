@@ -23,8 +23,10 @@ export async function cadastrarSeller(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const v = parsed.data;
-  const cnpj = v.cnpj ? onlyDigits(v.cnpj) : null;
-  const cpf = v.cpf ? onlyDigits(v.cpf) : null;
+  // o campo escondido pelo toggle PJ/PF pode chegar com valor antigo (RHF não
+  // limpa input desmontado por padrão) — ignora o que não corresponde ao tipo escolhido
+  const cnpj = v.tipo_pessoa === "juridica" && v.cnpj ? onlyDigits(v.cnpj) : null;
+  const cpf = v.tipo_pessoa === "fisica" && v.cpf ? onlyDigits(v.cpf) : null;
   if (cnpj && cnpj.length !== 14) return { ok: false, error: "CNPJ inválido — precisa ter 14 dígitos." };
   if (cpf && cpf.length !== 11) return { ok: false, error: "CPF inválido — precisa ter 11 dígitos." };
 

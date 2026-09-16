@@ -27,6 +27,7 @@ export default function SellerCadastroForm() {
   } = useForm<SellerCadastroInput>({
     resolver: zodResolver(sellerCadastroSchema),
     defaultValues: { tipo_pessoa: "juridica" },
+    shouldUnregister: true, // limpa cnpj/cpf ao trocar o toggle PJ/PF
   });
 
   const tipo = (useWatch({ control, name: "tipo_pessoa" }) ?? "juridica") as string;

@@ -3,7 +3,55 @@
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { sellerCadastroSchema } from "@/lib/sistema/schemas";
 import { onlyDigits } from "@/lib/sistema/format";
+import { criarNotificacoes } from "@/lib/sistema/notificacoes";
+import { sendEmail, resendConfigurado } from "@/lib/email/resend";
 import type { ActionResult } from "@/lib/sistema/types";
+
+function siteUrl(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL || "https://www.phrepresentante.com.br";
+}
+
+async function avisarNovoSeller(nome: string) {
+  try {
+    const db = await createSistemaAdminClient();
+    const { data: gestores } = await db
+      .from("profiles")
+      .select("id")
+      .in("role", ["admin", "gerente"])
+      .eq("ativo", true);
+    await criarNotificacoes(
+      (gestores ?? []).map((g) => ({
+        userId: g.id as string,
+        tipo: "seller",
+        titulo: `Novo cadastro de seller: ${nome}`,
+        descricao: "Auto-cadastro pelo /drop/cadastro — está como 'prospect', aguardando aprovação.",
+        link: "/sistema/clientes?status=prospect",
+      }))
+    );
+  } catch (e) {
+    console.error("avisarNovoSeller:", e);
+  }
+}
+
+async function enviarBoasVindas(email: string | null, nome: string, portalToken: string) {
+  if (!email || !resendConfigurado()) return;
+  const link = `${siteUrl()}/drop/portal/${portalToken}`;
+  try {
+    await sendEmail({
+      to: email,
+      subject: "Cadastro recebido — PH Representante",
+      html: `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6">
+        <p>Olá, ${nome}!</p>
+        <p>Recebemos seu cadastro como seller da PH Representante. Nosso time vai analisar e liberar
+        seu acesso em breve.</p>
+        <p>Guarde este link — é o seu acesso pessoal ao portal (sem precisar de senha):</p>
+        <p><a href="${link}">${link}</a></p>
+      </div>`,
+    });
+  } catch (e) {
+    console.error("enviarBoasVindas:", e);
+  }
+}
 
 /**
  * Auto-cadastro público de seller (sem login — /drop/cadastro). Usa o client
@@ -32,9 +80,13 @@ export async function cadastrarSeller(
 
   const db = await createSistemaAdminClient();
 
+  const nome = v.razao_social || v.nome_fantasia || "seller";
+
   const { data: existente } = await db
     .from("clientes")
-    .select("id, is_seller, telefone, whatsapp, email, cep, logradouro, numero, complemento, bairro, cidade, estado")
+    .select(
+      "id, is_seller, portal_token, telefone, whatsapp, email, cep, logradouro, numero, complemento, bairro, cidade, estado"
+    )
     .eq(cnpj ? "cnpj" : "cpf", cnpj ?? cpf)
     .maybeSingle();
 
@@ -58,32 +110,48 @@ export async function cadastrarSeller(
     }
     const { error } = await db.from("clientes").update(preencheSeVazio).eq("id", existente.id as string);
     if (error) return { ok: false, error: error.message };
+    await Promise.all([
+      avisarNovoSeller(nome),
+      enviarBoasVindas(
+        (v.email || existente.email) as string | null,
+        nome,
+        existente.portal_token as string
+      ),
+    ]);
     return { ok: true, jaExistia: true };
   }
 
-  const { error } = await db.from("clientes").insert({
-    tipo_pessoa: v.tipo_pessoa,
-    cnpj,
-    cpf,
-    razao_social: v.razao_social,
-    nome_fantasia: v.nome_fantasia,
-    inscricao_estadual: v.inscricao_estadual,
-    telefone: v.telefone,
-    whatsapp: v.whatsapp || v.telefone,
-    email: v.email,
-    cep: v.cep,
-    logradouro: v.logradouro,
-    numero: v.numero,
-    complemento: v.complemento,
-    bairro: v.bairro,
-    cidade: v.cidade,
-    estado: v.estado,
-    status: "prospect",
-    is_seller: true,
-  });
+  const { data: novo, error } = await db
+    .from("clientes")
+    .insert({
+      tipo_pessoa: v.tipo_pessoa,
+      cnpj,
+      cpf,
+      razao_social: v.razao_social,
+      nome_fantasia: v.nome_fantasia,
+      inscricao_estadual: v.inscricao_estadual,
+      telefone: v.telefone,
+      whatsapp: v.whatsapp || v.telefone,
+      email: v.email,
+      cep: v.cep,
+      logradouro: v.logradouro,
+      numero: v.numero,
+      complemento: v.complemento,
+      bairro: v.bairro,
+      cidade: v.cidade,
+      estado: v.estado,
+      status: "prospect",
+      is_seller: true,
+    })
+    .select("portal_token")
+    .single();
   if (error) {
     if (error.code === "23505") return { ok: false, error: "Já existe um cadastro com este documento." };
     return { ok: false, error: error.message };
   }
+  await Promise.all([
+    avisarNovoSeller(nome),
+    enviarBoasVindas(v.email ?? null, nome, novo.portal_token as string),
+  ]);
   return { ok: true, jaExistia: false };
 }

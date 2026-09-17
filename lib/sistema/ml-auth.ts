@@ -32,7 +32,9 @@ export function getPortalMlAuthUrl(clienteId: string): string {
     client_id: ML_APP_ID,
     redirect_uri: ML_PORTAL_REDIRECT_URI,
     state: clienteId,
-    scope: "offline_access read write orders",
+    // "orders" não é escopo reconhecido no app novo (permissões são só do painel
+    // ML Developers) — mandar um scope inválido faz a autorização falhar de cara
+    scope: "offline_access read write",
   });
   return `https://auth.mercadolivre.com.br/authorization?${params}`;
 }

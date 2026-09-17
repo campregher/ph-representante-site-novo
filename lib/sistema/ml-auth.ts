@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 
 /**
@@ -25,13 +26,29 @@ export function mlConfigurado(): boolean {
   return !!(ML_APP_ID && ML_SECRET && ML_PORTAL_REDIRECT_URI);
 }
 
-/** state carrega o cliente_id — o callback do ML não preserva sessão/cookies. */
+/** PKCE (obrigatório neste app ML — use_pkce=true). code_verifier: 43-128 chars, RFC 7636. */
+function generateCodeVerifier(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+function codeChallengeFromVerifier(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
+/**
+ * state carrega cliente_id + code_verifier (separados por ".", nenhum dos dois usa
+ * esse caractere) — o callback do ML não preserva sessão/cookies entre domínios,
+ * então precisa vir tudo pelo próprio state.
+ */
 export function getPortalMlAuthUrl(clienteId: string): string {
+  const codeVerifier = generateCodeVerifier();
   const params = new URLSearchParams({
     response_type: "code",
     client_id: ML_APP_ID,
     redirect_uri: ML_PORTAL_REDIRECT_URI,
-    state: clienteId,
+    state: `${clienteId}.${codeVerifier}`,
+    code_challenge: codeChallengeFromVerifier(codeVerifier),
+    code_challenge_method: "S256",
     // "orders" não é escopo reconhecido no app novo (permissões são só do painel
     // ML Developers) — mandar um scope inválido faz a autorização falhar de cara
     scope: "offline_access read write",
@@ -39,7 +56,17 @@ export function getPortalMlAuthUrl(clienteId: string): string {
   return `https://auth.mercadolivre.com.br/authorization?${params}`;
 }
 
-export async function exchangePortalCodeForToken(code: string): Promise<MLTokenResponse> {
+/** Extrai {clienteId, codeVerifier} do state recebido no callback. */
+export function parseAuthState(state: string): { clienteId: string; codeVerifier: string } | null {
+  const [clienteId, codeVerifier] = state.split(".");
+  if (!clienteId || !codeVerifier) return null;
+  return { clienteId, codeVerifier };
+}
+
+export async function exchangePortalCodeForToken(
+  code: string,
+  codeVerifier: string
+): Promise<MLTokenResponse> {
   const res = await fetch(ML_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -49,6 +76,7 @@ export async function exchangePortalCodeForToken(code: string): Promise<MLTokenR
       client_secret: ML_SECRET,
       code,
       redirect_uri: ML_PORTAL_REDIRECT_URI,
+      code_verifier: codeVerifier,
     }),
   });
   if (!res.ok) {

@@ -33,6 +33,27 @@ async function avisarNovoSeller(nome: string) {
   }
 }
 
+/** Cliente novo — precisa confirmar o e-mail antes de qualquer coisa (D1). */
+async function enviarConfirmacaoEmail(email: string | null, nome: string, portalToken: string) {
+  if (!email || !resendConfigurado()) return;
+  const link = `${siteUrl()}/drop/confirmar/${portalToken}`;
+  try {
+    await sendEmail({
+      to: email,
+      subject: "Confirme seu e-mail — PH Representante",
+      html: `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6">
+        <p>Olá, ${nome}!</p>
+        <p>Recebemos seu cadastro como seller da PH Representante. Falta só confirmar seu e-mail
+        pra gente analisar seu documento e liberar o acesso automaticamente.</p>
+        <p><a href="${link}">${link}</a></p>
+      </div>`,
+    });
+  } catch (e) {
+    console.error("enviarConfirmacaoEmail:", e);
+  }
+}
+
+/** Cliente que já existia e virou seller agora — já é confiável, manda direto o portal. */
 async function enviarBoasVindas(email: string | null, nome: string, portalToken: string) {
   if (!email || !resendConfigurado()) return;
   const link = `${siteUrl()}/drop/portal/${portalToken}`;
@@ -151,7 +172,7 @@ export async function cadastrarSeller(
   }
   await Promise.all([
     avisarNovoSeller(nome),
-    enviarBoasVindas(v.email ?? null, nome, novo.portal_token as string),
+    enviarConfirmacaoEmail(v.email ?? null, nome, novo.portal_token as string),
   ]);
   return { ok: true, jaExistia: false };
 }

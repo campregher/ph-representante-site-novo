@@ -12,7 +12,7 @@ export default async function SellerPortalPage({
   const db = await createSistemaAdminClient();
   const { data: cliente } = await db
     .from("clientes")
-    .select("id, nome_fantasia, razao_social, status")
+    .select("id, nome_fantasia, razao_social, status, email_confirmado")
     .eq("portal_token", token)
     .maybeSingle();
 
@@ -51,13 +51,21 @@ export default async function SellerPortalPage({
             Seu acesso está bloqueado no momento. Fale com nosso time para mais informações.
           </CardBody>
         </Card>
+      ) : !cliente.email_confirmado ? (
+        <Card>
+          <CardHeader title="Confirme seu e-mail" />
+          <CardBody className="text-sm text-neutral-600">
+            Enviamos um link de confirmação pro e-mail que você cadastrou. Clique nele pra gente
+            analisar seu documento e liberar o acesso.
+          </CardBody>
+        </Card>
       ) : pendente ? (
         <Card>
           <CardHeader title="Cadastro em análise" />
           <CardBody className="text-sm text-neutral-600">
-            Recebemos seu cadastro e nosso time está avaliando. Assim que for aprovado, você poderá
-            conectar sua conta do Mercado Livre e ver o catálogo de produtos disponíveis pra
-            dropshipping aqui mesmo neste link — pode salvar essa página.
+            Seu e-mail foi confirmado e seu documento está em análise manual pelo nosso time. Assim
+            que for aprovado, você poderá conectar sua conta do Mercado Livre e ver o catálogo de
+            produtos disponíveis pra dropshipping aqui mesmo neste link — pode salvar essa página.
           </CardBody>
         </Card>
       ) : (

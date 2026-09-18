@@ -6,9 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function DropLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div data-sistema className="min-h-screen bg-neutral-100 text-neutral-900">
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }

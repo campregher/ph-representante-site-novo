@@ -113,7 +113,8 @@ export async function cadastrarSeller(
 
   if (existente) {
     if (existente.is_seller) return { ok: true, jaExistia: true };
-    const preencheSeVazio: Record<string, unknown> = { is_seller: true };
+    // cliente já existente vira seller sem passar pela confirmação de e-mail (já é confiável)
+    const preencheSeVazio: Record<string, unknown> = { is_seller: true, email_confirmado: true };
     const camposOpcionais = [
       ["telefone", v.telefone],
       ["whatsapp", v.whatsapp],

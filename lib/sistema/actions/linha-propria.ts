@@ -8,6 +8,7 @@ import { aplicarMovimento, custoMedio } from "@/lib/sistema/estoque-mov";
 import {
   fornecedorSchema,
   produtoProprioSchema,
+  categoriaLinhaPropriaSchema,
   compraSchema,
   ajusteEstoqueSchema,
 } from "@/lib/sistema/schemas";
@@ -70,12 +71,14 @@ export async function salvarProdutoProprio(id: string | null, raw: unknown): Pro
     nome: v.nome,
     descricao: v.descricao,
     fornecedor_id: v.fornecedor_id || null,
+    categoria_id: v.categoria_id || null,
     ncm: v.ncm,
     ean: v.ean,
     unidade: v.unidade || "UN",
     imagem_url: v.imagem_url,
     custo: v.custo,
     preco_bruto: v.preco_bruto,
+    margem_minima_percentual: v.margem_minima_percentual,
     estoque_minimo: Math.round(Number(v.estoque_minimo ?? 0)),
     peso: v.peso,
     altura: v.altura,
@@ -98,6 +101,38 @@ export async function salvarProdutoProprio(id: string | null, raw: unknown): Pro
   }
   revalidatePath("/sistema/estoque");
   return { ok: true };
+}
+
+// ────────────────────── Categorias da linha própria ────────────────────────
+// Categorias sem representada (representada_id null) — usadas só pra agrupar
+// produtos próprios e definir a margem mínima de revenda no drop.
+
+export async function salvarCategoriaLinhaPropria(
+  id: string | null,
+  raw: unknown
+): Promise<ActionResult<{ id?: string }>> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+  const parsed = categoriaLinhaPropriaSchema.safeParse(raw);
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const v = parsed.data;
+  const row = { nome: v.nome, margem_minima_percentual: v.margem_minima_percentual, ativa: v.ativa };
+  const supabase = await createSistemaClient();
+  if (id) {
+    const { error } = await supabase.from("categorias_produtos").update(row).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/sistema/estoque/categorias");
+    return { ok: true, id };
+  }
+  const { data, error } = await supabase
+    .from("categorias_produtos")
+    .insert({ ...row, representada_id: null })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/sistema/estoque/categorias");
+  return { ok: true, id: data.id as string };
 }
 
 // ─────────────────────────────── Compras ──────────────────────────────────

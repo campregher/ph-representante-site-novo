@@ -1,6 +1,7 @@
 import { createSistemaClient } from "@/lib/supabase/server";
-import type { Fornecedor } from "@/lib/sistema/types";
+import type { CategoriaProduto, Fornecedor } from "@/lib/sistema/types";
 import { STATUS_VENDA } from "@/lib/sistema/types";
+import { margemMinimaEfetiva, precoMinimoVenda } from "@/lib/sistema/preco";
 
 export interface ProdutoProprioRow {
   id: string;
@@ -14,6 +15,9 @@ export interface ProdutoProprioRow {
   ativo: boolean;
   ean: string | null;
   imagem_url: string | null;
+  categoria: string | null;
+  margemMinima: number | null;
+  precoMinimo: number | null;
 }
 
 export async function listFornecedores(soAtivos = false): Promise<Fornecedor[]> {
@@ -39,6 +43,23 @@ export async function fornecedorOptions(): Promise<{ id: string; label: string }
   return (data ?? []).filter((f) => f.ativo).map((f) => ({ id: f.id as string, label: f.nome as string }));
 }
 
+/** Categorias da linha própria (representada_id null) — agrupam produtos
+ *  próprios e definem a margem mínima padrão de revenda no drop. */
+export async function listCategoriasLinhaPropria(soAtivas = false): Promise<CategoriaProduto[]> {
+  const supabase = await createSistemaClient();
+  let q = supabase.from("categorias_produtos").select("*").is("representada_id", null).order("nome");
+  if (soAtivas) q = q.eq("ativa", true);
+  const { data } = await q;
+  return (data as CategoriaProduto[]) ?? [];
+}
+
+export async function categoriaLinhaPropriaOptions(): Promise<
+  { id: string; label: string; margem: number | null }[]
+> {
+  const cats = await listCategoriasLinhaPropria(true);
+  return cats.map((c) => ({ id: c.id, label: c.nome, margem: c.margem_minima_percentual }));
+}
+
 export async function listProdutosProprios(opts: {
   busca?: string;
   baixoEstoque?: boolean;
@@ -47,7 +68,7 @@ export async function listProdutosProprios(opts: {
   let q = supabase
     .from("produtos")
     .select(
-      "id, sku, nome, custo, preco_bruto, estoque_atual, estoque_minimo, ativo, ean, imagem_url, fornecedor:fornecedores(nome)"
+      "id, sku, nome, custo, preco_bruto, estoque_atual, estoque_minimo, ativo, ean, imagem_url, margem_minima_percentual, fornecedor:fornecedores(nome), categoria:categorias_produtos(nome, margem_minima_percentual)"
     )
     .eq("linha_propria", true)
     .order("nome")
@@ -57,9 +78,22 @@ export async function listProdutosProprios(opts: {
     q = q.or(`sku.ilike.%${t}%,nome.ilike.%${t}%,ean.ilike.%${t}%`);
   }
   const { data } = await q;
-  let rows = ((data ?? []) as unknown as (ProdutoProprioRow & { fornecedor: { nome: string } | null })[]).map(
-    (r) => ({ ...r, fornecedor: r.fornecedor?.nome ?? null })
-  );
+  let rows = (
+    (data ?? []) as unknown as (ProdutoProprioRow & {
+      fornecedor: { nome: string } | null;
+      categoria: { nome: string; margem_minima_percentual: number | null } | null;
+      margem_minima_percentual: number | null;
+    })[]
+  ).map((r) => {
+    const margemMinima = margemMinimaEfetiva(r.margem_minima_percentual, r.categoria?.margem_minima_percentual);
+    return {
+      ...r,
+      fornecedor: r.fornecedor?.nome ?? null,
+      categoria: r.categoria?.nome ?? null,
+      margemMinima,
+      precoMinimo: precoMinimoVenda(r.custo, margemMinima),
+    };
+  });
   if (opts.baixoEstoque) rows = rows.filter((r) => r.estoque_atual <= r.estoque_minimo);
   return rows;
 }

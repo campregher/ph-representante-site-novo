@@ -6,18 +6,23 @@ export default function AuthCard({
   subtitle,
   children,
   footer,
+  maxWidthClassName = "max-w-sm",
 }: {
   title: string;
   subtitle?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** largura do card — telas com formulário maior (ex.: cadastro de seller) usam mais que max-w-sm */
+  maxWidthClassName?: string;
 }) {
   return (
     <div
       data-sistema
       className="flex min-h-screen items-center justify-center bg-neutral-100 p-4 text-neutral-900"
     >
-      <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div
+        className={`w-full ${maxWidthClassName} overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm`}
+      >
         <div className="flex items-center justify-center bg-dark-700 px-6 py-5">
           <Image
             src="/images/ph.png"
@@ -25,6 +30,7 @@ export default function AuthCard({
             width={140}
             height={34}
             className="h-8 w-auto object-contain"
+            style={{ width: "auto" }}
             priority
           />
         </div>

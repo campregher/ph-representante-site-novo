@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ArrowRight } from "lucide-react";
 import { sellerCadastroSchema, type SellerCadastroInput } from "@/lib/sistema/schemas";
 import { cadastrarSeller } from "@/lib/sistema/actions/seller-cadastro";
 import { UF_LIST } from "@/lib/sistema/types";
 import { Field, Input, Select, FormGrid } from "@/components/sistema/ui/Field";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
+import AuthCard from "@/components/sistema/AuthCard";
 import CnpjLookup from "@/components/sistema/CnpjLookup";
 import type { CnpjData } from "@/lib/sistema/cnpj";
 
@@ -67,30 +68,25 @@ export default function SellerCadastroForm() {
 
   if (feito) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
-        <CheckCircle2 size={40} className="mx-auto mb-4 text-green-600" />
-        <h1 className="text-lg font-bold text-neutral-900">
-          {feito.jaExistia ? "Você já está cadastrado!" : "Cadastro recebido!"}
-        </h1>
-        <p className="mt-2 text-sm text-neutral-600">
-          {feito.jaExistia
+      <AuthCard
+        title={feito.jaExistia ? "Você já está cadastrado!" : "Cadastro recebido!"}
+        subtitle={
+          feito.jaExistia
             ? "Encontramos um cadastro com esse documento — já está marcado como seller. Em breve nosso time entra em contato."
-            : "Recebemos seus dados. Nosso time vai analisar e entrar em contato em breve para liberar seu acesso ao catálogo de dropshipping."}
-        </p>
-      </div>
+            : "Recebemos seus dados. Nosso time vai analisar e entrar em contato em breve para liberar seu acesso ao catálogo de dropshipping."
+        }
+      >
+        <CheckCircle2 size={36} className="mx-auto text-green-600" />
+      </AuthCard>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-6 text-center">
-        <span className="text-2xl font-black tracking-tight text-neutral-900">PH</span>
-        <h1 className="mt-3 text-xl font-bold text-neutral-900">Seja um seller PH Representante</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Cadastre sua empresa para vender nossos produtos por dropshipping.
-        </p>
-      </div>
-
+    <AuthCard
+      title="Seja um seller PH Representante"
+      subtitle="Cadastre sua empresa para vender nossos produtos por dropshipping."
+      maxWidthClassName="max-w-2xl"
+    >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Card>
           <CardHeader title="Identificação" />
@@ -197,9 +193,9 @@ export default function SellerCadastroForm() {
         </Card>
 
         <Button type="submit" loading={enviando} className="w-full">
-          Enviar cadastro
+          Enviar cadastro <ArrowRight size={15} />
         </Button>
       </form>
-    </div>
+    </AuthCard>
   );
 }

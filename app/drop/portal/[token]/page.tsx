@@ -1,6 +1,7 @@
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { getMlRecord } from "@/lib/sistema/ml-auth";
 import SellerPortalMl from "@/components/public/SellerPortalMl";
+import AuthCard from "@/components/sistema/AuthCard";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 
 export default async function SellerPortalPage({
@@ -18,15 +19,9 @@ export default async function SellerPortalPage({
 
   if (!cliente) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
-          <span className="text-2xl font-black tracking-tight text-neutral-900">PH</span>
-          <h1 className="mt-4 text-lg font-bold text-neutral-900">Link inválido</h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            Este link de acesso não é válido. Fale com a gente se precisar de um novo.
-          </p>
-        </div>
-      </div>
+      <AuthCard title="Link inválido" subtitle="Este link de acesso não é válido. Fale com a gente se precisar de um novo.">
+        {null}
+      </AuthCard>
     );
   }
 
@@ -38,13 +33,11 @@ export default async function SellerPortalPage({
   const mlRecord = !pendente && !bloqueado ? await getMlRecord(cliente.id as string) : null;
 
   return (
-    <div className="mx-auto max-w-2xl p-4 py-10 sm:py-16">
-      <div className="mb-6 text-center">
-        <span className="text-2xl font-black tracking-tight text-neutral-900">PH</span>
-        <h1 className="mt-3 text-xl font-bold text-neutral-900">Olá, {nome}!</h1>
-        <p className="mt-1 text-sm text-neutral-500">Portal do seller — dropshipping PH Representante.</p>
-      </div>
-
+    <AuthCard
+      title={`Olá, ${nome}!`}
+      subtitle="Portal do seller — dropshipping PH Representante."
+      maxWidthClassName="max-w-2xl"
+    >
       {bloqueado ? (
         <Card>
           <CardBody className="text-center text-sm text-neutral-600">
@@ -84,6 +77,6 @@ export default async function SellerPortalPage({
           </Card>
         </div>
       )}
-    </div>
+    </AuthCard>
   );
 }

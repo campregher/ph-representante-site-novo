@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
 import { salvarProdutoProprio } from "@/lib/sistema/actions/linha-propria";
 import { Card, CardBody, CardHeader } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
@@ -10,10 +11,12 @@ import { Field, Input, Textarea, Select, FormGrid } from "@/components/sistema/u
 
 interface Opt { id: string; label: string }
 interface CategoriaOpt { id: string; label: string; margem: number | null }
+interface CategoriaMlSugestao { id: string; nome: string; caminho: string[] }
 
 const base = {
-  sku: "", nome: "", descricao: "", fornecedor_id: "", categoria_id: "", ncm: "", ean: "", unidade: "UN",
-  imagem_url: "", custo: "", preco_bruto: "", margem_minima_percentual: "", estoque_minimo: "0",
+  sku: "", nome: "", descricao: "", marca: "", fornecedor_id: "", categoria_id: "", ncm: "", ean: "", unidade: "UN",
+  imagem_url: "", custo: "", preco_bruto: "", margem_minima_percentual: "",
+  ml_category_id: "", ml_category_nome: "", estoque_minimo: "0",
   peso: "", altura: "", largura: "", comprimento: "", ativo: true, observacoes: "",
 };
 
@@ -32,6 +35,34 @@ export default function ProdutoProprioForm({
   const [pending, start] = useTransition();
   const [f, setF] = useState({ ...base, ...initial });
   const set = (k: keyof typeof base, v: string | boolean) => setF((s) => ({ ...s, [k]: v }));
+
+  const [buscandoMl, setBuscandoMl] = useState(false);
+  const [sugestoesMl, setSugestoesMl] = useState<CategoriaMlSugestao[] | null>(null);
+
+  async function buscarCategoriaMl() {
+    setBuscandoMl(true);
+    setSugestoesMl(null);
+    try {
+      const q = f.nome.trim();
+      const res = await fetch(`/api/sistema/ml/categoria-preditor?q=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Falha ao buscar categorias do Mercado Livre.");
+        return;
+      }
+      setSugestoesMl(json as CategoriaMlSugestao[]);
+    } catch {
+      toast.error("Erro de rede ao buscar categorias.");
+    } finally {
+      setBuscandoMl(false);
+    }
+  }
+
+  function escolherCategoriaMl(s: CategoriaMlSugestao) {
+    set("ml_category_id", s.id);
+    set("ml_category_nome", [...s.caminho, s.nome].join(" > "));
+    setSugestoesMl(null);
+  }
 
   function salvar() {
     if (!f.sku.trim() || f.nome.trim().length < 2) return toast.error("Preencha SKU e nome.");
@@ -71,11 +102,47 @@ export default function ProdutoProprioForm({
           <Field label="Nome" required><Input value={f.nome} onChange={(e) => set("nome", e.target.value)} /></Field>
           <Field label="Descrição"><Textarea value={f.descricao} onChange={(e) => set("descricao", e.target.value)} rows={2} /></Field>
           <FormGrid>
+            <Field label="Marca"><Input value={f.marca} onChange={(e) => set("marca", e.target.value)} /></Field>
             <Field label="NCM"><Input value={f.ncm} onChange={(e) => set("ncm", e.target.value)} /></Field>
             <Field label="EAN"><Input value={f.ean} onChange={(e) => set("ean", e.target.value)} /></Field>
             <Field label="Unidade"><Input value={f.unidade} onChange={(e) => set("unidade", e.target.value)} /></Field>
-            <Field label="Foto (link)"><Input value={f.imagem_url} onChange={(e) => set("imagem_url", e.target.value)} /></Field>
           </FormGrid>
+          <Field label="Foto (link)"><Input value={f.imagem_url} onChange={(e) => set("imagem_url", e.target.value)} /></Field>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Mercado Livre" />
+        <CardBody className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              {f.ml_category_nome || <span className="text-neutral-400">Nenhuma categoria definida</span>}
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={buscarCategoriaMl} loading={buscandoMl}>
+              <Search size={14} /> Buscar categoria
+            </Button>
+          </div>
+          {sugestoesMl && (
+            <div className="overflow-hidden rounded-lg border border-neutral-200">
+              {sugestoesMl.length === 0 ? (
+                <p className="p-3 text-sm text-neutral-400">Nenhuma sugestão encontrada.</p>
+              ) : (
+                sugestoesMl.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => escolherCategoriaMl(s)}
+                    className="block w-full border-b border-neutral-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-neutral-50"
+                  >
+                    <span className="text-neutral-900">{s.nome}</span>
+                    {s.caminho.length > 0 && (
+                      <span className="block text-xs text-neutral-400">{s.caminho.join(" > ")}</span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </CardBody>
       </Card>
 

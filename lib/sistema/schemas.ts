@@ -89,6 +89,13 @@ export const categoriaSchema = z.object({
   descricao: optionalText,
 });
 
+/** Categoria própria da linha própria (sem representada) — só nome + margem mínima. */
+export const categoriaLinhaPropriaSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome"),
+  margem_minima_percentual: percentualOpcional,
+  ativa: z.boolean().default(true),
+});
+
 /** Um eixo de variação: nome + lista de valores possíveis. */
 export const variacaoEixoSchema = z.object({
   nome: z.string().trim().min(1, "Informe o nome do eixo"),
@@ -441,12 +448,14 @@ export const produtoProprioSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome"),
   descricao: optionalText,
   fornecedor_id: optionalText,
+  categoria_id: optionalText,
   ncm: optionalText,
   ean: optionalText,
   unidade: optionalText,
   imagem_url: optionalText,
   custo: optionalNumber,
   preco_bruto: optionalNumber, // preço de venda ao seller
+  margem_minima_percentual: percentualOpcional, // override; sem valor usa o da categoria
   estoque_minimo: optionalNumber,
   peso: optionalNumber,
   altura: optionalNumber,

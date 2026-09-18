@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Boxes, Truck, ClipboardList, ArrowLeftRight, AlertTriangle, Coins, Package, BarChart3 } from "lucide-react";
+import { Plus, Boxes, Truck, ClipboardList, ArrowLeftRight, AlertTriangle, Coins, Package, BarChart3, Tags } from "lucide-react";
 import { requireSistemaProfile } from "@/lib/sistema/auth";
 import { listProdutosProprios, estoqueKpis } from "@/lib/sistema/estoque";
 import { formatBRL, formatNumber } from "@/lib/sistema/format";
@@ -30,6 +30,7 @@ export default async function EstoquePage({
     { href: "/sistema/estoque/produtos/nova", label: "Novo produto", icon: <Plus size={15} /> },
     { href: "/sistema/estoque/compras/nova", label: "Nova compra", icon: <ClipboardList size={15} /> },
     { href: "/sistema/estoque/vendas/nova", label: "Novo pedido drop", icon: <Package size={15} /> },
+    { href: "/sistema/estoque/categorias", label: "Categorias", icon: <Tags size={15} /> },
     { href: "/sistema/estoque/fornecedores", label: "Fornecedores", icon: <Truck size={15} /> },
     { href: "/sistema/estoque/compras", label: "Compras", icon: <ClipboardList size={15} /> },
     { href: "/sistema/estoque/movimentos", label: "Movimentos", icon: <ArrowLeftRight size={15} /> },
@@ -86,6 +87,7 @@ export default async function EstoquePage({
                 <Th>Fornecedor</Th>
                 <Th className="text-right">Custo</Th>
                 <Th className="text-right">Venda</Th>
+                <Th className="text-right">Preço mín. seller</Th>
                 <Th className="text-right">Estoque</Th>
                 <Th>Status</Th>
                 <Th className="text-right">Ações</Th>
@@ -93,7 +95,7 @@ export default async function EstoquePage({
             </Thead>
             <Tbody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={8}>Nada aqui.</TableEmpty>
+                <TableEmpty colSpan={9}>Nada aqui.</TableEmpty>
               ) : (
                 rows.map((p) => {
                   const abaixo = p.estoque_atual <= p.estoque_minimo;
@@ -108,6 +110,9 @@ export default async function EstoquePage({
                       <Td>{p.fornecedor ?? "—"}</Td>
                       <Td className="text-right">{p.custo != null ? formatBRL(p.custo) : "—"}</Td>
                       <Td className="text-right">{p.preco_bruto != null ? formatBRL(p.preco_bruto) : "—"}</Td>
+                      <Td className="text-right">
+                        {p.precoMinimo != null ? formatBRL(p.precoMinimo) : <span className="text-neutral-400">sem margem</span>}
+                      </Td>
                       <Td className="text-right">
                         <span className={abaixo ? "font-semibold text-red-600" : ""}>{p.estoque_atual}</span>
                         {p.estoque_minimo > 0 && <span className="text-neutral-400"> / {p.estoque_minimo}</span>}

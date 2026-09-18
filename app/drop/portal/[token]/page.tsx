@@ -1,5 +1,7 @@
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { getMlRecord } from "@/lib/sistema/ml-auth";
+import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
+import { formatBRL } from "@/lib/sistema/format";
 import SellerPortalMl from "@/components/public/SellerPortalMl";
 import AuthCard from "@/components/sistema/AuthCard";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
@@ -30,7 +32,11 @@ export default async function SellerPortalPage({
   const pendente = status === "prospect";
   const bloqueado = status === "bloqueado";
 
-  const mlRecord = !pendente && !bloqueado ? await getMlRecord(cliente.id as string) : null;
+  const liberado = !pendente && !bloqueado && !!cliente.email_confirmado;
+  const [mlRecord, catalogo] = await Promise.all([
+    liberado ? getMlRecord(cliente.id as string) : Promise.resolve(null),
+    liberado ? catalogoDropSeller() : Promise.resolve([]),
+  ]);
 
   return (
     <AuthCard
@@ -69,10 +75,31 @@ export default async function SellerPortalPage({
             nickname={mlRecord?.ml_nickname ?? null}
           />
           <Card>
-            <CardHeader title="Catálogo de dropshipping" />
+            <CardHeader
+              title="Catálogo de dropshipping"
+              description="Preço mínimo de revenda — anunciar no Mercado Livre vem em breve."
+            />
             <CardBody className="text-sm text-neutral-600">
-              Em breve: aqui você vai poder escolher os produtos que quer anunciar no seu Mercado
-              Livre e acompanhar suas vendas.
+              {catalogo.length === 0 ? (
+                <p>Nenhum produto disponível pra venda no momento.</p>
+              ) : (
+                <div className="divide-y divide-neutral-100">
+                  {catalogo.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-neutral-900">{p.nome}</p>
+                        <p className="text-xs text-neutral-400">
+                          SKU {p.sku}
+                          {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque
+                        </p>
+                      </div>
+                      <p className="shrink-0 font-semibold text-neutral-900">
+                        {p.precoMinimo != null ? `a partir de ${formatBRL(p.precoMinimo)}` : "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardBody>
           </Card>
         </div>

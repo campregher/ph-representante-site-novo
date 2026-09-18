@@ -51,10 +51,11 @@ export const DROPSHIP_PAGAMENTO_OPTIONS = ["Pix", "Boleto", "Semanal", "À vista
 
 export interface CategoriaProduto {
   id: string;
-  representada_id: string;
+  representada_id: string | null;
   nome: string;
   descricao: string | null;
   ativa: boolean;
+  margem_minima_percentual: number | null;
   created_at: string;
 }
 

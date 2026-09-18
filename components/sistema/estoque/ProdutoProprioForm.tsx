@@ -9,19 +9,22 @@ import { Button } from "@/components/sistema/ui/Button";
 import { Field, Input, Textarea, Select, FormGrid } from "@/components/sistema/ui/Field";
 
 interface Opt { id: string; label: string }
+interface CategoriaOpt { id: string; label: string; margem: number | null }
 
 const base = {
-  sku: "", nome: "", descricao: "", fornecedor_id: "", ncm: "", ean: "", unidade: "UN",
-  imagem_url: "", custo: "", preco_bruto: "", estoque_minimo: "0",
+  sku: "", nome: "", descricao: "", fornecedor_id: "", categoria_id: "", ncm: "", ean: "", unidade: "UN",
+  imagem_url: "", custo: "", preco_bruto: "", margem_minima_percentual: "", estoque_minimo: "0",
   peso: "", altura: "", largura: "", comprimento: "", ativo: true, observacoes: "",
 };
 
 export default function ProdutoProprioForm({
   fornecedores,
+  categorias,
   initial,
   produtoId,
 }: {
   fornecedores: Opt[];
+  categorias: CategoriaOpt[];
   initial?: Partial<typeof base>;
   produtoId?: string;
 }) {
@@ -54,6 +57,16 @@ export default function ProdutoProprioForm({
                 {fornecedores.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
               </Select>
             </Field>
+            <Field label="Categoria" hint="Define a margem mínima de revenda no drop, salvo override abaixo">
+              <Select value={f.categoria_id} onChange={(e) => set("categoria_id", e.target.value)}>
+                <option value="">—</option>
+                {categorias.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.label}{x.margem != null ? ` (${x.margem}%)` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </FormGrid>
           <Field label="Nome" required><Input value={f.nome} onChange={(e) => set("nome", e.target.value)} /></Field>
           <Field label="Descrição"><Textarea value={f.descricao} onChange={(e) => set("descricao", e.target.value)} rows={2} /></Field>
@@ -73,6 +86,16 @@ export default function ProdutoProprioForm({
             <Field label="Custo (R$)" hint="Atualizado pelas compras"><Input value={f.custo} onChange={(e) => set("custo", e.target.value)} inputMode="decimal" /></Field>
             <Field label="Preço de venda (R$)"><Input value={f.preco_bruto} onChange={(e) => set("preco_bruto", e.target.value)} inputMode="decimal" /></Field>
             <Field label="Estoque mínimo"><Input value={f.estoque_minimo} onChange={(e) => set("estoque_minimo", e.target.value)} inputMode="numeric" /></Field>
+            <Field
+              label="Margem mínima do seller (%)"
+              hint="Preço mínimo de revenda no drop. Em branco usa a margem da categoria"
+            >
+              <Input
+                value={f.margem_minima_percentual}
+                onChange={(e) => set("margem_minima_percentual", e.target.value)}
+                inputMode="decimal"
+              />
+            </Field>
           </FormGrid>
         </CardBody>
       </Card>

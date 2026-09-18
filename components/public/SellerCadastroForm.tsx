@@ -14,9 +14,11 @@ import { Button } from "@/components/sistema/ui/Button";
 import AuthCard from "@/components/sistema/AuthCard";
 import CnpjLookup from "@/components/sistema/CnpjLookup";
 import type { CnpjData } from "@/lib/sistema/cnpj";
+import type { CepData } from "@/lib/sistema/cep";
 
 export default function SellerCadastroForm() {
   const [enviando, setEnviando] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
   const [feito, setFeito] = useState<{ jaExistia: boolean } | null>(null);
 
   const {
@@ -35,6 +37,36 @@ export default function SellerCadastroForm() {
   const cnpjValue = (useWatch({ control, name: "cnpj" }) ?? "") as string;
   const wpp = (useWatch({ control, name: "whatsapp" }) ?? "") as string;
   const isPJ = tipo !== "fisica";
+
+  function fillFromCep(d: CepData) {
+    const set = (k: keyof SellerCadastroInput, v: string) => {
+      if (v) setValue(k, v, { shouldDirty: true });
+    };
+    set("logradouro", d.logradouro);
+    set("complemento", d.complemento);
+    set("bairro", d.bairro);
+    set("cidade", d.cidade);
+    set("estado", d.estado);
+  }
+
+  async function buscarCepAoSair(valor: string) {
+    const clean = valor.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`/api/drop/cep/${clean}`);
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Falha na consulta do CEP.");
+        return;
+      }
+      fillFromCep(json as CepData);
+    } catch {
+      toast.error("Erro de rede ao consultar o CEP.");
+    } finally {
+      setBuscandoCep(false);
+    }
+  }
 
   function fillFromCnpj(d: CnpjData) {
     const set = (k: keyof SellerCadastroInput, v: string) => {
@@ -160,8 +192,16 @@ export default function SellerCadastroForm() {
           <CardHeader title="Endereço" />
           <CardBody>
             <FormGrid>
-              <Field label="CEP" error={errors.cep?.message}>
-                <Input {...register("cep")} inputMode="numeric" placeholder="00000-000" />
+              <Field
+                label="CEP"
+                error={errors.cep?.message}
+                hint={buscandoCep ? "Buscando endereço…" : undefined}
+              >
+                <Input
+                  {...register("cep", { onBlur: (e) => buscarCepAoSair(e.target.value) })}
+                  inputMode="numeric"
+                  placeholder="00000-000"
+                />
               </Field>
               <Field label="Logradouro" error={errors.logradouro?.message}>
                 <Input {...register("logradouro")} />

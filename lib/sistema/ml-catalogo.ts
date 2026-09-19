@@ -197,3 +197,32 @@ export async function atualizarAnuncioML(
   }
   return { ok: true };
 }
+
+/**
+ * D8 — pausa automaticamente todo anúncio ativo de um produto que zerou o
+ * estoque (não dá pra vender o que não existe mais). Chamado depois de
+ * qualquer baixa de estoque da linha própria (venda ML, confirmação de
+ * pedido drop manual, ajuste). Um mesmo produto pode estar anunciado por
+ * mais de um seller — pausa o anúncio de todos.
+ */
+export async function pausarAnunciosPorEstoqueZerado(produtoId: string): Promise<void> {
+  const db = await createSistemaAdminClient();
+  const { data: produto } = await db
+    .from("produtos")
+    .select("estoque_atual")
+    .eq("id", produtoId)
+    .maybeSingle();
+  if (!produto || Number(produto.estoque_atual) > 0) return;
+
+  const { data: anuncios } = await db
+    .from("seller_ml_anuncios")
+    .select("cliente_id, ml_item_id")
+    .eq("produto_id", produtoId)
+    .eq("ml_status", "active");
+  for (const a of anuncios ?? []) {
+    const res = await atualizarAnuncioML(a.cliente_id as string, produtoId, a.ml_item_id as string, {
+      status: "paused",
+    });
+    if (!res.ok) console.error("[pausarAnunciosPorEstoqueZerado]", a.cliente_id, res.error);
+  }
+}

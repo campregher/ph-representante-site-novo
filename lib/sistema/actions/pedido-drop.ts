@@ -5,6 +5,7 @@ import { createSistemaClient } from "@/lib/supabase/server";
 import { getSistemaProfile } from "@/lib/sistema/auth";
 import { canFinance } from "@/lib/sistema/roles";
 import { aplicarMovimento } from "@/lib/sistema/estoque-mov";
+import { pausarAnunciosPorEstoqueZerado } from "@/lib/sistema/ml-catalogo";
 import { pedidoDropSchema } from "@/lib/sistema/schemas";
 import type { ActionResult } from "@/lib/sistema/types";
 
@@ -158,7 +159,7 @@ export async function confirmarPedidoDrop(id: string): Promise<ActionResult> {
 
   for (const it of itens ?? []) {
     if (!it.produto_id) continue;
-    await aplicarMovimento(supabase, {
+    const saldo = await aplicarMovimento(supabase, {
       produtoId: it.produto_id as string,
       delta: -Number(it.quantidade),
       tipo: "saida",
@@ -167,6 +168,7 @@ export async function confirmarPedidoDrop(id: string): Promise<ActionResult> {
       observacao: `Pedido drop #${ped.numero}`,
       userId: g.profile!.id,
     });
+    if (saldo <= 0) await pausarAnunciosPorEstoqueZerado(it.produto_id as string);
   }
   await supabase.from("pedidos").update({ status: "confirmado", updated_by: g.profile!.id }).eq("id", id);
   await supabase.from("pedido_historico").insert({

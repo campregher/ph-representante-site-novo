@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { LineChart } from "lucide-react";
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { getMlRecord } from "@/lib/sistema/ml-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
@@ -5,6 +7,7 @@ import SellerPortalMl from "@/components/public/SellerPortalMl";
 import SellerCatalogoDrop from "@/components/public/SellerCatalogoDrop";
 import AuthCard from "@/components/sistema/AuthCard";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
+import { buttonClass } from "@/components/sistema/ui/buttonClass";
 
 export default async function SellerPortalPage({
   params,
@@ -74,6 +77,9 @@ export default async function SellerPortalPage({
             conectado={!!mlRecord}
             nickname={mlRecord?.ml_nickname ?? null}
           />
+          <Link href={`/drop/vendas/${token}`} className={buttonClass({ variant: "outline", className: "w-full" })}>
+            <LineChart size={15} /> Ver minhas vendas
+          </Link>
           <Card>
             <CardHeader
               title="Catálogo de dropshipping"

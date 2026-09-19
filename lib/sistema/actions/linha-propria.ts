@@ -5,6 +5,7 @@ import { createSistemaClient } from "@/lib/supabase/server";
 import { getSistemaProfile } from "@/lib/sistema/auth";
 import { canManage } from "@/lib/sistema/roles";
 import { aplicarMovimento, custoMedio } from "@/lib/sistema/estoque-mov";
+import { pausarAnunciosPorEstoqueZerado } from "@/lib/sistema/ml-catalogo";
 import {
   fornecedorSchema,
   produtoProprioSchema,
@@ -276,6 +277,7 @@ export async function ajustarEstoque(raw: unknown): Promise<ActionResult> {
     observacao: motivo,
     userId: g.profile!.id,
   });
+  if (novo_saldo <= 0) await pausarAnunciosPorEstoqueZerado(produto_id);
   revalidatePath("/sistema/estoque");
   return { ok: true };
 }

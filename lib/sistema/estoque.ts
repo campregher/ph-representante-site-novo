@@ -375,6 +375,64 @@ export async function estoqueRelatorio(dias = 90): Promise<EstoqueRelatorio> {
   };
 }
 
+export interface DespachoRow {
+  id: string;
+  numero: number;
+  dataPedido: string;
+  status: string;
+  canal: string | null;
+  seller: string;
+  produtos: string;
+  entrega: string | null;
+}
+
+/** D8 — fila de despacho: pedidos drop confirmados/faturados que ainda não
+ *  saíram (não estão em_transporte/entregue) — precisam ser embalados e
+ *  postados. */
+export async function listFilaDespacho(): Promise<DespachoRow[]> {
+  const supabase = await createSistemaClient();
+  const { data } = await supabase
+    .from("pedidos")
+    .select(
+      "id, numero, data_pedido, status, canal, entrega_nome, entrega_cidade, entrega_uf, cliente:clientes(nome_fantasia, razao_social), pedido_itens(descricao_snapshot, quantidade)"
+    )
+    .eq("tipo", "drop_proprio")
+    .in("status", ["confirmado", "faturado"])
+    .order("data_pedido", { ascending: true })
+    .limit(300);
+
+  return (
+    (data ?? []) as unknown as {
+      id: string;
+      numero: number;
+      data_pedido: string;
+      status: string;
+      canal: string | null;
+      entrega_nome: string | null;
+      entrega_cidade: string | null;
+      entrega_uf: string | null;
+      cliente: { nome_fantasia: string | null; razao_social: string | null } | null;
+      pedido_itens: { descricao_snapshot: string | null; quantidade: number }[];
+    }[]
+  ).map((r) => ({
+    id: r.id,
+    numero: r.numero,
+    dataPedido: r.data_pedido,
+    status: r.status,
+    canal: r.canal,
+    seller: r.cliente?.nome_fantasia || r.cliente?.razao_social || "—",
+    produtos: (r.pedido_itens ?? [])
+      .map((it) => `${it.quantidade}x ${it.descricao_snapshot ?? "?"}`)
+      .join(", "),
+    entrega:
+      r.entrega_nome || r.entrega_cidade
+        ? [r.entrega_nome, r.entrega_cidade && r.entrega_uf ? `${r.entrega_cidade}/${r.entrega_uf}` : null]
+            .filter(Boolean)
+            .join(" — ")
+        : null,
+  }));
+}
+
 /** Todos os clientes (sellers + clientes da representação) para o pedido drop. */
 export async function clientesParaDrop(): Promise<ClienteDropOpt[]> {
   const supabase = await createSistemaClient();

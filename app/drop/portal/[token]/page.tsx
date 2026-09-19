@@ -1,8 +1,8 @@
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { getMlRecord } from "@/lib/sistema/ml-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
-import { formatBRL } from "@/lib/sistema/format";
 import SellerPortalMl from "@/components/public/SellerPortalMl";
+import SellerCatalogoDrop from "@/components/public/SellerCatalogoDrop";
 import AuthCard from "@/components/sistema/AuthCard";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 
@@ -35,7 +35,7 @@ export default async function SellerPortalPage({
   const liberado = !pendente && !bloqueado && !!cliente.email_confirmado;
   const [mlRecord, catalogo] = await Promise.all([
     liberado ? getMlRecord(cliente.id as string) : Promise.resolve(null),
-    liberado ? catalogoDropSeller() : Promise.resolve([]),
+    liberado ? catalogoDropSeller(cliente.id as string) : Promise.resolve([]),
   ]);
 
   return (
@@ -77,29 +77,14 @@ export default async function SellerPortalPage({
           <Card>
             <CardHeader
               title="Catálogo de dropshipping"
-              description="Preço mínimo de revenda — anunciar no Mercado Livre vem em breve."
+              description="Escolha o preço de venda (mínimo já calculado) e publique no seu Mercado Livre."
             />
-            <CardBody className="text-sm text-neutral-600">
-              {catalogo.length === 0 ? (
-                <p>Nenhum produto disponível pra venda no momento.</p>
-              ) : (
-                <div className="divide-y divide-neutral-100">
-                  {catalogo.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between gap-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-neutral-900">{p.nome}</p>
-                        <p className="text-xs text-neutral-400">
-                          SKU {p.sku}
-                          {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque
-                        </p>
-                      </div>
-                      <p className="shrink-0 font-semibold text-neutral-900">
-                        {p.precoMinimo != null ? `a partir de ${formatBRL(p.precoMinimo)}` : "—"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <CardBody>
+              <SellerCatalogoDrop
+                token={token}
+                mlConectado={!!mlRecord}
+                itens={catalogo.map((p) => ({ ...p, precoMinimo: p.precoMinimo as number }))}
+              />
             </CardBody>
           </Card>
         </div>

@@ -171,3 +171,23 @@ export async function disconnectMl(clienteId: string): Promise<void> {
   const { error } = await db.from("cliente_ml_tokens").delete().eq("cliente_id", clienteId);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Token de aplicação (client_credentials) — não pertence a nenhum seller,
+ * serve só pra consultar endpoints públicos do ML (ex.: category_predictor)
+ * sem depender de nenhum vendedor estar conectado.
+ */
+export async function getAppAccessToken(): Promise<string> {
+  const res = await fetch(ML_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: ML_APP_ID,
+      client_secret: ML_SECRET,
+    }),
+  });
+  if (!res.ok) throw new Error("Falha ao obter token de aplicação do Mercado Livre");
+  const data = await res.json();
+  return data.access_token as string;
+}

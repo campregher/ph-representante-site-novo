@@ -447,6 +447,7 @@ export const produtoProprioSchema = z.object({
   sku: z.string().trim().min(1, "Informe o SKU"),
   nome: z.string().trim().min(2, "Informe o nome"),
   descricao: optionalText,
+  marca: optionalText,
   fornecedor_id: optionalText,
   categoria_id: optionalText,
   ncm: optionalText,
@@ -456,6 +457,8 @@ export const produtoProprioSchema = z.object({
   custo: optionalNumber,
   preco_bruto: optionalNumber, // preço de venda ao seller
   margem_minima_percentual: percentualOpcional, // override; sem valor usa o da categoria
+  ml_category_id: optionalText,
+  ml_category_nome: optionalText,
   estoque_minimo: optionalNumber,
   peso: optionalNumber,
   altura: optionalNumber,

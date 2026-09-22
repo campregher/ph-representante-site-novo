@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plug, PackageSearch, Megaphone, LineChart } from "lucide-react";
 import { requireSeller } from "@/lib/sistema/seller-auth";
-import { getMlRecord } from "@/lib/sistema/ml-auth";
+import { getMlRecords } from "@/lib/sistema/ml-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
 import { getFinanceiroSeller } from "@/lib/sistema/seller-financeiro";
 import { formatBRL } from "@/lib/sistema/format";
@@ -22,14 +22,14 @@ export default async function DropDashboardInicioPage() {
     );
   }
 
-  const [mlRecord, catalogo, financeiro] = await Promise.all([
-    getMlRecord(seller.id),
+  const [mlContas, catalogo, financeiro] = await Promise.all([
+    getMlRecords(seller.id),
     catalogoDropSeller(seller.id),
     getFinanceiroSeller(seller.id),
   ]);
 
-  const anunciados = catalogo.filter((p) => p.anuncio);
-  const ativos = anunciados.filter((p) => p.anuncio?.status !== "paused");
+  const anunciados = catalogo.filter((p) => p.anuncios.length > 0);
+  const ativos = anunciados.filter((p) => p.anuncios.some((a) => a.status !== "paused"));
 
   return (
     <div className="space-y-4">
@@ -38,7 +38,7 @@ export default async function DropDashboardInicioPage() {
         <Badge tone={statusInfo.tone}>{statusInfo.label}</Badge>
       </div>
 
-      {!mlRecord && (
+      {mlContas.length === 0 && (
         <Card className="border-yellow-200 bg-yellow-50/50">
           <CardBody className="flex items-center justify-between gap-3 text-sm text-yellow-800">
             <span>Conecte sua conta do Mercado Livre pra começar a anunciar.</span>
@@ -52,8 +52,8 @@ export default async function DropDashboardInicioPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           label="Mercado Livre"
-          value={mlRecord ? "Conectado" : "Não conectado"}
-          hint={mlRecord?.ml_nickname ?? undefined}
+          value={mlContas.length > 0 ? `${mlContas.length} conta(s)` : "Não conectado"}
+          hint={mlContas[0]?.ml_nickname ?? undefined}
           icon={<Plug size={16} />}
         />
         <StatCard label="Anúncios ativos" value={ativos.length} icon={<Megaphone size={16} />} />
@@ -65,7 +65,7 @@ export default async function DropDashboardInicioPage() {
         />
         <StatCard
           label="Disponíveis pra anunciar"
-          value={catalogo.filter((p) => !p.anuncio).length}
+          value={catalogo.filter((p) => p.anuncios.length === 0).length}
           icon={<PackageSearch size={16} />}
         />
       </div>

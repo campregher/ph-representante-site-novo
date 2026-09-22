@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LineChart } from "lucide-react";
 import { createSistemaAdminClient } from "@/lib/supabase/server";
-import { getMlRecord } from "@/lib/sistema/ml-auth";
+import { getMlRecords } from "@/lib/sistema/ml-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
 import SellerPortalMl from "@/components/public/SellerPortalMl";
 import SellerCatalogoDrop from "@/components/public/SellerCatalogoDrop";
@@ -36,10 +36,11 @@ export default async function SellerPortalPage({
   const bloqueado = status === "bloqueado";
 
   const liberado = !pendente && !bloqueado && !!cliente.email_confirmado;
-  const [mlRecord, catalogo] = await Promise.all([
-    liberado ? getMlRecord(cliente.id as string) : Promise.resolve(null),
+  const [mlContas, catalogo] = await Promise.all([
+    liberado ? getMlRecords(cliente.id as string) : Promise.resolve([]),
     liberado ? catalogoDropSeller(cliente.id as string) : Promise.resolve([]),
   ]);
+  const mlRecord = mlContas[0] ?? null;
 
   return (
     <AuthCard
@@ -88,7 +89,7 @@ export default async function SellerPortalPage({
             <CardBody>
               <SellerCatalogoDrop
                 token={token}
-                mlConectado={!!mlRecord}
+                mlContas={mlContas.map((c) => ({ id: c.id, nickname: c.ml_nickname }))}
                 itens={catalogo.map((p) => ({ ...p, precoMinimo: p.precoMinimo as number }))}
               />
             </CardBody>

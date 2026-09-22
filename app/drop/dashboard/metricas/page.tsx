@@ -18,9 +18,9 @@ export default async function DropDashboardMetricasPage() {
   }
 
   const [financeiro, catalogo] = await Promise.all([getFinanceiroSeller(seller.id), catalogoDropSeller(seller.id)]);
-  const anunciados = catalogo.filter((p) => p.anuncio);
-  const ativos = anunciados.filter((p) => p.anuncio?.status !== "paused").length;
-  const pausados = anunciados.length - ativos;
+  const todosAnuncios = catalogo.flatMap((p) => p.anuncios);
+  const ativos = todosAnuncios.filter((a) => a.status !== "paused").length;
+  const pausados = todosAnuncios.length - ativos;
 
   const porProduto = new Map<string, { nome: string; quantidade: number; venda: number }>();
   for (const v of financeiro.vendas) {

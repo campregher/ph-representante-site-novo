@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createSistemaAdminClient } from "@/lib/supabase/server";
-import { disconnectMl } from "@/lib/sistema/ml-auth";
+import { disconnectMl, getMlRecord, getMlRecords } from "@/lib/sistema/ml-auth";
 import { validarDocumentoSeller } from "@/lib/sistema/seller-validacao";
 import { criarNotificacoes } from "@/lib/sistema/notificacoes";
 import type { ActionResult } from "@/lib/sistema/types";
 
-/** Desconecta a conta ML do seller (portal público, autenticado só pelo token do link). */
+/** Desconecta a (primeira) conta ML do seller — usado só pelo portal antigo por token (single-account). */
 export async function desconectarMlPortal(portalToken: string): Promise<ActionResult> {
   const db = await createSistemaAdminClient();
   const { data: cliente } = await db
@@ -17,8 +17,27 @@ export async function desconectarMlPortal(portalToken: string): Promise<ActionRe
     .maybeSingle();
   if (!cliente) return { ok: false, error: "Link inválido." };
 
-  await disconnectMl(cliente.id as string);
+  const conta = await getMlRecord(cliente.id as string);
+  if (!conta) return { ok: false, error: "Nenhuma conta conectada." };
+  await disconnectMl(conta.id);
   revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true };
+}
+
+/** Desconecta UMA conta específica do ML — usado pelo dashboard novo (multi-conta). */
+export async function desconectarMlConta(portalToken: string, mlContaId: string): Promise<ActionResult> {
+  const db = await createSistemaAdminClient();
+  const { data: cliente } = await db
+    .from("clientes")
+    .select("id")
+    .eq("portal_token", portalToken)
+    .maybeSingle();
+  if (!cliente) return { ok: false, error: "Link inválido." };
+
+  const contas = await getMlRecords(cliente.id as string);
+  if (!contas.some((c) => c.id === mlContaId)) return { ok: false, error: "Conta não encontrada." };
+  await disconnectMl(mlContaId);
+  revalidatePath("/drop/dashboard/integracao");
   return { ok: true };
 }
 

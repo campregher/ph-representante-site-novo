@@ -1,6 +1,6 @@
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
-import { getMlRecord } from "@/lib/sistema/ml-auth";
+import { getMlRecords } from "@/lib/sistema/ml-auth";
 import SellerLocked from "@/components/drop/SellerLocked";
 import SellerCatalogoDrop from "@/components/public/SellerCatalogoDrop";
 import { Card, CardBody } from "@/components/sistema/ui/Card";
@@ -17,8 +17,8 @@ export default async function DropDashboardAnunciadosPage() {
     );
   }
 
-  const [catalogo, mlRecord] = await Promise.all([catalogoDropSeller(seller.id), getMlRecord(seller.id)]);
-  const anunciados = catalogo.filter((p) => p.anuncio);
+  const [catalogo, mlContas] = await Promise.all([catalogoDropSeller(seller.id), getMlRecords(seller.id)]);
+  const anunciados = catalogo.filter((p) => p.anuncios.length > 0);
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -36,7 +36,7 @@ export default async function DropDashboardAnunciadosPage() {
           ) : (
             <SellerCatalogoDrop
               token={seller.portalToken}
-              mlConectado={!!mlRecord}
+              mlContas={mlContas.map((c) => ({ id: c.id, nickname: c.ml_nickname }))}
               itens={anunciados.map((p) => ({ ...p, precoMinimo: p.precoMinimo as number }))}
             />
           )}

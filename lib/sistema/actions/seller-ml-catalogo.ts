@@ -27,6 +27,19 @@ async function resolveClienteLiberado(
   return { db, clienteId: cliente.id as string };
 }
 
+/** Garante que a conta do ML informada é mesmo desse seller — nunca confia
+ *  num mlContaId vindo do client sem checar a dona (evitaria publicar/mexer
+ *  na conta de outro seller). */
+async function checarDonoDaContaMl(db: Db, clienteId: string, mlContaId: string): Promise<string | null> {
+  const { data } = await db
+    .from("cliente_ml_tokens")
+    .select("id")
+    .eq("id", mlContaId)
+    .eq("cliente_id", clienteId)
+    .maybeSingle();
+  return data ? null : "Conta do Mercado Livre não encontrada.";
+}
+
 async function buscarProdutoElegivel(
   db: Db,
   produtoId: string
@@ -60,17 +73,20 @@ async function buscarProdutoElegivel(
 
 export async function publicarProdutoML(
   portalToken: string,
+  mlContaId: string,
   produtoId: string,
   precoRevenda: number
 ): Promise<ActionResult<{ permalink: string }>> {
   const ctx = await resolveClienteLiberado(portalToken);
   if ("error" in ctx) return { ok: false, error: ctx.error };
+  const donoErro = await checarDonoDaContaMl(ctx.db, ctx.clienteId, mlContaId);
+  if (donoErro) return { ok: false, error: donoErro };
   const pr = await buscarProdutoElegivel(ctx.db, produtoId);
   if ("error" in pr) return { ok: false, error: pr.error };
   if (!Number.isFinite(precoRevenda) || precoRevenda < pr.precoMinimo)
     return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(pr.precoMinimo)}.` };
 
-  const res = await publicarAnuncioML(ctx.clienteId, pr.produto, precoRevenda);
+  const res = await publicarAnuncioML(ctx.clienteId, mlContaId, pr.produto, precoRevenda);
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true, permalink: res.permalink };
@@ -87,12 +103,16 @@ export interface PublicarEmMassaResultado {
   error?: string;
 }
 
+/** Publica vários produtos de uma vez, todos na MESMA conta do ML escolhida. */
 export async function publicarEmMassaML(
   portalToken: string,
+  mlContaId: string,
   itens: PublicarEmMassaItem[]
 ): Promise<ActionResult<{ resultados: PublicarEmMassaResultado[] }>> {
   const ctx = await resolveClienteLiberado(portalToken);
   if ("error" in ctx) return { ok: false, error: ctx.error };
+  const donoErro = await checarDonoDaContaMl(ctx.db, ctx.clienteId, mlContaId);
+  if (donoErro) return { ok: false, error: donoErro };
 
   const resultados: PublicarEmMassaResultado[] = [];
   for (const item of itens) {
@@ -109,7 +129,7 @@ export async function publicarEmMassaML(
       });
       continue;
     }
-    const res = await publicarAnuncioML(ctx.clienteId, pr.produto, item.precoRevenda);
+    const res = await publicarAnuncioML(ctx.clienteId, mlContaId, pr.produto, item.precoRevenda);
     resultados.push({ produtoId: item.produtoId, ok: res.ok, error: res.ok ? undefined : res.error });
   }
 
@@ -119,6 +139,7 @@ export async function publicarEmMassaML(
 
 async function mudarStatusAnuncio(
   portalToken: string,
+  mlContaId: string,
   produtoId: string,
   status: "active" | "paused"
 ): Promise<ActionResult> {
@@ -128,26 +149,36 @@ async function mudarStatusAnuncio(
     .from("seller_ml_anuncios")
     .select("ml_item_id")
     .eq("cliente_id", ctx.clienteId)
+    .eq("ml_conta_id", mlContaId)
     .eq("produto_id", produtoId)
     .maybeSingle();
   if (!anuncio) return { ok: false, error: "Anúncio não encontrado." };
 
-  const res = await atualizarAnuncioML(ctx.clienteId, produtoId, anuncio.ml_item_id as string, { status });
+  const res = await atualizarAnuncioML(mlContaId, produtoId, anuncio.ml_item_id as string, { status });
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true };
 }
 
-export async function pausarAnuncioML(portalToken: string, produtoId: string): Promise<ActionResult> {
-  return mudarStatusAnuncio(portalToken, produtoId, "paused");
+export async function pausarAnuncioML(
+  portalToken: string,
+  mlContaId: string,
+  produtoId: string
+): Promise<ActionResult> {
+  return mudarStatusAnuncio(portalToken, mlContaId, produtoId, "paused");
 }
 
-export async function reativarAnuncioML(portalToken: string, produtoId: string): Promise<ActionResult> {
-  return mudarStatusAnuncio(portalToken, produtoId, "active");
+export async function reativarAnuncioML(
+  portalToken: string,
+  mlContaId: string,
+  produtoId: string
+): Promise<ActionResult> {
+  return mudarStatusAnuncio(portalToken, mlContaId, produtoId, "active");
 }
 
 export async function atualizarPrecoAnuncioML(
   portalToken: string,
+  mlContaId: string,
   produtoId: string,
   novoPreco: number
 ): Promise<ActionResult> {
@@ -163,11 +194,12 @@ export async function atualizarPrecoAnuncioML(
     .from("seller_ml_anuncios")
     .select("ml_item_id")
     .eq("cliente_id", ctx.clienteId)
+    .eq("ml_conta_id", mlContaId)
     .eq("produto_id", produtoId)
     .maybeSingle();
   if (!anuncio) return { ok: false, error: "Anúncio não encontrado." };
 
-  const res = await atualizarAnuncioML(ctx.clienteId, produtoId, anuncio.ml_item_id as string, { price: novoPreco });
+  const res = await atualizarAnuncioML(mlContaId, produtoId, anuncio.ml_item_id as string, { price: novoPreco });
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true };

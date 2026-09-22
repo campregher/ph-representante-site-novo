@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
-import { getMlRecord } from "@/lib/sistema/ml-auth";
+import { getMlRecords } from "@/lib/sistema/ml-auth";
 import SellerLocked from "@/components/drop/SellerLocked";
 import SellerCatalogoDrop from "@/components/public/SellerCatalogoDrop";
 import { Card, CardBody } from "@/components/sistema/ui/Card";
@@ -24,7 +24,7 @@ export default async function DropDashboardFornecedorProdutosPage({
     );
   }
 
-  const [catalogo, mlRecord] = await Promise.all([catalogoDropSeller(seller.id), getMlRecord(seller.id)]);
+  const [catalogo, mlContas] = await Promise.all([catalogoDropSeller(seller.id), getMlRecords(seller.id)]);
   const itens = catalogo.filter((p) => (p.fornecedorId ?? "sem-fornecedor") === fornecedorId);
   const nomeFornecedor = itens[0]?.fornecedorNome ?? "Fornecedor";
 
@@ -42,7 +42,7 @@ export default async function DropDashboardFornecedorProdutosPage({
           ) : (
             <SellerCatalogoDrop
               token={seller.portalToken}
-              mlConectado={!!mlRecord}
+              mlContas={mlContas.map((c) => ({ id: c.id, nickname: c.ml_nickname }))}
               itens={itens.map((p) => ({ ...p, precoMinimo: p.precoMinimo as number }))}
             />
           )}

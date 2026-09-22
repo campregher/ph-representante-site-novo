@@ -111,6 +111,18 @@ export async function refreshAccessToken(refreshToken: string): Promise<MLTokenR
   return res.json();
 }
 
+export interface MlAccountRecord {
+  id: string;
+  ml_user_id: string;
+  ml_nickname: string | null;
+  expires_at: string;
+}
+
+/**
+ * Grava/renova o token de UMA conta do ML do seller. Um seller pode ter
+ * várias contas conectadas (uma linha por ml_user_id) — reconectar a MESMA
+ * conta (mesmo ml_user_id) só atualiza o token dela, não cria outra linha.
+ */
 export async function saveMlToken(
   clienteId: string,
   token: MLTokenResponse,
@@ -127,18 +139,18 @@ export async function saveMlToken(
       refresh_token: token.refresh_token,
       expires_at: expiresAt,
     },
-    { onConflict: "cliente_id" }
+    { onConflict: "cliente_id,ml_user_id" }
   );
   if (error) throw new Error(error.message);
 }
 
-/** Retorna um access_token válido, renovando via refresh_token se necessário. */
-export async function getValidMlToken(clienteId: string): Promise<string> {
+/** Retorna um access_token válido pra UMA conta específica (id de cliente_ml_tokens), renovando via refresh_token se necessário. */
+export async function getValidMlToken(mlContaId: string): Promise<string> {
   const db = await createSistemaAdminClient();
   const { data } = await db
     .from("cliente_ml_tokens")
-    .select("access_token, refresh_token, expires_at")
-    .eq("cliente_id", clienteId)
+    .select("cliente_id, access_token, refresh_token, expires_at")
+    .eq("id", mlContaId)
     .maybeSingle();
 
   if (!data?.access_token) throw new Error("Conta do Mercado Livre não conectada");
@@ -148,27 +160,33 @@ export async function getValidMlToken(clienteId: string): Promise<string> {
 
   if (isExpired && data.refresh_token) {
     const refreshed = await refreshAccessToken(data.refresh_token as string);
-    await saveMlToken(clienteId, refreshed);
+    await saveMlToken(data.cliente_id as string, refreshed);
     return refreshed.access_token;
   }
   return data.access_token as string;
 }
 
-export async function getMlRecord(
-  clienteId: string
-): Promise<{ ml_user_id: string; ml_nickname: string | null; expires_at: string } | null> {
+/** Todas as contas do ML conectadas por esse seller. */
+export async function getMlRecords(clienteId: string): Promise<MlAccountRecord[]> {
   const db = await createSistemaAdminClient();
   const { data } = await db
     .from("cliente_ml_tokens")
-    .select("ml_user_id, ml_nickname, expires_at")
+    .select("id, ml_user_id, ml_nickname, expires_at")
     .eq("cliente_id", clienteId)
-    .maybeSingle();
-  return (data as { ml_user_id: string; ml_nickname: string | null; expires_at: string }) ?? null;
+    .order("created_at");
+  return (data as MlAccountRecord[]) ?? [];
 }
 
-export async function disconnectMl(clienteId: string): Promise<void> {
+/** Primeira conta conectada — usado só pelo portal antigo por token (single-account). */
+export async function getMlRecord(clienteId: string): Promise<MlAccountRecord | null> {
+  const contas = await getMlRecords(clienteId);
+  return contas[0] ?? null;
+}
+
+/** Desconecta UMA conta específica (id de cliente_ml_tokens), não todas do seller. */
+export async function disconnectMl(mlContaId: string): Promise<void> {
   const db = await createSistemaAdminClient();
-  const { error } = await db.from("cliente_ml_tokens").delete().eq("cliente_id", clienteId);
+  const { error } = await db.from("cliente_ml_tokens").delete().eq("id", mlContaId);
   if (error) throw new Error(error.message);
 }
 

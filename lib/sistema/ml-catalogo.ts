@@ -87,9 +87,15 @@ async function atributosFamilyObrigatorios(
   return resolvidos;
 }
 
-/** Publica um produto como anúncio novo no ML e grava o vínculo em seller_ml_anuncios. */
+/**
+ * Publica um produto como anúncio novo no ML e grava o vínculo em
+ * seller_ml_anuncios. `mlContaId` é o id de `cliente_ml_tokens` — o seller
+ * pode ter várias contas conectadas, e o mesmo produto pode estar anunciado
+ * em mais de uma ao mesmo tempo (cada uma vira uma linha própria).
+ */
 export async function publicarAnuncioML(
   clienteId: string,
+  mlContaId: string,
   produto: AnuncioProduto,
   precoRevenda: number
 ): Promise<MlResult<{ mlItemId: string; permalink: string }>> {
@@ -98,7 +104,7 @@ export async function publicarAnuncioML(
 
   let token: string;
   try {
-    token = await getValidMlToken(clienteId);
+    token = await getValidMlToken(mlContaId);
   } catch {
     return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
   }
@@ -154,28 +160,29 @@ export async function publicarAnuncioML(
     {
       cliente_id: clienteId,
       produto_id: produto.id,
+      ml_conta_id: mlContaId,
       ml_item_id: data.id,
       ml_status: data.status ?? "active",
       ml_permalink: data.permalink ?? null,
       preco_revenda: precoRevenda,
     },
-    { onConflict: "cliente_id,produto_id" }
+    { onConflict: "cliente_id,produto_id,ml_conta_id" }
   );
   if (error) return { ok: false, error: `Anunciado no ML, mas falhou salvar localmente: ${error.message}` };
 
   return { ok: true, mlItemId: data.id as string, permalink: data.permalink as string };
 }
 
-/** Atualiza preço e/ou status (pausar/reativar) de um anúncio já publicado. */
+/** Atualiza preço e/ou status (pausar/reativar) de um anúncio já publicado numa conta específica. */
 export async function atualizarAnuncioML(
-  clienteId: string,
+  mlContaId: string,
   produtoId: string,
   mlItemId: string,
   patch: { price?: number; status?: "active" | "paused" }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   let token: string;
   try {
-    token = await getValidMlToken(clienteId);
+    token = await getValidMlToken(mlContaId);
   } catch {
     return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
   }
@@ -193,7 +200,11 @@ export async function atualizarAnuncioML(
   if (patch.status) dbPatch.ml_status = (data.status as string) ?? patch.status;
   if (Object.keys(dbPatch).length) {
     const db = await createSistemaAdminClient();
-    await db.from("seller_ml_anuncios").update(dbPatch).eq("cliente_id", clienteId).eq("produto_id", produtoId);
+    await db
+      .from("seller_ml_anuncios")
+      .update(dbPatch)
+      .eq("ml_conta_id", mlContaId)
+      .eq("produto_id", produtoId);
   }
   return { ok: true };
 }
@@ -216,11 +227,11 @@ export async function pausarAnunciosPorEstoqueZerado(produtoId: string): Promise
 
   const { data: anuncios } = await db
     .from("seller_ml_anuncios")
-    .select("cliente_id, ml_item_id")
+    .select("cliente_id, ml_conta_id, ml_item_id")
     .eq("produto_id", produtoId)
     .eq("ml_status", "active");
   for (const a of anuncios ?? []) {
-    const res = await atualizarAnuncioML(a.cliente_id as string, produtoId, a.ml_item_id as string, {
+    const res = await atualizarAnuncioML(a.ml_conta_id as string, produtoId, a.ml_item_id as string, {
       status: "paused",
     });
     if (!res.ok) console.error("[pausarAnunciosPorEstoqueZerado]", a.cliente_id, res.error);

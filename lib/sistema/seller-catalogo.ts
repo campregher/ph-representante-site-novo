@@ -2,6 +2,8 @@ import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { margemMinimaEfetiva, precoMinimoVenda } from "@/lib/sistema/preco";
 
 export interface AnuncioInfo {
+  mlContaId: string;
+  contaNickname: string | null;
   mlItemId: string;
   status: string;
   precoRevenda: number;
@@ -17,7 +19,8 @@ export interface CatalogoDropItem {
   estoque_atual: number;
   precoMinimo: number | null;
   mlCategoriaDefinida: boolean;
-  anuncio: AnuncioInfo | null;
+  /** um produto pode estar anunciado em mais de uma conta do ML do seller ao mesmo tempo */
+  anuncios: AnuncioInfo[];
   fornecedorId: string | null;
   fornecedorNome: string | null;
 }
@@ -28,8 +31,8 @@ export interface CatalogoDropItem {
  * token). Não expõe custo — só o preço mínimo de revenda já calculado.
  * Produto sem margem definida (nem no produto, nem na categoria) fica de
  * fora — sem margem não dá pra saber o preço mínimo. `clienteId` opcional:
- * quando informado, traz também o estado do anúncio do ML desse seller
- * pra cada produto (D5).
+ * quando informado, traz também o(s) anúncio(s) do ML desse seller pra cada
+ * produto — um mesmo produto pode estar anunciado em mais de uma conta (D5).
  */
 export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDropItem[]> {
   const db = await createSistemaAdminClient();
@@ -47,7 +50,9 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     clienteId
       ? db
           .from("seller_ml_anuncios")
-          .select("produto_id, ml_item_id, ml_status, preco_revenda, ml_permalink")
+          .select(
+            "produto_id, ml_conta_id, conta:cliente_ml_tokens(ml_nickname), ml_item_id, ml_status, preco_revenda, ml_permalink"
+          )
           .eq("cliente_id", clienteId)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
@@ -66,18 +71,27 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     categoria: { nome: string; margem_minima_percentual: number | null } | null;
   }[];
 
-  const anuncioPorProduto = new Map(
-    ((anunciosData ?? []) as unknown as {
-      produto_id: string;
-      ml_item_id: string;
-      ml_status: string;
-      preco_revenda: number;
-      ml_permalink: string | null;
-    }[]).map((a) => [
-      a.produto_id,
-      { mlItemId: a.ml_item_id, status: a.ml_status, precoRevenda: Number(a.preco_revenda), permalink: a.ml_permalink },
-    ])
-  );
+  const anunciosPorProduto = new Map<string, AnuncioInfo[]>();
+  for (const a of (anunciosData ?? []) as unknown as {
+    produto_id: string;
+    ml_conta_id: string;
+    conta: { ml_nickname: string | null } | null;
+    ml_item_id: string;
+    ml_status: string;
+    preco_revenda: number;
+    ml_permalink: string | null;
+  }[]) {
+    const lista = anunciosPorProduto.get(a.produto_id) ?? [];
+    lista.push({
+      mlContaId: a.ml_conta_id,
+      contaNickname: a.conta?.ml_nickname ?? null,
+      mlItemId: a.ml_item_id,
+      status: a.ml_status,
+      precoRevenda: Number(a.preco_revenda),
+      permalink: a.ml_permalink,
+    });
+    anunciosPorProduto.set(a.produto_id, lista);
+  }
 
   return rows
     .map((r) => {
@@ -91,7 +105,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         estoque_atual: r.estoque_atual,
         precoMinimo: precoMinimoVenda(r.custo, margem),
         mlCategoriaDefinida: !!r.ml_category_id,
-        anuncio: anuncioPorProduto.get(r.id) ?? null,
+        anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,
         fornecedorNome: r.fornecedor?.nome ?? null,
       };

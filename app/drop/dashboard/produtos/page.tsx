@@ -25,7 +25,7 @@ export default async function DropDashboardFornecedoresPage() {
     const nome = p.fornecedorNome ?? "Sem fornecedor definido";
     const atual = porFornecedor.get(id) ?? { nome, total: 0, anunciados: 0 };
     atual.total++;
-    if (p.anuncio) atual.anunciados++;
+    if (p.anuncios.length > 0) atual.anunciados++;
     porFornecedor.set(id, atual);
   }
   const fornecedores = [...porFornecedor.entries()].sort((a, b) => a[1].nome.localeCompare(b[1].nome));

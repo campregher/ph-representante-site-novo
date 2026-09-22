@@ -86,6 +86,5 @@ export async function confirmarEmailSeller(
     );
   }
 
-  revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true, jaConfirmado: false, aprovado: validacao.aprovado, motivo: validacao.motivo, nome };
 }

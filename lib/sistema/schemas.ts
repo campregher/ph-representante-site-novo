@@ -235,7 +235,9 @@ export const sellerCadastroSchema = z
     inscricao_estadual: optionalText,
     telefone: optionalText,
     whatsapp: optionalText,
-    email: optionalEmail,
+    email: z.string().trim().email("E-mail inválido"),
+    senha: z.string().min(6, "A senha precisa ter pelo menos 6 caracteres"),
+    confirmar_senha: z.string(),
     cep: optionalText,
     logradouro: optionalText,
     numero: optionalText,
@@ -252,9 +254,9 @@ export const sellerCadastroSchema = z
     message: "Informe o CNPJ ou o CPF",
     path: ["cnpj"],
   })
-  .refine((d) => !!(d.telefone || d.whatsapp || d.email), {
-    message: "Informe pelo menos um contato (telefone, whatsapp ou e-mail)",
-    path: ["email"],
+  .refine((d) => d.senha === d.confirmar_senha, {
+    message: "As senhas não conferem",
+    path: ["confirmar_senha"],
   });
 export type SellerCadastroInput = z.input<typeof sellerCadastroSchema>;
 

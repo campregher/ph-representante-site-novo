@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { CheckCircle2, ArrowRight } from "lucide-react";
+import { CheckCircle2, ArrowRight, Lock } from "lucide-react";
 import { sellerCadastroSchema, type SellerCadastroInput } from "@/lib/sistema/schemas";
 import { cadastrarSeller } from "@/lib/sistema/actions/seller-cadastro";
 import { UF_LIST } from "@/lib/sistema/types";
@@ -183,6 +183,26 @@ export default function SellerCadastroForm() {
               </Field>
               <Field label="E-mail" error={errors.email?.message} className="sm:col-span-2">
                 <Input {...register("email")} type="email" />
+              </Field>
+            </FormGrid>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Acesso ao portal" />
+          <CardBody>
+            <FormGrid>
+              <Field label="Senha" error={errors.senha?.message}>
+                <div className="relative">
+                  <Lock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                  <Input {...register("senha")} type="password" autoComplete="new-password" className="pl-9" />
+                </div>
+              </Field>
+              <Field label="Confirmar senha" error={errors.confirmar_senha?.message}>
+                <div className="relative">
+                  <Lock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                  <Input {...register("confirmar_senha")} type="password" autoComplete="new-password" className="pl-9" />
+                </div>
               </Field>
             </FormGrid>
           </CardBody>

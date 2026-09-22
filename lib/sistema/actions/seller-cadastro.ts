@@ -75,6 +75,30 @@ async function enviarBoasVindas(email: string | null, nome: string, portalToken:
 }
 
 /**
+ * Cria (ou reaproveita) o usuário de Auth do seller e devolve o id. E-mail já
+ * confirmado no Auth — a confirmação de verdade é a flag `email_confirmado`
+ * (D1), controlada pelo link em /drop/confirmar/[token].
+ */
+async function criarAuthUser(
+  db: Awaited<ReturnType<typeof createSistemaAdminClient>>,
+  email: string,
+  senha: string
+): Promise<{ id: string } | { error: string }> {
+  const { data, error } = await db.auth.admin.createUser({
+    email,
+    password: senha,
+    email_confirm: true,
+  });
+  if (error) {
+    if (error.code === "email_exists") {
+      return { error: "Já existe uma conta com este e-mail. Faça login em /drop/login." };
+    }
+    return { error: error.message };
+  }
+  return { id: data.user.id };
+}
+
+/**
  * Auto-cadastro público de seller (sem login — /drop/cadastro). Usa o client
  * admin (service role) porque não há sessão. Cria o cliente com
  * is_seller=true, status='prospect' (fica pendente de aprovação — alguém do
@@ -106,15 +130,34 @@ export async function cadastrarSeller(
   const { data: existente } = await db
     .from("clientes")
     .select(
-      "id, is_seller, portal_token, telefone, whatsapp, email, cep, logradouro, numero, complemento, bairro, cidade, estado"
+      "id, is_seller, portal_token, auth_user_id, telefone, whatsapp, email, cep, logradouro, numero, complemento, bairro, cidade, estado"
     )
     .eq(cnpj ? "cnpj" : "cpf", cnpj ?? cpf)
     .maybeSingle();
 
   if (existente) {
-    if (existente.is_seller) return { ok: true, jaExistia: true };
+    if (existente.is_seller && existente.auth_user_id) return { ok: true, jaExistia: true };
+
+    // cliente antigo (de antes do login) ou recém convertido em seller ainda
+    // não tem usuário de Auth — cria agora com o e-mail/senha que acabou de informar
+    let authUserId = existente.auth_user_id as string | null;
+    if (!authUserId) {
+      const authRes = await criarAuthUser(db, v.email, v.senha);
+      if ("error" in authRes) return { ok: false, error: authRes.error };
+      authUserId = authRes.id;
+    }
+
+    if (existente.is_seller) {
+      await db.from("clientes").update({ auth_user_id: authUserId }).eq("id", existente.id as string);
+      return { ok: true, jaExistia: true };
+    }
+
     // cliente já existente vira seller sem passar pela confirmação de e-mail (já é confiável)
-    const preencheSeVazio: Record<string, unknown> = { is_seller: true, email_confirmado: true };
+    const preencheSeVazio: Record<string, unknown> = {
+      is_seller: true,
+      email_confirmado: true,
+      auth_user_id: authUserId,
+    };
     const camposOpcionais = [
       ["telefone", v.telefone],
       ["whatsapp", v.whatsapp],
@@ -143,6 +186,9 @@ export async function cadastrarSeller(
     return { ok: true, jaExistia: true };
   }
 
+  const authRes = await criarAuthUser(db, v.email, v.senha);
+  if ("error" in authRes) return { ok: false, error: authRes.error };
+
   const { data: novo, error } = await db
     .from("clientes")
     .insert({
@@ -155,6 +201,7 @@ export async function cadastrarSeller(
       telefone: v.telefone,
       whatsapp: v.whatsapp || v.telefone,
       email: v.email,
+      auth_user_id: authRes.id,
       cep: v.cep,
       logradouro: v.logradouro,
       numero: v.numero,
@@ -168,6 +215,7 @@ export async function cadastrarSeller(
     .select("portal_token")
     .single();
   if (error) {
+    await db.auth.admin.deleteUser(authRes.id).catch(() => {});
     if (error.code === "23505") return { ok: false, error: "Já existe um cadastro com este documento." };
     return { ok: false, error: error.message };
   }

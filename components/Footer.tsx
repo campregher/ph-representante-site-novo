@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Mail, MapPin, MessageCircle, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { Mail, MapPin, MessageCircle, ArrowUpRight, Briefcase } from "lucide-react";
 import { WHATSAPP_URL, EMAIL, INSTAGRAM, FACEBOOK, COMPANY_CITY } from "@/lib/constants";
 
 const quickLinks = [
@@ -134,9 +135,14 @@ export default function Footer() {
       <div className="border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-gray-600 text-xs">© {year} PH Representante. Todos os direitos reservados.</p>
-          <a href="#inicio" onClick={(e) => { e.preventDefault(); handleNavClick("#inicio"); }} className="flex items-center gap-1 text-gray-600 hover:text-gray-400 text-xs transition-colors">
-            Voltar ao topo <ArrowUpRight size={12} />
-          </a>
+          <div className="flex items-center gap-4">
+            <Link href="/sistema" className="flex items-center gap-1.5 text-gray-600 hover:text-gray-400 text-xs transition-colors">
+              <Briefcase size={12} /> Sistema Comercial
+            </Link>
+            <a href="#inicio" onClick={(e) => { e.preventDefault(); handleNavClick("#inicio"); }} className="flex items-center gap-1 text-gray-600 hover:text-gray-400 text-xs transition-colors">
+              Voltar ao topo <ArrowUpRight size={12} />
+            </a>
+          </div>
         </div>
       </div>
     </footer>

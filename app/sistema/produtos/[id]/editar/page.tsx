@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/sistema/auth";
 import { createSistemaClient } from "@/lib/supabase/server";
 import {
@@ -21,6 +21,8 @@ export default async function EditarProdutoPage({
   const supabase = await createSistemaClient();
   const { data } = await supabase.from("produtos").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
+  // produto de linha própria não é "representação" — vive em /sistema/estoque
+  if (data.linha_propria) redirect(`/sistema/estoque/produtos/${id}/editar`);
   const produto = data as Produto;
 
   const [repOptions, categorias, variacoes] = await Promise.all([

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Package } from "lucide-react";
 import { requireSistemaProfile, canManage } from "@/lib/sistema/auth";
 import { createSistemaClient } from "@/lib/supabase/server";
@@ -39,6 +39,8 @@ export default async function ProdutoDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
+  // produto de linha própria não é "representação" — vive em /sistema/estoque
+  if (data.linha_propria) redirect(`/sistema/estoque/produtos/${id}/editar`);
 
   const p = data as unknown as Produto & {
     representada: { id: string; nome_fantasia: string | null; razao_social: string } | null;

@@ -86,10 +86,13 @@ export default async function ProdutosPage({
         return { id: r.id as string, total: total ?? 0, inativos: inativos ?? 0 };
       })
     );
+    // conta só produtos de representação órfãos (sem representada) — linha
+    // própria nunca tem representada e não é "representação", não entra aqui
     const { count: semRepCount } = await supabase
       .from("produtos")
       .select("id", { count: "exact", head: true })
-      .is("representada_id", null);
+      .is("representada_id", null)
+      .eq("linha_propria", false);
 
     const contagem = new Map(contagens.map((c) => [c.id, c]));
 
@@ -235,6 +238,8 @@ export default async function ProdutosPage({
       "id, sku, nome, aplicacao, ativo, preco_bruto, representada:representadas(nome_fantasia, razao_social), categoria:categorias_produtos(nome)",
       { count: "exact" }
     )
+    // esta tela é só de representação — linha própria vive em /sistema/estoque
+    .eq("linha_propria", false)
     .order("nome", { ascending: true });
 
   if (busca) {

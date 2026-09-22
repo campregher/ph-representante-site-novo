@@ -83,6 +83,7 @@ export async function salvarProdutoProprio(id: string | null, raw: unknown): Pro
     margem_minima_percentual: v.margem_minima_percentual,
     ml_category_id: v.ml_category_id,
     ml_category_nome: v.ml_category_nome,
+    ml_item_id: v.ml_item_id,
     estoque_minimo: Math.round(Number(v.estoque_minimo ?? 0)),
     peso: v.peso,
     altura: v.altura,
@@ -105,6 +106,76 @@ export async function salvarProdutoProprio(id: string | null, raw: unknown): Pro
   }
   revalidatePath("/sistema/estoque");
   return { ok: true };
+}
+
+// ────────────────── Importar produtos do ML da empresa ─────────────────────
+// (admin puxa os próprios anúncios do ML — nenhum seller participa disso)
+
+export interface ImportarMlItem {
+  mlItemId: string;
+  sku: string;
+  nome: string;
+  imagem_url: string | null;
+  marca: string | null;
+  preco_bruto: number | null;
+  ml_category_id: string | null;
+  ml_category_nome: string | null;
+  quantidadeDisponivel: number;
+  fornecedor_id: string | null;
+}
+
+export async function importarProdutosML(
+  itens: ImportarMlItem[]
+): Promise<ActionResult<{ importados: number; falhas: { mlItemId: string; error: string }[] }>> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+  const supabase = await createSistemaClient();
+
+  let importados = 0;
+  const falhas: { mlItemId: string; error: string }[] = [];
+
+  for (const item of itens) {
+    const { data: novo, error } = await supabase
+      .from("produtos")
+      .insert({
+        sku: item.sku,
+        nome: item.nome,
+        marca: item.marca,
+        fornecedor_id: item.fornecedor_id || null,
+        imagem_url: item.imagem_url,
+        preco_bruto: item.preco_bruto,
+        ml_category_id: item.ml_category_id,
+        ml_category_nome: item.ml_category_nome,
+        ml_item_id: item.mlItemId,
+        ativo: true,
+        linha_propria: true,
+        representada_id: null,
+        created_by: g.profile!.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      falhas.push({
+        mlItemId: item.mlItemId,
+        error: error.code === "23505" ? "Já importado ou SKU duplicado." : error.message,
+      });
+      continue;
+    }
+    importados++;
+    if (item.quantidadeDisponivel > 0) {
+      await aplicarMovimento(supabase, {
+        produtoId: novo.id as string,
+        delta: item.quantidadeDisponivel,
+        tipo: "entrada",
+        origemTipo: "importacao_ml",
+        observacao: "Importação do Mercado Livre",
+        userId: g.profile!.id,
+      });
+    }
+  }
+
+  revalidatePath("/sistema/estoque");
+  return { ok: true, importados, falhas };
 }
 
 // ────────────────────── Categorias da linha própria ────────────────────────

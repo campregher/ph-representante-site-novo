@@ -461,6 +461,7 @@ export const produtoProprioSchema = z.object({
   margem_minima_percentual: percentualOpcional, // override; sem valor usa o da categoria
   ml_category_id: optionalText,
   ml_category_nome: optionalText,
+  ml_item_id: optionalText,
   estoque_minimo: optionalNumber,
   peso: optionalNumber,
   altura: optionalNumber,

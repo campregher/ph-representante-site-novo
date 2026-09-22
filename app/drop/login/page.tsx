@@ -32,19 +32,8 @@ export default function DropLoginPage() {
       return;
     }
 
-    const res = await fetch("/api/drop/meu-token");
-    if (!res.ok) {
-      await supabase.auth.signOut();
-      setError(
-        res.status === 404
-          ? "Não encontramos um cadastro de seller para este e-mail."
-          : "Não foi possível entrar. Tente novamente."
-      );
-      setLoading(false);
-      return;
-    }
-    const { token } = await res.json();
-    router.push(`/drop/portal/${token}`);
+    router.push("/drop/dashboard");
+    router.refresh();
   }
 
   return (

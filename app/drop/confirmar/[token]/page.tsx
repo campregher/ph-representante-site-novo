@@ -41,8 +41,8 @@ export default async function ConfirmarEmailPage({
       <div className="flex flex-col items-center gap-4">
         {conteudo.icon}
         {res.ok && (
-          <Link href={`/drop/portal/${token}`} className={`${buttonClass({ className: "w-full" })}`}>
-            Ir para o portal <ArrowRight size={15} />
+          <Link href="/drop/dashboard" className={`${buttonClass({ className: "w-full" })}`}>
+            Ir para o painel <ArrowRight size={15} />
           </Link>
         )}
       </div>

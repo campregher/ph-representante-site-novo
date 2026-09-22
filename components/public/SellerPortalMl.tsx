@@ -11,10 +11,13 @@ export default function SellerPortalMl({
   token,
   conectado,
   nickname,
+  redirectPath,
 }: {
   token: string;
   conectado: boolean;
   nickname: string | null;
+  /** pra onde limpar a query string (?ml=...) depois do OAuth — padrão é o portal antigo por token */
+  redirectPath?: string;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -24,7 +27,7 @@ export default function SellerPortalMl({
     const ml = sp.get("ml");
     if (ml === "conectado") toast.success("Conta do Mercado Livre conectada!");
     if (ml === "erro") toast.error(sp.get("detalhe") || "Falha ao conectar o Mercado Livre.");
-    if (ml) router.replace(`/drop/portal/${token}`);
+    if (ml) router.replace(redirectPath ?? `/drop/portal/${token}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -7,8 +7,10 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function SignOutButton({
   variant = "icon",
+  redirectTo = "/login",
 }: {
   variant?: "icon" | "plain";
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -17,7 +19,7 @@ export default function SignOutButton({
     setLoading(true);
     try {
       await createClient().auth.signOut();
-      router.push("/login");
+      router.push(redirectTo);
       router.refresh();
     } finally {
       setLoading(false);

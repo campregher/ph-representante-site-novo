@@ -9,7 +9,9 @@ export default async function DropErroPage({
   const msg =
     sp.e === "ml_auth"
       ? "Não conseguimos validar a autorização do Mercado Livre. Tente conectar de novo pelo link do seu portal."
-      : "Algo deu errado.";
+      : sp.e === "sem_cadastro"
+        ? "Não encontramos um cadastro de seller vinculado a esse login. Fale com a gente ou cadastre-se em /drop/cadastro."
+        : "Algo deu errado.";
 
   return (
     <AuthCard title="Ocorreu um erro" subtitle={msg}>

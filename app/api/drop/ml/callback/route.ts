@@ -21,14 +21,10 @@ export async function GET(request: Request) {
   const { clienteId, codeVerifier } = parsed;
 
   const db = await createSistemaAdminClient();
-  const { data: cliente } = await db
-    .from("clientes")
-    .select("portal_token")
-    .eq("id", clienteId)
-    .maybeSingle();
+  const { data: cliente } = await db.from("clientes").select("id").eq("id", clienteId).maybeSingle();
   if (!cliente) return NextResponse.redirect(new URL("/drop/erro?e=ml_auth", request.url));
 
-  const portalUrl = new URL(`/drop/portal/${cliente.portal_token}`, request.url);
+  const portalUrl = new URL("/drop/dashboard/integracao", request.url);
 
   try {
     const token = await exchangePortalCodeForToken(code, codeVerifier);

@@ -18,6 +18,8 @@ export interface CatalogoDropItem {
   precoMinimo: number | null;
   mlCategoriaDefinida: boolean;
   anuncio: AnuncioInfo | null;
+  fornecedorId: string | null;
+  fornecedorNome: string | null;
 }
 
 /**
@@ -35,7 +37,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     db
       .from("produtos")
       .select(
-        "id, sku, nome, imagem_url, custo, estoque_atual, margem_minima_percentual, ml_category_id, categoria:categorias_produtos(nome, margem_minima_percentual)"
+        "id, sku, nome, imagem_url, custo, estoque_atual, margem_minima_percentual, ml_category_id, fornecedor_id, fornecedor:fornecedores(nome), categoria:categorias_produtos(nome, margem_minima_percentual)"
       )
       .eq("linha_propria", true)
       .eq("ativo", true)
@@ -59,6 +61,8 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     estoque_atual: number;
     margem_minima_percentual: number | null;
     ml_category_id: string | null;
+    fornecedor_id: string | null;
+    fornecedor: { nome: string } | null;
     categoria: { nome: string; margem_minima_percentual: number | null } | null;
   }[];
 
@@ -88,6 +92,8 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         precoMinimo: precoMinimoVenda(r.custo, margem),
         mlCategoriaDefinida: !!r.ml_category_id,
         anuncio: anuncioPorProduto.get(r.id) ?? null,
+        fornecedorId: r.fornecedor_id,
+        fornecedorNome: r.fornecedor?.nome ?? null,
       };
     })
     .filter((p) => p.precoMinimo != null);

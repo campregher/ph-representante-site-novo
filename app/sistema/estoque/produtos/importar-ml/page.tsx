@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/sistema/ui/State";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
 import ImportarProdutosMlForm from "@/components/sistema/estoque/ImportarProdutosMlForm";
+import SincronizarMlButton from "@/components/sistema/estoque/SincronizarMlButton";
 import { ShoppingBag } from "lucide-react";
 
 export default async function ImportarProdutosMlPage() {
@@ -48,6 +49,7 @@ export default async function ImportarProdutosMlPage() {
       <PageHeader
         title="Importar do Mercado Livre"
         description={`Conectado como ${conta.ml_nickname ?? conta.ml_user_id}. ${disponiveis.length} anúncio(s) disponível(is) (${idsImportados.size} já importado(s) ocultados).`}
+        action={<SincronizarMlButton />}
       />
       <Card>
         <CardHeader title="Anúncios" description="Ativos e pausados. Selecione os que quer trazer pra linha própria — ajuste o SKU antes de importar." />

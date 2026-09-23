@@ -16,6 +16,11 @@ export interface MlAnuncioEmpresa {
   listingTypeId: string;
   logisticType: string | null;
   vendidos: number;
+  ean: string | null;
+  pesoKg: number | null;
+  alturaCm: number | null;
+  larguraCm: number | null;
+  comprimentoCm: number | null;
 }
 
 interface MlItemBody {
@@ -30,8 +35,23 @@ interface MlItemBody {
   permalink: string;
   status: string;
   listing_type_id: string;
-  shipping?: { logistic_type?: string };
+  shipping?: { logistic_type?: string; dimensions?: string | null };
   attributes?: { id: string; value_name: string | null }[];
+}
+
+/** "dimensions" do ML vem como "COMPxLARGxALT,PESO_GRAMAS" (cm e gramas). */
+function parseDimensoesML(
+  dimensions: string | null | undefined
+): { pesoKg: number | null; alturaCm: number | null; larguraCm: number | null; comprimentoCm: number | null } {
+  const m = dimensions?.match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/);
+  if (!m) return { pesoKg: null, alturaCm: null, larguraCm: null, comprimentoCm: null };
+  const [, comprimento, largura, altura, pesoGramas] = m;
+  return {
+    comprimentoCm: Number(comprimento),
+    larguraCm: Number(largura),
+    alturaCm: Number(altura),
+    pesoKg: Math.round((Number(pesoGramas) / 1000) * 1000) / 1000,
+  };
 }
 
 /** status considerados aqui — fora "closed"/"inactive" (anúncio encerrado/expirado, não importável). */
@@ -105,5 +125,18 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
     listingTypeId: b.listing_type_id,
     logisticType: b.shipping?.logistic_type ?? null,
     vendidos: b.sold_quantity ?? 0,
+    ean: b.attributes?.find((a) => a.id === "GTIN")?.value_name ?? null,
+    ...parseDimensoesML(b.shipping?.dimensions),
   }));
+}
+
+/** Descrição em texto puro do anúncio — endpoint separado no ML, só vale a pena buscar no momento de importar (não pra lista inteira). */
+export async function buscarDescricaoAnuncioML(mlItemId: string): Promise<string | null> {
+  const token = await getValidAdminMlToken();
+  const res = await fetch(`${ML_BASE}/items/${mlItemId}/description`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return (data.plain_text as string) || null;
 }

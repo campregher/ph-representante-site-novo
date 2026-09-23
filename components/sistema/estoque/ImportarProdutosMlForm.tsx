@@ -23,6 +23,11 @@ export interface MlAnuncioItem {
   listingTypeId: string;
   logisticType: string | null;
   vendidos: number;
+  ean: string | null;
+  pesoKg: number | null;
+  alturaCm: number | null;
+  larguraCm: number | null;
+  comprimentoCm: number | null;
 }
 
 const TIPO_ANUNCIO_LABEL: Record<string, string> = {
@@ -158,6 +163,11 @@ export default function ImportarProdutosMlForm({
         ml_category_nome: i.categoryNome,
         quantidadeDisponivel: i.quantidadeDisponivel,
         fornecedor_id: fornecedorId || null,
+        ean: i.ean,
+        pesoKg: i.pesoKg,
+        alturaCm: i.alturaCm,
+        larguraCm: i.larguraCm,
+        comprimentoCm: i.comprimentoCm,
       }));
 
     start(async () => {
@@ -286,6 +296,8 @@ export default function ImportarProdutosMlForm({
               <p className="text-xs text-neutral-400">
                 {formatBRL(i.preco)} · {i.quantidadeDisponivel} disponível(is) · {i.vendidos} vendido(s) · {i.categoryNome}
                 {i.marca ? ` · ${i.marca}` : ""}
+                {i.ean ? ` · EAN ${i.ean}` : ""}
+                {i.pesoKg ? ` · ${i.pesoKg}kg` : ""}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-1">

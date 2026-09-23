@@ -6,6 +6,7 @@ import { getSistemaProfile } from "@/lib/sistema/auth";
 import { canManage } from "@/lib/sistema/roles";
 import { aplicarMovimento, custoMedio } from "@/lib/sistema/estoque-mov";
 import { pausarAnunciosPorEstoqueZerado } from "@/lib/sistema/ml-catalogo";
+import { buscarDescricaoAnuncioML } from "@/lib/sistema/ml-admin-catalogo";
 import {
   fornecedorSchema,
   produtoProprioSchema,
@@ -122,6 +123,11 @@ export interface ImportarMlItem {
   ml_category_nome: string | null;
   quantidadeDisponivel: number;
   fornecedor_id: string | null;
+  ean: string | null;
+  pesoKg: number | null;
+  alturaCm: number | null;
+  larguraCm: number | null;
+  comprimentoCm: number | null;
 }
 
 export async function importarProdutosML(
@@ -135,11 +141,13 @@ export async function importarProdutosML(
   const falhas: { mlItemId: string; error: string }[] = [];
 
   for (const item of itens) {
+    const descricao = await buscarDescricaoAnuncioML(item.mlItemId).catch(() => null);
     const { data: novo, error } = await supabase
       .from("produtos")
       .insert({
         sku: item.sku,
         nome: item.nome,
+        descricao,
         marca: item.marca,
         fornecedor_id: item.fornecedor_id || null,
         imagem_url: item.imagem_url,
@@ -147,6 +155,11 @@ export async function importarProdutosML(
         ml_category_id: item.ml_category_id,
         ml_category_nome: item.ml_category_nome,
         ml_item_id: item.mlItemId,
+        ean: item.ean,
+        peso: item.pesoKg,
+        altura: item.alturaCm,
+        largura: item.larguraCm,
+        comprimento: item.comprimentoCm,
         ativo: true,
         linha_propria: true,
         representada_id: null,

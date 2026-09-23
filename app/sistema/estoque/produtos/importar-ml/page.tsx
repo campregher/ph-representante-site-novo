@@ -66,6 +66,11 @@ export default async function ImportarProdutosMlPage() {
               listingTypeId: a.listingTypeId,
               logisticType: a.logisticType,
               vendidos: a.vendidos,
+              ean: a.ean,
+              pesoKg: a.pesoKg,
+              alturaCm: a.alturaCm,
+              larguraCm: a.larguraCm,
+              comprimentoCm: a.comprimentoCm,
             }))}
             fornecedores={fornecedores}
           />

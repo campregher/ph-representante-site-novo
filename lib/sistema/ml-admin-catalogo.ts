@@ -12,6 +12,10 @@ export interface MlAnuncioEmpresa {
   marca: string | null;
   quantidadeDisponivel: number;
   permalink: string;
+  status: string;
+  listingTypeId: string;
+  logisticType: string | null;
+  vendidos: number;
 }
 
 interface MlItemBody {
@@ -22,15 +26,22 @@ interface MlItemBody {
   pictures?: { url: string }[];
   category_id: string;
   available_quantity?: number;
+  sold_quantity?: number;
   permalink: string;
+  status: string;
+  listing_type_id: string;
+  shipping?: { logistic_type?: string };
   attributes?: { id: string; value_name: string | null }[];
 }
 
+/** status considerados aqui — fora "closed"/"inactive" (anúncio encerrado/expirado, não importável). */
+const STATUS_BUSCADOS = ["active", "paused"];
+
 /**
- * Lista os anúncios ATIVOS da conta do Mercado Livre da empresa (admin_ml_token).
- * Pagina via items/search (até 1000, limite da API) e busca detalhes em lotes
- * de 20 via multiget — o jeito mais econômico de trazer título/preço/foto/
- * categoria sem 1 chamada por anúncio.
+ * Lista os anúncios (ativos e pausados) da conta do Mercado Livre da empresa
+ * (admin_ml_token). Pagina via items/search (até 1000 por status, limite da
+ * API) e busca detalhes em lotes de 20 via multiget — o jeito mais econômico
+ * de trazer título/preço/foto/categoria/envio/tipo sem 1 chamada por anúncio.
  */
 export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
   const record = await getAdminMlRecord();
@@ -38,19 +49,21 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
   const token = await getValidAdminMlToken();
 
   const ids: string[] = [];
-  const limit = 100;
-  let offset = 0;
-  for (;;) {
-    const res = await fetch(
-      `${ML_BASE}/users/${record.ml_user_id}/items/search?status=active&limit=${limit}&offset=${offset}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!res.ok) break;
-    const data = (await res.json()) as { results?: string[] };
-    const results = data.results ?? [];
-    ids.push(...results);
-    offset += limit;
-    if (results.length < limit || offset >= 1000) break;
+  for (const status of STATUS_BUSCADOS) {
+    const limit = 100;
+    let offset = 0;
+    for (;;) {
+      const res = await fetch(
+        `${ML_BASE}/users/${record.ml_user_id}/items/search?status=${status}&limit=${limit}&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) break;
+      const data = (await res.json()) as { results?: string[] };
+      const results = data.results ?? [];
+      ids.push(...results);
+      offset += limit;
+      if (results.length < limit || offset >= 1000) break;
+    }
   }
   if (ids.length === 0) return [];
 
@@ -88,5 +101,9 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
     marca: b.attributes?.find((a) => a.id === "BRAND")?.value_name ?? null,
     quantidadeDisponivel: b.available_quantity ?? 0,
     permalink: b.permalink,
+    status: b.status,
+    listingTypeId: b.listing_type_id,
+    logisticType: b.shipping?.logistic_type ?? null,
+    vendidos: b.sold_quantity ?? 0,
   }));
 }

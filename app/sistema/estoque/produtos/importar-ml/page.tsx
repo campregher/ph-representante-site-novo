@@ -50,7 +50,7 @@ export default async function ImportarProdutosMlPage() {
         description={`Conectado como ${conta.ml_nickname ?? conta.ml_user_id}. ${disponiveis.length} anúncio(s) disponível(is) (${idsImportados.size} já importado(s) ocultados).`}
       />
       <Card>
-        <CardHeader title="Anúncios ativos" description="Selecione os que quer trazer pra linha própria — ajuste o SKU antes de importar." />
+        <CardHeader title="Anúncios" description="Ativos e pausados. Selecione os que quer trazer pra linha própria — ajuste o SKU antes de importar." />
         <CardBody>
           <ImportarProdutosMlForm
             itens={disponiveis.map((a) => ({
@@ -62,6 +62,10 @@ export default async function ImportarProdutosMlPage() {
               categoryNome: a.categoryNome,
               marca: a.marca,
               quantidadeDisponivel: a.quantidadeDisponivel,
+              status: a.status,
+              listingTypeId: a.listingTypeId,
+              logisticType: a.logisticType,
+              vendidos: a.vendidos,
             }))}
             fornecedores={fornecedores}
           />

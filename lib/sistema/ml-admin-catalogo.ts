@@ -8,6 +8,7 @@ export interface MlAnuncioEmpresa {
   preco: number;
   imagemUrl: string | null;
   categoryId: string;
+  categoryNome: string;
   marca: string | null;
   quantidadeDisponivel: number;
   permalink: string;
@@ -53,7 +54,7 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
   }
   if (ids.length === 0) return [];
 
-  const itens: MlAnuncioEmpresa[] = [];
+  const itensBrutos: MlItemBody[] = [];
   for (let i = 0; i < ids.length; i += 20) {
     const chunk = ids.slice(i, i + 20);
     const res = await fetch(`${ML_BASE}/items?ids=${chunk.join(",")}`, {
@@ -62,19 +63,30 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
     if (!res.ok) continue;
     const arr = (await res.json()) as { code: number; body: MlItemBody }[];
     for (const entry of arr) {
-      if (entry.code !== 200) continue;
-      const b = entry.body;
-      itens.push({
-        mlItemId: b.id,
-        titulo: b.title,
-        preco: b.price,
-        imagemUrl: b.thumbnail ?? b.pictures?.[0]?.url ?? null,
-        categoryId: b.category_id,
-        marca: b.attributes?.find((a) => a.id === "BRAND")?.value_name ?? null,
-        quantidadeDisponivel: b.available_quantity ?? 0,
-        permalink: b.permalink,
-      });
+      if (entry.code === 200) itensBrutos.push(entry.body);
     }
   }
-  return itens;
+
+  const categoriaIds = [...new Set(itensBrutos.map((b) => b.category_id))];
+  const nomesPorCategoria = new Map<string, string>();
+  await Promise.all(
+    categoriaIds.map(async (id) => {
+      const res = await fetch(`${ML_BASE}/categories/${id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.name) nomesPorCategoria.set(id, data.name as string);
+    })
+  );
+
+  return itensBrutos.map((b) => ({
+    mlItemId: b.id,
+    titulo: b.title,
+    preco: b.price,
+    imagemUrl: b.thumbnail ?? b.pictures?.[0]?.url ?? null,
+    categoryId: b.category_id,
+    categoryNome: nomesPorCategoria.get(b.category_id) ?? b.category_id,
+    marca: b.attributes?.find((a) => a.id === "BRAND")?.value_name ?? null,
+    quantidadeDisponivel: b.available_quantity ?? 0,
+    permalink: b.permalink,
+  }));
 }

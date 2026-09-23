@@ -15,6 +15,7 @@ export interface MlAnuncioItem {
   preco: number;
   imagemUrl: string | null;
   categoryId: string;
+  categoryNome: string;
   marca: string | null;
   quantidadeDisponivel: number;
 }
@@ -29,17 +30,29 @@ export default function ImportarProdutosMlForm({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [busca, setBusca] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [fornecedorId, setFornecedorId] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [skus, setSkus] = useState<Record<string, string>>(() =>
     Object.fromEntries(itens.map((i) => [i.mlItemId, i.mlItemId]))
   );
 
+  const categorias = useMemo(() => {
+    const porId = new Map<string, string>();
+    for (const i of itens) porId.set(i.categoryId, i.categoryNome);
+    return [...porId.entries()]
+      .map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [itens]);
+
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return itens;
-    return itens.filter((i) => i.titulo.toLowerCase().includes(q));
-  }, [itens, busca]);
+    return itens.filter((i) => {
+      if (categoriaId && i.categoryId !== categoriaId) return false;
+      if (q && !i.titulo.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [itens, busca, categoriaId]);
 
   function toggle(id: string) {
     setSelecionados((s) => {
@@ -76,7 +89,7 @@ export default function ImportarProdutosMlForm({
         marca: i.marca,
         preco_bruto: i.preco,
         ml_category_id: i.categoryId,
-        ml_category_nome: null,
+        ml_category_nome: i.categoryNome,
         quantidadeDisponivel: i.quantidadeDisponivel,
         fornecedor_id: fornecedorId || null,
       }));
@@ -108,6 +121,16 @@ export default function ImportarProdutosMlForm({
         <div className="relative max-w-xs flex-1">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por título…" className="pl-8" />
+        </div>
+        <div className="min-w-48">
+          <Select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
+            <option value="">Todas as categorias</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="min-w-48">
           <Select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)}>
@@ -145,7 +168,7 @@ export default function ImportarProdutosMlForm({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-neutral-900">{i.titulo}</p>
               <p className="text-xs text-neutral-400">
-                {formatBRL(i.preco)} · {i.quantidadeDisponivel} disponível(is)
+                {formatBRL(i.preco)} · {i.quantidadeDisponivel} disponível(is) · {i.categoryNome}
                 {i.marca ? ` · ${i.marca}` : ""}
               </p>
             </div>

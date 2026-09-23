@@ -59,6 +59,7 @@ export default async function ImportarProdutosMlPage() {
               preco: a.preco,
               imagemUrl: a.imagemUrl,
               categoryId: a.categoryId,
+              categoryNome: a.categoryNome,
               marca: a.marca,
               quantidadeDisponivel: a.quantidadeDisponivel,
             }))}

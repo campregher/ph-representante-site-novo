@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Boxes, Truck, ClipboardList, ArrowLeftRight, AlertTriangle, Coins, Package, BarChart3, Tags, PackageSearch } from "lucide-react";
+import { Plus, Boxes, Truck, ClipboardList, ArrowLeftRight, AlertTriangle, Coins, Package, BarChart3, Tags, PackageSearch, ShoppingBag } from "lucide-react";
 import { requireSistemaProfile } from "@/lib/sistema/auth";
 import { listProdutosProprios, estoqueKpis } from "@/lib/sistema/estoque";
 import { formatBRL, formatNumber } from "@/lib/sistema/format";
@@ -28,6 +28,7 @@ export default async function EstoquePage({
 
   const nav = [
     { href: "/sistema/estoque/produtos/nova", label: "Novo produto", icon: <Plus size={15} /> },
+    { href: "/sistema/estoque/produtos/importar-ml", label: "Importar do ML", icon: <ShoppingBag size={15} /> },
     { href: "/sistema/estoque/compras/nova", label: "Nova compra", icon: <ClipboardList size={15} /> },
     { href: "/sistema/estoque/vendas/nova", label: "Novo pedido drop", icon: <Package size={15} /> },
     { href: "/sistema/estoque/despacho", label: "Fila de despacho", icon: <PackageSearch size={15} /> },

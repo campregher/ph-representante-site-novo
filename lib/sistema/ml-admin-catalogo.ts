@@ -60,35 +60,10 @@ function parseDimensoesML(
 /** status considerados aqui — fora "closed"/"inactive" (anúncio encerrado/expirado, não importável). */
 const STATUS_BUSCADOS = ["active", "paused"];
 
-/**
- * Lista os anúncios (ativos e pausados) da conta do Mercado Livre da empresa
- * (admin_ml_token). Pagina via items/search (até 1000 por status, limite da
- * API) e busca detalhes em lotes de 20 via multiget — o jeito mais econômico
- * de trazer título/preço/foto/categoria/envio/tipo sem 1 chamada por anúncio.
- */
-export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
-  const record = await getAdminMlRecord();
-  if (!record) return [];
-  const token = await getValidAdminMlToken();
-
-  const ids: string[] = [];
-  for (const status of STATUS_BUSCADOS) {
-    const limit = 100;
-    let offset = 0;
-    for (;;) {
-      const res = await fetch(
-        `${ML_BASE}/users/${record.ml_user_id}/items/search?status=${status}&limit=${limit}&offset=${offset}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) break;
-      const data = (await res.json()) as { results?: string[] };
-      const results = data.results ?? [];
-      ids.push(...results);
-      offset += limit;
-      if (results.length < limit || offset >= 1000) break;
-    }
-  }
+/** Busca detalhes completos (multiget em lotes de 20 + nome de categoria) de uma lista de ids de anúncio. */
+export async function buscarAnunciosPorIds(ids: string[]): Promise<MlAnuncioEmpresa[]> {
   if (ids.length === 0) return [];
+  const token = await getValidAdminMlToken();
 
   const itensBrutos: MlItemBody[] = [];
   for (let i = 0; i < ids.length; i += 20) {
@@ -133,6 +108,37 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
     imagens: (b.pictures ?? []).map((p) => p.secure_url ?? p.url),
     ...parseDimensoesML(b.shipping?.dimensions),
   }));
+}
+
+/**
+ * Lista os anúncios (ativos e pausados) da conta do Mercado Livre da empresa
+ * (admin_ml_token). Pagina via items/search (até 1000 por status, limite da
+ * API) e busca detalhes via buscarAnunciosPorIds — o jeito mais econômico de
+ * trazer título/preço/foto/categoria/envio/tipo sem 1 chamada por anúncio.
+ */
+export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
+  const record = await getAdminMlRecord();
+  if (!record) return [];
+  const token = await getValidAdminMlToken();
+
+  const ids: string[] = [];
+  for (const status of STATUS_BUSCADOS) {
+    const limit = 100;
+    let offset = 0;
+    for (;;) {
+      const res = await fetch(
+        `${ML_BASE}/users/${record.ml_user_id}/items/search?status=${status}&limit=${limit}&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) break;
+      const data = (await res.json()) as { results?: string[] };
+      const results = data.results ?? [];
+      ids.push(...results);
+      offset += limit;
+      if (results.length < limit || offset >= 1000) break;
+    }
+  }
+  return buscarAnunciosPorIds(ids);
 }
 
 /** Descrição em texto puro do anúncio — endpoint separado no ML, só vale a pena buscar no momento de importar (não pra lista inteira). */

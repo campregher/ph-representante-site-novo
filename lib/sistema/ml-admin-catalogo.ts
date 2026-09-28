@@ -21,6 +21,7 @@ export interface MlAnuncioEmpresa {
   alturaCm: number | null;
   larguraCm: number | null;
   comprimentoCm: number | null;
+  skuVendedor: string | null;
 }
 
 interface MlItemBody {
@@ -35,6 +36,7 @@ interface MlItemBody {
   permalink: string;
   status: string;
   listing_type_id: string;
+  seller_custom_field?: string | null;
   shipping?: { logistic_type?: string; dimensions?: string | null };
   attributes?: { id: string; value_name: string | null }[];
 }
@@ -126,6 +128,7 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
     logisticType: b.shipping?.logistic_type ?? null,
     vendidos: b.sold_quantity ?? 0,
     ean: b.attributes?.find((a) => a.id === "GTIN")?.value_name ?? null,
+    skuVendedor: b.attributes?.find((a) => a.id === "SELLER_SKU")?.value_name ?? b.seller_custom_field ?? null,
     ...parseDimensoesML(b.shipping?.dimensions),
   }));
 }

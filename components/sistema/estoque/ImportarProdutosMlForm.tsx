@@ -28,6 +28,7 @@ export interface MlAnuncioItem {
   alturaCm: number | null;
   larguraCm: number | null;
   comprimentoCm: number | null;
+  skuVendedor: string | null;
 }
 
 const TIPO_ANUNCIO_LABEL: Record<string, string> = {
@@ -72,7 +73,7 @@ export default function ImportarProdutosMlForm({
   const [fornecedorId, setFornecedorId] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [skus, setSkus] = useState<Record<string, string>>(() =>
-    Object.fromEntries(itens.map((i) => [i.mlItemId, i.mlItemId]))
+    Object.fromEntries(itens.map((i) => [i.mlItemId, i.skuVendedor ?? i.mlItemId]))
   );
 
   const categorias = useMemo(() => {

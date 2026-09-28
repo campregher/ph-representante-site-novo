@@ -194,10 +194,13 @@ export async function importarProdutosML(
 }
 
 /**
- * Ressincroniza produtos já importados do ML: atualiza só conteúdo do
- * anúncio (nome, descrição, fotos, categoria, EAN, dimensões) — nunca
- * custo/estoque/margem/SKU/fornecedor/ativo, que são de gestão manual do
- * admin. Usa o mesmo ml_item_id gravado na importação original.
+ * Ressincroniza produtos já importados do ML: atualiza conteúdo do anúncio
+ * (nome, descrição, fotos, categoria, EAN, dimensões) — nunca
+ * custo/estoque/margem/fornecedor/ativo, que são de gestão manual do admin.
+ * SKU é um caso especial: só é sobrescrito quando ainda está intocado (igual
+ * ao ml_item_id, valor padrão de quando não havia SKU do vendedor no ML na
+ * hora da importação) — se o admin já personalizou o SKU, nunca é tocado.
+ * Usa o mesmo ml_item_id gravado na importação original.
  */
 export async function ressincronizarProdutosML(
   produtoIds: string[]
@@ -209,7 +212,7 @@ export async function ressincronizarProdutosML(
 
   const { data: produtos, error: eBusca } = await supabase
     .from("produtos")
-    .select("id, ml_item_id")
+    .select("id, sku, ml_item_id")
     .in("id", produtoIds)
     .not("ml_item_id", "is", null);
   if (eBusca) return { ok: false, error: eBusca.message };
@@ -228,9 +231,11 @@ export async function ressincronizarProdutosML(
       continue;
     }
     const descricao = await buscarDescricaoAnuncioML(anuncio.mlItemId).catch(() => null);
+    const skuIntocado = p.sku === p.ml_item_id;
     const { error } = await supabase
       .from("produtos")
       .update({
+        ...(skuIntocado && anuncio.skuVendedor ? { sku: anuncio.skuVendedor } : {}),
         nome: anuncio.titulo,
         descricao,
         imagem_url: anuncio.imagens[0] ?? anuncio.imagemUrl,

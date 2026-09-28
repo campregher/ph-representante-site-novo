@@ -74,6 +74,7 @@ export default async function ImportarProdutosMlPage() {
               larguraCm: a.larguraCm,
               comprimentoCm: a.comprimentoCm,
               skuVendedor: a.skuVendedor,
+              imagens: a.imagens,
             }))}
             fornecedores={fornecedores}
           />

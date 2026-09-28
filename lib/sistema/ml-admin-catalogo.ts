@@ -22,6 +22,7 @@ export interface MlAnuncioEmpresa {
   larguraCm: number | null;
   comprimentoCm: number | null;
   skuVendedor: string | null;
+  imagens: string[];
 }
 
 interface MlItemBody {
@@ -29,7 +30,7 @@ interface MlItemBody {
   title: string;
   price: number;
   thumbnail?: string;
-  pictures?: { url: string }[];
+  pictures?: { url: string; secure_url?: string }[];
   category_id: string;
   available_quantity?: number;
   sold_quantity?: number;
@@ -129,6 +130,7 @@ export async function listarAnunciosEmpresaML(): Promise<MlAnuncioEmpresa[]> {
     vendidos: b.sold_quantity ?? 0,
     ean: b.attributes?.find((a) => a.id === "GTIN")?.value_name ?? null,
     skuVendedor: b.attributes?.find((a) => a.id === "SELLER_SKU")?.value_name ?? b.seller_custom_field ?? null,
+    imagens: (b.pictures ?? []).map((p) => p.secure_url ?? p.url),
     ...parseDimensoesML(b.shipping?.dimensions),
   }));
 }

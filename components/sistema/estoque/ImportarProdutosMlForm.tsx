@@ -29,6 +29,7 @@ export interface MlAnuncioItem {
   larguraCm: number | null;
   comprimentoCm: number | null;
   skuVendedor: string | null;
+  imagens: string[];
 }
 
 const TIPO_ANUNCIO_LABEL: Record<string, string> = {
@@ -169,6 +170,7 @@ export default function ImportarProdutosMlForm({
         alturaCm: i.alturaCm,
         larguraCm: i.larguraCm,
         comprimentoCm: i.comprimentoCm,
+        imagens: i.imagens,
       }));
 
     start(async () => {

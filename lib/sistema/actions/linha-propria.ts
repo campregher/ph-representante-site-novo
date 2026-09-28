@@ -128,6 +128,7 @@ export interface ImportarMlItem {
   alturaCm: number | null;
   larguraCm: number | null;
   comprimentoCm: number | null;
+  imagens: string[];
 }
 
 export async function importarProdutosML(
@@ -151,6 +152,7 @@ export async function importarProdutosML(
         marca: item.marca,
         fornecedor_id: item.fornecedor_id || null,
         imagem_url: item.imagem_url,
+        imagens: item.imagens.length > 0 ? item.imagens : null,
         preco_bruto: item.preco_bruto,
         ml_category_id: item.ml_category_id,
         ml_category_nome: item.ml_category_nome,

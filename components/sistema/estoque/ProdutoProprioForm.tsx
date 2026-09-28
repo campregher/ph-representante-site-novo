@@ -25,11 +25,13 @@ export default function ProdutoProprioForm({
   categorias,
   initial,
   produtoId,
+  imagensGaleria,
 }: {
   fornecedores: Opt[];
   categorias: CategoriaOpt[];
   initial?: Partial<typeof base>;
   produtoId?: string;
+  imagensGaleria?: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -107,7 +109,19 @@ export default function ProdutoProprioForm({
             <Field label="EAN"><Input value={f.ean} onChange={(e) => set("ean", e.target.value)} /></Field>
             <Field label="Unidade"><Input value={f.unidade} onChange={(e) => set("unidade", e.target.value)} /></Field>
           </FormGrid>
-          <Field label="Foto (link)"><Input value={f.imagem_url} onChange={(e) => set("imagem_url", e.target.value)} /></Field>
+          <Field label="Foto (link)" hint="Usada como capa no catálogo do seller e no PDF">
+            <Input value={f.imagem_url} onChange={(e) => set("imagem_url", e.target.value)} />
+          </Field>
+          {imagensGaleria && imagensGaleria.length > 1 && (
+            <Field label={`Outras fotos do anúncio (${imagensGaleria.length})`} hint="Importadas do Mercado Livre — só a foto acima é usada no catálogo">
+              <div className="flex flex-wrap gap-2">
+                {imagensGaleria.map((url, idx) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={url + idx} src={url} alt="" className="h-16 w-16 rounded-md border border-neutral-200 object-cover" />
+                ))}
+              </div>
+            </Field>
+          )}
         </CardBody>
       </Card>
 

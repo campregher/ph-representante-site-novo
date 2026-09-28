@@ -27,6 +27,7 @@ export default async function EditarProdutoProprioPage({
         fornecedores={fornecedores}
         categorias={categorias}
         produtoId={id}
+        imagensGaleria={(pr.imagens as string[] | null) ?? []}
         initial={{
           sku: s(pr.sku), nome: s(pr.nome), descricao: s(pr.descricao), marca: s(pr.marca),
           fornecedor_id: s(pr.fornecedor_id), categoria_id: s(pr.categoria_id), ncm: s(pr.ncm), ean: s(pr.ean),

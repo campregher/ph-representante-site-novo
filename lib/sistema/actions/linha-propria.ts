@@ -249,8 +249,10 @@ export async function ressincronizarProdutosML(
         comprimento: anuncio.comprimentoCm,
       })
       .eq("id", p.id);
-    if (error) falhas.push({ produtoId: p.id as string, error: error.message });
-    else atualizados++;
+    if (error) {
+      console.error("[ressincronizarProdutosML]", p.id, error.code, error.message);
+      falhas.push({ produtoId: p.id as string, error: error.message });
+    } else atualizados++;
   }
 
   revalidatePath("/sistema/estoque");

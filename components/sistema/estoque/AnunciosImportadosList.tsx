@@ -51,7 +51,11 @@ export default function AnunciosImportadosList({ itens }: { itens: ProdutoImport
       if (res.falhas.length === 0) {
         toast.success(`${res.atualizados} produto(s) ressincronizado(s).`);
       } else {
-        toast.error(`${res.atualizados} ressincronizado(s), ${res.falhas.length} falharam.`);
+        toast.error(
+          `${res.atualizados} ressincronizado(s), ${res.falhas.length} falharam: ${res.falhas
+            .map((f) => f.error)
+            .join("; ")}`
+        );
       }
       setSelecionados(new Set());
       router.refresh();

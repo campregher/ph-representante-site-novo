@@ -63,7 +63,6 @@ export default function AnunciosImportadosList({ itens }: { itens: ProdutoImport
             .join("; ")}`
         );
       }
-      for (const aviso of res.avisos) toast.warning(aviso);
       setSelecionados(new Set());
       router.refresh();
     });

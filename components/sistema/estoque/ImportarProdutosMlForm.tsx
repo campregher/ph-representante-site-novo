@@ -174,7 +174,13 @@ export default function ImportarProdutosMlForm({
       }));
 
     start(async () => {
-      const res = await importarProdutosML(payload);
+      let res: Awaited<ReturnType<typeof importarProdutosML>>;
+      try {
+        res = await importarProdutosML(payload);
+      } catch {
+        toast.error("Falha ao comunicar com o servidor — atualize a página (Ctrl+Shift+R) e tente de novo.");
+        return;
+      }
       if (!res.ok) {
         toast.error(res.error);
         return;

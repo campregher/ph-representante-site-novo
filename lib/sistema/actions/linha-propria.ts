@@ -204,7 +204,7 @@ export async function importarProdutosML(
  */
 export async function ressincronizarProdutosML(
   produtoIds: string[]
-): Promise<ActionResult<{ atualizados: number; falhas: { produtoId: string; error: string }[] }>> {
+): Promise<ActionResult<{ atualizados: number; falhas: { produtoId: string; error: string }[]; avisos: string[] }>> {
   const g = await guard();
   if (g.error) return { ok: false, error: g.error };
   if (produtoIds.length === 0) return { ok: false, error: "Nenhum produto selecionado." };
@@ -212,7 +212,7 @@ export async function ressincronizarProdutosML(
 
   const { data: produtos, error: eBusca } = await supabase
     .from("produtos")
-    .select("id, sku, ml_item_id")
+    .select("id, sku, nome, ml_item_id")
     .in("id", produtoIds)
     .not("ml_item_id", "is", null);
   if (eBusca) return { ok: false, error: eBusca.message };
@@ -223,6 +223,7 @@ export async function ressincronizarProdutosML(
 
   let atualizados = 0;
   const falhas: { produtoId: string; error: string }[] = [];
+  const avisos: string[] = [];
 
   for (const p of produtos ?? []) {
     const anuncio = anuncioPorId.get(p.ml_item_id as string);
@@ -231,11 +232,9 @@ export async function ressincronizarProdutosML(
       continue;
     }
     const descricao = await buscarDescricaoAnuncioML(anuncio.mlItemId).catch(() => null);
-    const skuIntocado = p.sku === p.ml_item_id;
     const { error } = await supabase
       .from("produtos")
       .update({
-        ...(skuIntocado && anuncio.skuVendedor ? { sku: anuncio.skuVendedor } : {}),
         nome: anuncio.titulo,
         descricao,
         imagem_url: anuncio.imagens[0] ?? anuncio.imagemUrl,
@@ -252,12 +251,28 @@ export async function ressincronizarProdutosML(
     if (error) {
       console.error("[ressincronizarProdutosML]", p.id, error.code, error.message);
       falhas.push({ produtoId: p.id as string, error: error.message });
-    } else atualizados++;
+      continue;
+    }
+    atualizados++;
+
+    // SKU é atualizado numa query separada: se colidir com o SKU de outro
+    // produto (vendedor reusou o mesmo SKU em mais de um anúncio no ML),
+    // não pode derrubar a atualização do conteúdo acima — só avisa e mantém
+    // o SKU atual. Nunca toca em SKU já personalizado pelo admin.
+    const skuIntocado = p.sku === p.ml_item_id;
+    if (skuIntocado && anuncio.skuVendedor && anuncio.skuVendedor !== p.sku) {
+      const { error: eSku } = await supabase.from("produtos").update({ sku: anuncio.skuVendedor }).eq("id", p.id);
+      if (eSku) {
+        avisos.push(
+          `"${p.nome}": SKU do ML ("${anuncio.skuVendedor}") já está em uso por outro produto — mantido "${p.sku}".`
+        );
+      }
+    }
   }
 
   revalidatePath("/sistema/estoque");
   revalidatePath("/sistema/estoque/produtos/importar-ml");
-  return { ok: true, atualizados, falhas };
+  return { ok: true, atualizados, falhas, avisos };
 }
 
 // ────────────────────── Categorias da linha própria ────────────────────────

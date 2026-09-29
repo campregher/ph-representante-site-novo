@@ -43,7 +43,13 @@ export default function AnunciosImportadosList({ itens }: { itens: ProdutoImport
   function ressincronizar() {
     if (selecionados.size === 0) return;
     start(async () => {
-      const res = await ressincronizarProdutosML([...selecionados]);
+      let res: Awaited<ReturnType<typeof ressincronizarProdutosML>>;
+      try {
+        res = await ressincronizarProdutosML([...selecionados]);
+      } catch {
+        toast.error("Falha ao comunicar com o servidor — atualize a página (Ctrl+Shift+R) e tente de novo.");
+        return;
+      }
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -57,6 +63,7 @@ export default function AnunciosImportadosList({ itens }: { itens: ProdutoImport
             .join("; ")}`
         );
       }
+      for (const aviso of res.avisos) toast.warning(aviso);
       setSelecionados(new Set());
       router.refresh();
     });

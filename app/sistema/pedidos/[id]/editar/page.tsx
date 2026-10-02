@@ -79,7 +79,14 @@ export default async function EditarPedidoPage({
 
   return (
     <div className="max-w-4xl">
-      <PageHeader title={`Editar pedido #${p.numero}`} description="Só pedidos em orçamento podem ser editados." />
+      <PageHeader
+        title={`Editar pedido #${p.numero}`}
+        description={
+          ["orcamento", "aguardando_aprovacao"].includes(p.status)
+            ? "Altere e salve como orçamento, ou gere o pedido."
+            : "Pedido já confirmado — salvar altera os dados sem mudar o status."
+        }
+      />
       <NovoPedido
         initial={initial}
         clienteOptions={clienteOptions}

@@ -52,7 +52,8 @@ export default async function PedidosPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireSistemaProfile();
+  const profile = await requireSistemaProfile();
+  const podeCriar = profile.role !== "consulta";
   const sp = await searchParams;
   const busca = (sp.busca ?? "").trim();
   const representada = sp.representada ?? "";
@@ -114,9 +115,11 @@ export default async function PedidosPage({
         title="Pedidos"
         description="Lançamento e acompanhamento por representada."
         action={
-          <Link href="/sistema/pedidos/novo" className={buttonClass({ size: "sm" })}>
-            <Plus size={15} /> Novo pedido
-          </Link>
+          podeCriar && (
+            <Link href="/sistema/pedidos/novo" className={buttonClass({ size: "sm" })}>
+              <Plus size={15} /> Novo pedido
+            </Link>
+          )
         }
       />
 
@@ -156,9 +159,11 @@ export default async function PedidosPage({
           title="Nenhum pedido lançado"
           description="Lance o primeiro pedido escolhendo cliente, representada e produtos."
           action={
-            <Link href="/sistema/pedidos/novo" className={buttonClass({ size: "sm" })}>
-              <Plus size={15} /> Novo pedido
-            </Link>
+            podeCriar && (
+              <Link href="/sistema/pedidos/novo" className={buttonClass({ size: "sm" })}>
+                <Plus size={15} /> Novo pedido
+              </Link>
+            )
           }
         />
       ) : (
@@ -196,7 +201,7 @@ export default async function PedidosPage({
                       label: p.status as string,
                       tone: "neutral" as const,
                     };
-                    const editavel = !["cancelado", "rejeitado"].includes(p.status as string);
+                    const editavel = podeCriar && !["cancelado", "rejeitado"].includes(p.status as string);
                     return (
                       <RowLink key={p.id as string} href={`/sistema/pedidos/${p.id}`}>
                         <Td className="font-medium text-neutral-900">#{p.numero as number}</Td>

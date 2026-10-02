@@ -334,6 +334,7 @@ export const pedidoSchema = z.object({
   condicao_pagamento: optionalText,
   forma_pagamento: optionalText,
   previsao_entrega: optionalText,
+  data_pedido: optionalText,
   observacao_cliente: optionalText,
   observacao_representada: optionalText,
   observacao_interna: optionalText,

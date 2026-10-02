@@ -70,6 +70,7 @@ export default async function EditarPedidoPage({
     condicao_pagamento: p.condicao_pagamento,
     forma_pagamento: p.forma_pagamento,
     previsao_entrega: p.previsao_entrega,
+    data_pedido: p.data_pedido ? String(p.data_pedido).slice(0, 10) : null,
     observacao_cliente: p.observacao_cliente,
     observacao_interna: p.observacao_interna,
     desconto_percentual: Number(p.desconto_percentual),

@@ -209,6 +209,7 @@ export async function salvarPedido(
     condicao_pagamento: v.condicao_pagamento ?? null,
     forma_pagamento: v.forma_pagamento ?? null,
     previsao_entrega: v.previsao_entrega ?? null,
+    ...(v.data_pedido ? { data_pedido: v.data_pedido } : {}),
     observacao_cliente: v.observacao_cliente ?? null,
     observacao_representada: v.observacao_representada ?? null,
     observacao_interna: v.observacao_interna ?? null,

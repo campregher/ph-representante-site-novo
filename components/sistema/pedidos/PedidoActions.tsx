@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Ban, Trash2 } from "lucide-react";
+import { Copy, Ban, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/sistema/ui/Button";
 import { ConfirmDialog } from "@/components/sistema/ui/Modal";
@@ -19,9 +19,11 @@ export default function PedidoActions({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [confirm, setConfirm] = useState<null | "cancelar" | "excluir">(null);
+  const [confirm, setConfirm] = useState<null | "cancelar" | "excluir" | "orcamento">(null);
 
   const cancelavel = !["cancelado", "entregue", "faturado"].includes(status);
+  const podeVoltarOrcamento = status !== "orcamento" && status !== "cancelado";
+  const eraVenda = ["confirmado", "faturado", "em_transporte", "entregue", "pendencia"].includes(status);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -44,6 +46,12 @@ export default function PedidoActions({
         <Copy size={14} /> Duplicar
       </Button>
 
+      {podeVoltarOrcamento && (
+        <Button variant="outline" size="sm" onClick={() => setConfirm("orcamento")}>
+          <Undo2 size={14} /> Voltar para orçamento
+        </Button>
+      )}
+
       {cancelavel && (
         <Button variant="outline" size="sm" onClick={() => setConfirm("cancelar")}>
           <Ban size={14} /> Cancelar
@@ -55,6 +63,31 @@ export default function PedidoActions({
           <Trash2 size={14} className="text-red-500" />
         </Button>
       )}
+
+      <ConfirmDialog
+        open={confirm === "orcamento"}
+        onClose={() => setConfirm(null)}
+        onConfirm={() =>
+          startTransition(async () => {
+            const res = await alterarStatusPedido(id, "orcamento", "Revertido para orçamento");
+            if (!res.ok) toast.error(res.error);
+            else {
+              toast.success("Pedido voltou para orçamento.");
+              setConfirm(null);
+              router.refresh();
+            }
+          })
+        }
+        title="Voltar para orçamento"
+        message={
+          eraVenda
+            ? "Esse pedido já conta como venda confirmada. Voltar para orçamento NÃO desfaz estoque, comissão ou conta a receber já gerados a partir dele — só muda o status. Continuar?"
+            : "O pedido volta a ficar editável como orçamento."
+        }
+        confirmLabel="Voltar para orçamento"
+        danger={eraVenda}
+        loading={pending}
+      />
 
       <ConfirmDialog
         open={confirm === "cancelar"}

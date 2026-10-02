@@ -132,6 +132,7 @@ export interface PedidoInitial {
   condicao_pagamento: string | null;
   forma_pagamento: string | null;
   previsao_entrega: string | null;
+  data_pedido: string | null;
   observacao_cliente: string | null;
   observacao_interna: string | null;
   desconto_percentual: number;
@@ -183,6 +184,9 @@ export default function NovoPedido({
   const [cond, setCond] = useState(initial?.condicao_pagamento ?? "");
   const [forma, setForma] = useState(initial?.forma_pagamento ?? "");
   const [previsao, setPrevisao] = useState(initial?.previsao_entrega ?? "");
+  const [dataPedido, setDataPedido] = useState(
+    initial?.data_pedido ?? new Date().toISOString().slice(0, 10)
+  );
   const [obsCliente, setObsCliente] = useState(initial?.observacao_cliente ?? "");
   const [obsInterna, setObsInterna] = useState(initial?.observacao_interna ?? "");
 
@@ -480,6 +484,7 @@ export default function NovoPedido({
       condicao_pagamento: cond,
       forma_pagamento: forma,
       previsao_entrega: previsao,
+      data_pedido: dataPedido,
       observacao_cliente: obsCliente,
       observacao_interna: obsInterna,
       desconto_modo: descModo,
@@ -1026,6 +1031,9 @@ export default function NovoPedido({
             </Field>
             <Field label="Previsão de entrega">
               <Input type="date" value={previsao} onChange={(e) => setPrevisao(e.target.value)} />
+            </Field>
+            <Field label="Data do pedido" hint="Afeta relatórios e competência de comissão">
+              <Input type="date" value={dataPedido} onChange={(e) => setDataPedido(e.target.value)} />
             </Field>
           </FormGrid>
           <Field label="Observação para o cliente" className="mt-4">

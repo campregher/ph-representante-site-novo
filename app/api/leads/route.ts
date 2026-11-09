@@ -8,16 +8,23 @@ export const runtime = "nodejs";
 const leadSchema = z.object({
   name: z.string().min(2),
   company: z.string().optional(),
-  cnpj: z.string().min(14),
+  // CNPJ é opcional: lead sem CNPJ ativo cai no grupo do WhatsApp em vez do
+  // chat individual (ver qualificarLead abaixo) — não bloqueia o formulário.
+  cnpj: z.string().optional(),
+  cnpjAtivo: z.boolean().default(false),
   phone: z.string().min(10),
   email: z.string().email(),
   city: z.string().min(2),
   businessType: z.enum(["distribuidor", "loja", "seller-ml", "seller-shopee", "dropshipping"]),
   interest: z.enum(["atacado", "dropshipping", "gestao", "tudo"]),
+  vendeMarketplace: z.enum(["sim", "nao"]),
+  linkLoja: z.string().optional(),
+  volumeMensal: z.enum(["nao-sei", "ate-5k", "5k-20k", "20k-50k", "acima-50k"]),
   message: z.string().optional(),
 });
 
 type Lead = z.infer<typeof leadSchema>;
+type Prioridade = "alta" | "media" | "baixa";
 
 const businessTypeLabels: Record<Lead["businessType"], string> = {
   distribuidor: "Distribuidor",
@@ -32,6 +39,33 @@ const interestLabels: Record<Lead["interest"], string> = {
   dropshipping: "Dropshipping",
   gestao: "Gestao de Marketplace",
   tudo: "Todos os servicos",
+};
+
+const vendeMarketplaceLabels: Record<Lead["vendeMarketplace"], string> = {
+  sim: "Ja vende",
+  nao: "Ainda nao vende",
+};
+
+const volumeLabels: Record<Lead["volumeMensal"], string> = {
+  "nao-sei": "Ainda nao sei",
+  "ate-5k": "Ate R$ 5 mil/mes",
+  "5k-20k": "R$ 5 mil a R$ 20 mil/mes",
+  "20k-50k": "R$ 20 mil a R$ 50 mil/mes",
+  "acima-50k": "Acima de R$ 50 mil/mes",
+};
+
+/** Prioridade de atendimento — não bloqueia nada, só prioriza o follow-up. */
+function qualificarLead(lead: Lead): Prioridade {
+  const volumeAlto = lead.volumeMensal === "20k-50k" || lead.volumeMensal === "acima-50k";
+  if (lead.cnpjAtivo && lead.vendeMarketplace === "sim" && volumeAlto) return "alta";
+  if (lead.cnpjAtivo) return "media";
+  return "baixa";
+}
+
+const prioridadeLabel: Record<Prioridade, string> = {
+  alta: "🔥 Alta prioridade",
+  media: "🟡 Prioridade média",
+  baixa: "⚪ Prioridade baixa",
 };
 
 function env(name: string) {
@@ -108,16 +142,21 @@ async function appendLeadToSheet(lead: Lead) {
     createdAt,
     lead.name,
     lead.company || "",
-    lead.cnpj,
+    lead.cnpj || "",
     lead.phone,
     lead.email,
     lead.city,
     businessTypeLabels[lead.businessType],
     interestLabels[lead.interest],
     lead.message || "",
+    lead.cnpjAtivo ? "Sim" : "Nao",
+    vendeMarketplaceLabels[lead.vendeMarketplace],
+    lead.linkLoja || "",
+    volumeLabels[lead.volumeMensal],
+    prioridadeLabel[qualificarLead(lead)],
   ]];
 
-  const range = encodeURIComponent(`${sheetName}!A:J`);
+  const range = encodeURIComponent(`${sheetName}!A:O`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
   const response = await fetch(url, {
     method: "POST",
@@ -135,22 +174,31 @@ async function appendLeadToSheet(lead: Lead) {
 }
 
 function emailHtml(lead: Lead) {
+  const prioridade = qualificarLead(lead);
+  const corPrioridade = { alta: "#16a34a", media: "#ca8a04", baixa: "#6b7280" }[prioridade];
   const rows = [
     ["Nome", lead.name],
     ["Empresa", lead.company || "-"],
-    ["CNPJ", lead.cnpj],
+    ["CNPJ", lead.cnpj || "-"],
+    ["CNPJ ativo", lead.cnpjAtivo ? "Sim" : "Nao"],
     ["WhatsApp", lead.phone],
     ["E-mail", lead.email],
     ["Cidade", lead.city],
     ["Tipo de negocio", businessTypeLabels[lead.businessType]],
     ["Interesse", interestLabels[lead.interest]],
+    ["Ja vende em marketplace", vendeMarketplaceLabels[lead.vendeMarketplace]],
+    ["Link da loja", lead.linkLoja || "-"],
+    ["Volume pretendido", volumeLabels[lead.volumeMensal]],
     ["Mensagem", lead.message || "-"],
   ];
 
   return `
     <div style="font-family:Arial,sans-serif;color:#111;line-height:1.5">
       <h2>Novo lead - PH Representante</h2>
-      <table cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:680px">
+      <p style="display:inline-block;padding:6px 14px;border-radius:999px;background:${corPrioridade};color:#fff;font-weight:bold;font-size:14px">
+        ${prioridadeLabel[prioridade]}
+      </p>
+      <table cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:680px;margin-top:12px">
         ${rows.map(([label, value]) => `
           <tr>
             <td style="border:1px solid #ddd;background:#f7f7f7;font-weight:bold;width:180px">${label}</td>

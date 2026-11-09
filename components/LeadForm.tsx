@@ -5,19 +5,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { User, Building2, Hash, Phone, Mail, MapPin, Store, ShoppingBag, CheckCircle2, X, Send, Loader2 } from "lucide-react";
+import { User, Building2, Hash, Phone, Mail, MapPin, Store, ShoppingBag, ShoppingCart, Link2, Wallet, CheckCircle2, AlertTriangle, X, Send, Loader2, Users } from "lucide-react";
 import { formatCNPJ, formatPhone, validateCNPJ } from "@/utils/cnpj";
-import { WHATSAPP_NUMBER } from "@/lib/constants";
+import { WHATSAPP_NUMBER, WHATSAPP_GROUP_URL } from "@/lib/constants";
+import type { CnpjData } from "@/lib/sistema/cnpj";
 
 const schema = z.object({
   name: z.string().min(2, "Nome deve ter ao menos 2 caracteres"),
   company: z.string().optional(),
-  cnpj: z.string().min(18, "CNPJ invalido").refine((v) => validateCNPJ(v), "CNPJ invalido - verifique os digitos"),
+  // CNPJ é opcional: quem ainda não tem vira lead pro grupo do WhatsApp em
+  // vez do chat individual — ver branching no modal de sucesso.
+  cnpj: z.string().optional().refine((v) => !v || validateCNPJ(v), "CNPJ invalido - verifique os digitos"),
   phone: z.string().min(14, "WhatsApp invalido"),
   email: z.string().email("E-mail invalido"),
   city: z.string().min(2, "Informe a cidade"),
   businessType: z.enum(["distribuidor", "loja", "seller-ml", "seller-shopee", "dropshipping"], { message: "Selecione o tipo de negocio" }),
   interest: z.enum(["atacado", "dropshipping", "gestao", "tudo"], { message: "Selecione o seu interesse" }),
+  vendeMarketplace: z.enum(["sim", "nao"], { message: "Selecione uma opcao" }),
+  linkLoja: z.string().optional(),
+  volumeMensal: z.enum(["nao-sei", "ate-5k", "5k-20k", "20k-50k", "acima-50k"], { message: "Selecione uma opcao" }),
   message: z.string().optional(),
 });
 
@@ -36,6 +42,19 @@ const interestOptions = [
   { value: "dropshipping", label: "Dropshipping" },
   { value: "gestao", label: "Gestao de Marketplace" },
   { value: "tudo", label: "Todos os servicos" },
+];
+
+const vendeMarketplaceOptions = [
+  { value: "sim", label: "Sim, ja vendo" },
+  { value: "nao", label: "Ainda nao" },
+];
+
+const volumeOptions = [
+  { value: "nao-sei", label: "Ainda nao sei" },
+  { value: "ate-5k", label: "Ate R$ 5 mil / mes" },
+  { value: "5k-20k", label: "R$ 5 mil a R$ 20 mil / mes" },
+  { value: "20k-50k", label: "R$ 20 mil a R$ 50 mil / mes" },
+  { value: "acima-50k", label: "Acima de R$ 50 mil / mes" },
 ];
 
 function InputField({
@@ -68,27 +87,61 @@ function InputField({
 const inputCls = "w-full pl-9 pr-4 py-3 bg-dark-900 border border-white/8 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand/50 focus:ring-2 focus:ring-brand/10 transition-all duration-200";
 const selectCls = "w-full pl-9 pr-4 py-3 bg-dark-900 border border-white/8 rounded-xl text-white text-sm focus:outline-none focus:border-brand/50 focus:ring-2 focus:ring-brand/10 transition-all duration-200 appearance-none cursor-pointer";
 
+/** Checa se o texto de situação cadastral retornado pela Receita indica CNPJ ativo. */
+function isCnpjAtiva(situacao: string | null): boolean {
+  return !!situacao && situacao.toLowerCase().includes("ativ");
+}
+
 export default function LeadForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [submittedData, setSubmittedData] = useState<FormData | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cnpjLoading, setCnpjLoading] = useState(false);
+  const [cnpjSituacao, setCnpjSituacao] = useState<string | null>(null);
+  const [cnpjChecked, setCnpjChecked] = useState<string | null>(null); // digitos já consultados, evita repetir
 
   const { register, handleSubmit, setValue, watch, formState: { errors }, reset } = useForm<FormData>({ resolver: zodResolver(schema) });
   const cnpjValue = watch("cnpj") ?? "";
   const phoneValue = watch("phone") ?? "";
+  const vendeMarketplaceValue = watch("vendeMarketplace");
+
+  async function checarCnpj() {
+    const digits = cnpjValue.replace(/\D/g, "");
+    if (digits.length !== 14 || !validateCNPJ(cnpjValue) || digits === cnpjChecked) return;
+    setCnpjLoading(true);
+    setCnpjSituacao(null);
+    try {
+      const res = await fetch(`/api/drop/cnpj/${digits}`);
+      if (res.ok) {
+        const data = (await res.json()) as CnpjData;
+        setCnpjSituacao(data.situacao || "desconhecida");
+        if (data.razao_social && !watch("company")) setValue("company", data.razao_social);
+      } else {
+        setCnpjSituacao(null);
+      }
+    } catch {
+      setCnpjSituacao(null);
+    } finally {
+      setCnpjChecked(digits);
+      setCnpjLoading(false);
+    }
+  }
 
   const buildWhatsAppMessage = (data: FormData) => {
     const lines = [
       "*Novo Lead - PH Representante*",
       `*Nome:* ${data.name}`,
       data.company ? `*Empresa:* ${data.company}` : null,
-      `*CNPJ:* ${data.cnpj}`,
+      data.cnpj ? `*CNPJ:* ${data.cnpj}` : null,
       `*WhatsApp:* ${data.phone}`,
       `*E-mail:* ${data.email}`,
       `*Cidade:* ${data.city}`,
       `*Tipo:* ${businessTypeOptions.find((o) => o.value === data.businessType)?.label}`,
       `*Interesse:* ${interestOptions.find((o) => o.value === data.interest)?.label}`,
+      `*Ja vende em marketplace:* ${vendeMarketplaceOptions.find((o) => o.value === data.vendeMarketplace)?.label}`,
+      data.linkLoja ? `*Loja:* ${data.linkLoja}` : null,
+      `*Volume pretendido:* ${volumeOptions.find((o) => o.value === data.volumeMensal)?.label}`,
       data.message ? `*Mensagem:* ${data.message}` : null,
     ].filter(Boolean).join("\n");
     return encodeURIComponent(lines);
@@ -102,7 +155,7 @@ export default function LeadForm() {
       const response = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, cnpjAtivo: isCnpjAtiva(cnpjSituacao) }),
       });
       const result = await response.json();
 
@@ -150,8 +203,23 @@ export default function LeadForm() {
               <InputField label="Empresa" error={errors.company?.message} icon={Building2}>
                 <input {...register("company")} placeholder="Nome da empresa (opcional)" className={inputCls} />
               </InputField>
-              <InputField label="CNPJ" error={errors.cnpj?.message} icon={Hash} required>
-                <input value={cnpjValue} onChange={(e) => setValue("cnpj", formatCNPJ(e.target.value), { shouldValidate: cnpjValue.length >= 17 })} placeholder="00.000.000/0000-00" className={inputCls} maxLength={18} inputMode="numeric" />
+              <InputField label="CNPJ" error={errors.cnpj?.message} icon={Hash}>
+                <input
+                  value={cnpjValue}
+                  onChange={(e) => setValue("cnpj", formatCNPJ(e.target.value), { shouldValidate: cnpjValue.length >= 17 })}
+                  onBlur={checarCnpj}
+                  placeholder="00.000.000/0000-00 (opcional)"
+                  className={inputCls}
+                  maxLength={18}
+                  inputMode="numeric"
+                />
+                {cnpjLoading && <p className="mt-1 text-xs text-gray-500">Consultando Receita...</p>}
+                {!cnpjLoading && cnpjSituacao && (
+                  <p className={`mt-1 text-xs flex items-center gap-1 ${isCnpjAtiva(cnpjSituacao) ? "text-green-400" : "text-amber-400"}`}>
+                    {isCnpjAtiva(cnpjSituacao) ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                    CNPJ {cnpjSituacao.toLowerCase()}
+                  </p>
+                )}
               </InputField>
               <InputField label="WhatsApp" error={errors.phone?.message} icon={Phone} required>
                 <input value={phoneValue} onChange={(e) => setValue("phone", formatPhone(e.target.value), { shouldValidate: phoneValue.length >= 13 })} placeholder="(11) 99999-9999" className={inputCls} maxLength={15} inputMode="tel" />
@@ -172,6 +240,23 @@ export default function LeadForm() {
                 <select {...register("interest")} className={selectCls}>
                   <option value="">Selecione...</option>
                   {interestOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </InputField>
+              <InputField label="Ja vende em algum marketplace?" error={errors.vendeMarketplace?.message} icon={ShoppingCart} required>
+                <select {...register("vendeMarketplace")} className={selectCls}>
+                  <option value="">Selecione...</option>
+                  {vendeMarketplaceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </InputField>
+              {vendeMarketplaceValue === "sim" && (
+                <InputField label="Link da sua loja" error={errors.linkLoja?.message} icon={Link2}>
+                  <input {...register("linkLoja")} placeholder="Link do Mercado Livre / Shopee (opcional)" className={inputCls} />
+                </InputField>
+              )}
+              <InputField label="Quanto pretende comprar por mes?" error={errors.volumeMensal?.message} icon={Wallet} required>
+                <select {...register("volumeMensal")} className={selectCls}>
+                  <option value="">Selecione...</option>
+                  {volumeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </InputField>
               <div className="sm:col-span-2">
@@ -215,11 +300,23 @@ export default function LeadForm() {
                   <CheckCircle2 size={32} className="text-green-400" />
                 </div>
                 <h3 className="text-2xl font-black text-white mb-2">Contato enviado!</h3>
-                <p className="text-gray-400 mb-6 text-sm leading-relaxed">Recebemos seus dados e nossa equipe foi notificada por e-mail. Se preferir, fale agora pelo WhatsApp.</p>
-                <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${buildWhatsAppMessage(submittedData)}`} target="_blank" rel="noopener noreferrer"
-                  onClick={() => setShowSuccess(false)}
-                  className="w-full flex items-center justify-center gap-2 py-4 bg-[#25d366] hover:bg-[#22c45b] text-white font-bold rounded-full transition-all"
-                ><Phone size={18} />Falar agora no WhatsApp</a>
+                {isCnpjAtiva(cnpjSituacao) ? (
+                  <>
+                    <p className="text-gray-400 mb-6 text-sm leading-relaxed">Recebemos seus dados e nossa equipe foi notificada por e-mail. Se preferir, fale agora pelo WhatsApp.</p>
+                    <a href={`https://wa.me/${WHATSAPP_NUMBER}?text=${buildWhatsAppMessage(submittedData)}`} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setShowSuccess(false)}
+                      className="w-full flex items-center justify-center gap-2 py-4 bg-[#25d366] hover:bg-[#22c45b] text-white font-bold rounded-full transition-all"
+                    ><Phone size={18} />Falar agora no WhatsApp</a>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-400 mb-6 text-sm leading-relaxed">Recebemos seus dados e nossa equipe foi notificada por e-mail. Enquanto isso, entre no nosso grupo do WhatsApp pra receber novidades e condições em primeira mão.</p>
+                    <a href={WHATSAPP_GROUP_URL} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setShowSuccess(false)}
+                      className="w-full flex items-center justify-center gap-2 py-4 bg-[#25d366] hover:bg-[#22c45b] text-white font-bold rounded-full transition-all"
+                    ><Users size={18} />Entrar no grupo do WhatsApp</a>
+                  </>
+                )}
                 <button onClick={() => setShowSuccess(false)} className="mt-3 text-sm text-gray-600 hover:text-gray-400 transition-colors">Fechar</button>
               </div>
             </motion.div>

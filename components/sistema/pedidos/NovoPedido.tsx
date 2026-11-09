@@ -184,9 +184,15 @@ export default function NovoPedido({
   const [cond, setCond] = useState(initial?.condicao_pagamento ?? "");
   const [forma, setForma] = useState(initial?.forma_pagamento ?? "");
   const [previsao, setPrevisao] = useState(initial?.previsao_entrega ?? "");
-  const [dataPedido, setDataPedido] = useState(
-    initial?.data_pedido ?? new Date().toISOString().slice(0, 10)
-  );
+  const [dataPedido, setDataPedido] = useState(() => {
+    if (initial?.data_pedido) return initial.data_pedido;
+    // data local do navegador — toISOString() usa UTC e erra o dia perto da meia-noite
+    const hoje = new Date();
+    const y = hoje.getFullYear();
+    const m = String(hoje.getMonth() + 1).padStart(2, "0");
+    const d = String(hoje.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  });
   const [obsCliente, setObsCliente] = useState(initial?.observacao_cliente ?? "");
   const [obsInterna, setObsInterna] = useState(initial?.observacao_interna ?? "");
 

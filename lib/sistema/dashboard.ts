@@ -66,13 +66,39 @@ export async function getDashboard(opts: {
   const fimMes = new Date(ano, mesN, 1);
   const inicio12 = new Date(ano, mesN - 1 - 11, 1);
 
-  let pedidosQuery = supabase
-    .from("pedidos")
-    .select("id, cliente_id, representada_id, vendedor_id, status, valor_total, data_pedido")
-    .gte("data_pedido", inicio12.toISOString())
-    .lt("data_pedido", fimMes.toISOString());
-  if (opts.representadaId) pedidosQuery = pedidosQuery.eq("representada_id", opts.representadaId);
-  if (opts.vendedorId) pedidosQuery = pedidosQuery.eq("vendedor_id", opts.vendedorId);
+  type PedidoDash = {
+    id: string;
+    cliente_id: string;
+    representada_id: string;
+    vendedor_id: string | null;
+    status: string;
+    valor_total: number;
+    data_pedido: string;
+  };
+
+  // busca paginada — a janela de 12 meses facilmente passa das 1000 linhas
+  // (limite padrão do PostgREST), e sem paginar o corte derruba justo os
+  // pedidos mais recentes (o mês atual), fazendo o total do dashboard não
+  // bater com o resto do sistema
+  async function fetchAllPedidos(): Promise<PedidoDash[]> {
+    const PAGE = 1000;
+    const out: PedidoDash[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      let q = supabase
+        .from("pedidos")
+        .select("id, cliente_id, representada_id, vendedor_id, status, valor_total, data_pedido")
+        .gte("data_pedido", inicio12.toISOString())
+        .lt("data_pedido", fimMes.toISOString())
+        .range(offset, offset + PAGE - 1);
+      if (opts.representadaId) q = q.eq("representada_id", opts.representadaId);
+      if (opts.vendedorId) q = q.eq("vendedor_id", opts.vendedorId);
+      const { data } = await q;
+      const page = (data as unknown as PedidoDash[] | null) ?? [];
+      out.push(...page);
+      if (page.length < PAGE) break;
+    }
+    return out;
+  }
 
   let clientesQuery = supabase
     .from("clientes")
@@ -80,30 +106,18 @@ export async function getDashboard(opts: {
   if (opts.vendedorId) clientesQuery = clientesQuery.eq("vendedor_id", opts.vendedorId);
 
   const [
-    { data: pedidos12 },
+    peds,
     repMap,
     { data: clientesRaw },
     { data: metasRaw },
     { data: representadasPct },
   ] = await Promise.all([
-    pedidosQuery,
+    fetchAllPedidos(),
     representadaLabelMap(),
     clientesQuery,
     supabase.from("metas_vendas").select("ano, mes, vendedor_id, representada_id, valor_meta"),
     supabase.from("representadas").select("id, percentual_comissao_padrao"),
   ]);
-
-  const peds = (pedidos12 as unknown as
-    | {
-        id: string;
-        cliente_id: string;
-        representada_id: string;
-        vendedor_id: string | null;
-        status: string;
-        valor_total: number;
-        data_pedido: string;
-      }[]
-    | null) ?? [];
 
   const clientes = clientesRaw ?? [];
   const clienteNome = new Map(
@@ -226,11 +240,19 @@ export async function getDashboard(opts: {
   const pedIds = peds.filter((p) => VENDA.includes(p.status)).map((p) => p.id);
   const porProd = new Map<string, { nome: string; value: number }>();
   if (pedIds.length) {
-    const { data: itens } = await supabase
-      .from("pedido_itens")
-      .select("produto_id, sku_snapshot, descricao_snapshot, valor_total")
-      .in("pedido_id", pedIds);
-    for (const it of itens ?? []) {
+    const PAGE = 1000;
+    const itens: { produto_id: string | null; sku_snapshot: string | null; descricao_snapshot: string | null; valor_total: number }[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data } = await supabase
+        .from("pedido_itens")
+        .select("produto_id, sku_snapshot, descricao_snapshot, valor_total")
+        .in("pedido_id", pedIds)
+        .range(offset, offset + PAGE - 1);
+      const page = data ?? [];
+      itens.push(...page);
+      if (page.length < PAGE) break;
+    }
+    for (const it of itens) {
       const key = (it.produto_id as string) || (it.sku_snapshot as string) || "?";
       const cur = porProd.get(key) ?? {
         nome: `${it.sku_snapshot ?? ""} ${it.descricao_snapshot ?? ""}`.trim() || "—",

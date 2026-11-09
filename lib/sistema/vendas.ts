@@ -111,37 +111,52 @@ export async function getVendas(opts: {
   const supabase = await createSistemaClient();
   const p = resolvePeriodo(opts.periodo);
 
-  let q = supabase
-    .from("pedidos")
-    .select(
-      "id, numero, cliente_id, representada_id, vendedor_id, status, subtotal, desconto_valor, valor_total, data_pedido"
-    )
-    .gte("data_pedido", p.inicio.toISOString())
-    .lt("data_pedido", p.fim.toISOString())
-    .order("data_pedido", { ascending: false });
-  if (opts.representadaId) q = q.eq("representada_id", opts.representadaId);
-  if (opts.vendedorId) q = q.eq("vendedor_id", opts.vendedorId);
+  type PedidoVenda = {
+    id: string;
+    numero: number;
+    cliente_id: string;
+    representada_id: string;
+    vendedor_id: string | null;
+    status: string;
+    subtotal: number;
+    desconto_valor: number;
+    valor_total: number;
+    data_pedido: string;
+  };
 
-  const [{ data: pedRaw }, repMap, profMap] = await Promise.all([
-    q,
+  // busca paginada — períodos longos (12m, ano) facilmente passam das 1000
+  // linhas (limite padrão do PostgREST); sem paginar, o corte derruba
+  // pedidos e o total não bate com o resto do sistema
+  async function fetchAllPedidos(): Promise<PedidoVenda[]> {
+    const PAGE = 1000;
+    const out: PedidoVenda[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      let q = supabase
+        .from("pedidos")
+        .select(
+          "id, numero, cliente_id, representada_id, vendedor_id, status, subtotal, desconto_valor, valor_total, data_pedido"
+        )
+        .gte("data_pedido", p.inicio.toISOString())
+        .lt("data_pedido", p.fim.toISOString())
+        .order("data_pedido", { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (opts.representadaId) q = q.eq("representada_id", opts.representadaId);
+      if (opts.vendedorId) q = q.eq("vendedor_id", opts.vendedorId);
+      const { data } = await q;
+      const page = (data as unknown as PedidoVenda[] | null) ?? [];
+      out.push(...page);
+      if (page.length < PAGE) break;
+    }
+    return out;
+  }
+
+  const [pedRaw, repMap, profMap] = await Promise.all([
+    fetchAllPedidos(),
     representadaLabelMap(),
     profileLabelMap(),
   ]);
 
-  const peds = ((pedRaw as unknown as
-    | {
-        id: string;
-        numero: number;
-        cliente_id: string;
-        representada_id: string;
-        vendedor_id: string | null;
-        status: string;
-        subtotal: number;
-        desconto_valor: number;
-        valor_total: number;
-        data_pedido: string;
-      }[]
-    | null) ?? []).filter((x) => VENDA.includes(x.status));
+  const peds = pedRaw.filter((x) => VENDA.includes(x.status));
 
   // nomes de clientes
   const cliIds = [...new Set(peds.map((x) => x.cliente_id))];
@@ -163,11 +178,19 @@ export async function getVendas(opts: {
   const itensPorPedido = new Map<string, number>();
   const porProduto = new Map<string, { nome: string; value: number }>();
   if (pedIds.length) {
-    const { data: itens } = await supabase
-      .from("pedido_itens")
-      .select("pedido_id, produto_id, sku_snapshot, descricao_snapshot, quantidade, valor_total")
-      .in("pedido_id", pedIds);
-    for (const it of itens ?? []) {
+    const PAGE = 1000;
+    const itens: { pedido_id: string; produto_id: string | null; sku_snapshot: string | null; descricao_snapshot: string | null; quantidade: number; valor_total: number }[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data } = await supabase
+        .from("pedido_itens")
+        .select("pedido_id, produto_id, sku_snapshot, descricao_snapshot, quantidade, valor_total")
+        .in("pedido_id", pedIds)
+        .range(offset, offset + PAGE - 1);
+      const page = data ?? [];
+      itens.push(...page);
+      if (page.length < PAGE) break;
+    }
+    for (const it of itens) {
       const pid = it.pedido_id as string;
       itensPorPedido.set(pid, (itensPorPedido.get(pid) ?? 0) + 1);
       const key = (it.produto_id as string) || (it.sku_snapshot as string) || "?";

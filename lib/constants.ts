@@ -10,6 +10,9 @@ export const WHATSAPP_MESSAGE = encodeURIComponent(
 
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`;
 
+/** Grupo de avisos — só a PH manda mensagem, sem bate-papo entre participantes. */
+export const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/Ejhdpmzu8ISLxexjUQIcX4?s=cl&p=a&iam=2";
+
 export const EMAIL = "contato@phrepresentante.com.br";
 
 export const INSTAGRAM = "https://instagram.com/phrepresentante";

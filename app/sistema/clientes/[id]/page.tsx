@@ -67,7 +67,7 @@ export default async function ClienteDetailPage({
     .from("pedidos")
     .select("id, numero, data_pedido, status, valor_total, representada_id")
     .eq("cliente_id", id)
-    .order("data_pedido", { ascending: false });
+    .order("numero", { ascending: false });
   const pedidos = pedidosRaw ?? [];
 
   const vendas = pedidos.filter((p) => (STATUS_VENDA as readonly string[]).includes(p.status as string));

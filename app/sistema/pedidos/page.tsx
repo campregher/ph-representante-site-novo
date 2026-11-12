@@ -76,7 +76,7 @@ export default async function PedidosPage({
       "id, numero, data_pedido, status, valor_total, cliente_id, representada_id, vendedor_id, share_token, clientes(nome_fantasia, razao_social)",
       { count: "exact" }
     )
-    .order("data_pedido", { ascending: false });
+    .order("numero", { ascending: false });
 
   if (representada) query = query.eq("representada_id", representada);
   if (vendedor) query = query.eq("vendedor_id", vendedor);

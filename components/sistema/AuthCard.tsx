@@ -1,4 +1,6 @@
 import Image from "next/image";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 export default function AuthCard({
@@ -20,25 +22,31 @@ export default function AuthCard({
       data-sistema
       className="flex min-h-screen items-center justify-center bg-neutral-100 p-4 text-neutral-900"
     >
-      <div
-        className={`w-full ${maxWidthClassName} overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm`}
-      >
-        <div className="flex items-center justify-center bg-dark-700 px-6 py-5">
-          <Image
-            src="/images/ph.png"
-            alt="PH Representante"
-            width={140}
-            height={34}
-            className="h-8 w-auto object-contain"
-            style={{ width: "auto" }}
-            priority
-          />
-        </div>
-        <div className="p-6">
-          <h1 className="text-base font-bold text-neutral-900">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-neutral-500">{subtitle}</p>}
-          <div className="mt-5">{children}</div>
-          {footer && <div className="mt-5 text-center text-sm text-neutral-500">{footer}</div>}
+      <div className={`w-full ${maxWidthClassName}`}>
+        <Link
+          href="/"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-brand"
+        >
+          <ArrowLeft size={15} /> Voltar para o site
+        </Link>
+        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+          <div className="flex items-center justify-center bg-dark-700 px-6 py-5">
+            <Image
+              src="/images/ph.png"
+              alt="PH Representante"
+              width={140}
+              height={34}
+              className="h-8 w-auto object-contain"
+              style={{ width: "auto" }}
+              priority
+            />
+          </div>
+          <div className="p-6">
+            <h1 className="text-base font-bold text-neutral-900">{title}</h1>
+            {subtitle && <p className="mt-1 text-sm text-neutral-500">{subtitle}</p>}
+            <div className="mt-5">{children}</div>
+            {footer && <div className="mt-5 text-center text-sm text-neutral-500">{footer}</div>}
+          </div>
         </div>
       </div>
     </div>

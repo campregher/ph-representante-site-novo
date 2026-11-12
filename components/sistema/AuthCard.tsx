@@ -31,13 +31,17 @@ function PainelVisual() {
           {vitrine.map((v) => (
             <div key={v.label} className="overflow-hidden rounded-xl border border-white/10 bg-dark-800">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={v.img} alt={v.label} className="h-24 w-full object-cover" />
+              <img src={v.img} alt={v.label} className="aspect-square w-full object-cover" />
               <p className="px-2.5 py-1.5 text-[11px] font-semibold text-gray-300">{v.label}</p>
             </div>
           ))}
-          <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-brand p-3 text-center">
-            <span className="text-xl font-black">+8</span>
-            <span className="text-[11px] font-semibold text-red-100">marcas representadas</span>
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-brand">
+            <div className="flex aspect-square items-center justify-center">
+              <span className="text-2xl font-black">+8</span>
+            </div>
+            <p className="px-2.5 py-1.5 text-center text-[11px] font-semibold text-red-100">
+              marcas representadas
+            </p>
           </div>
         </div>
         <h2 className="text-xl font-bold leading-snug">

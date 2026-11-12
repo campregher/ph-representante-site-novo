@@ -40,6 +40,7 @@ export default function DropLoginPage() {
     <AuthCard
       title="Portal do Seller"
       subtitle="Entre com sua conta de dropshipping PH Representante."
+      visual
       footer={
         <>
           <Link href="/recuperar-senha" className="text-brand hover:underline">

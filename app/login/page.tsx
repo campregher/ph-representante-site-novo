@@ -42,6 +42,7 @@ function LoginForm() {
     <AuthCard
       title="Sistema Comercial"
       subtitle="Entre com sua conta PH Representante."
+      visual
       footer={
         <Link href="/recuperar-senha" className="text-brand hover:underline">
           Esqueci minha senha

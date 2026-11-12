@@ -107,6 +107,7 @@ export default function SellerCadastroForm() {
             ? "Encontramos um cadastro com esse documento — já está marcado como seller. Em breve nosso time entra em contato."
             : "Recebemos seus dados. Nosso time vai analisar e entrar em contato em breve para liberar seu acesso ao catálogo de dropshipping."
         }
+        visual
       >
         <CheckCircle2 size={36} className="mx-auto text-green-600" />
       </AuthCard>
@@ -118,6 +119,7 @@ export default function SellerCadastroForm() {
       title="Seja um seller PH Representante"
       subtitle="Cadastre sua empresa para vender nossos produtos por dropshipping."
       maxWidthClassName="max-w-2xl"
+      visual
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Card>

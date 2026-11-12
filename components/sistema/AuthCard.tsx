@@ -29,19 +29,21 @@ function PainelVisual() {
       <div className="relative z-10">
         <div className="mb-6 grid grid-cols-2 gap-3">
           {vitrine.map((v) => (
-            <div key={v.label} className="overflow-hidden rounded-xl border border-white/10 bg-dark-800">
+            <div key={v.label} className="relative aspect-square overflow-hidden rounded-xl border border-white/10">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={v.img} alt={v.label} className="aspect-square w-full object-cover" />
-              <p className="px-2.5 py-1.5 text-[11px] font-semibold text-gray-300">{v.label}</p>
+              <img
+                src={v.img}
+                alt={v.label}
+                className="absolute inset-0 h-full w-full scale-125 object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent pb-1.5 pt-8">
+                <p className="px-2.5 text-[11px] font-semibold text-white">{v.label}</p>
+              </div>
             </div>
           ))}
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-brand">
-            <div className="flex aspect-square items-center justify-center">
-              <span className="text-2xl font-black">+8</span>
-            </div>
-            <p className="px-2.5 py-1.5 text-center text-[11px] font-semibold text-red-100">
-              marcas representadas
-            </p>
+          <div className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl bg-brand text-center">
+            <span className="text-2xl font-black">+8</span>
+            <span className="px-2 text-[11px] font-semibold text-red-100">marcas representadas</span>
           </div>
         </div>
         <h2 className="text-xl font-bold leading-snug">

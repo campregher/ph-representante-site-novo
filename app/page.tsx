@@ -1,6 +1,5 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
-import WhatsAppGroupCTA from "@/components/WhatsAppGroupCTA";
 import About from "@/components/About";
 import BusinessModels from "@/components/BusinessModels";
 import Brands from "@/components/Brands";
@@ -17,7 +16,6 @@ export default function Home() {
     <main className="bg-dark-900 overflow-x-hidden">
       <Navbar />
       <Hero />
-      <WhatsAppGroupCTA />
       <About />
       <BusinessModels />
       <Brands />

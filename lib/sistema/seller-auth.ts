@@ -13,12 +13,16 @@ export interface SellerProfile {
   nome: string;
   email: string | null;
   status: "prospect" | "ativo" | "inativo" | "bloqueado" | "reativacao";
+  tipoPessoa: "juridica" | "fisica";
   emailConfirmado: boolean;
   /** true só quando o seller pode de fato usar o portal (e-mail confirmado + não bloqueado/prospect) */
   liberado: boolean;
+  /** respondeu o questionário pós-aprovação (categorias/canal/volume) */
+  onboardingCompleto: boolean;
 }
 
-const SELLER_COLS = "id, portal_token, nome_fantasia, razao_social, email, status, email_confirmado";
+const SELLER_COLS =
+  "id, portal_token, nome_fantasia, razao_social, email, status, tipo_pessoa, email_confirmado, onboarding_completo";
 
 /**
  * Seller autenticado (via cookie do Supabase Auth) + dados de `comercial.clientes`.
@@ -50,8 +54,10 @@ export const getAuthedSellerResult = cache(async (): Promise<AuthedSellerResult>
       nome: (data.nome_fantasia as string) || (data.razao_social as string) || "seller",
       email: data.email as string | null,
       status,
+      tipoPessoa: data.tipo_pessoa as SellerProfile["tipoPessoa"],
       emailConfirmado: !!data.email_confirmado,
       liberado: status !== "prospect" && status !== "bloqueado" && !!data.email_confirmado,
+      onboardingCompleto: !!data.onboarding_completo,
     },
   };
 });

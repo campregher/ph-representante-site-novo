@@ -58,8 +58,12 @@ export const metadata: Metadata = {
     follow: true,
   },
   icons: {
-    icon: "/images/ph.png",
-    shortcut: "/images/ph.png",
+    icon: [
+      { url: "/images/favicon.png", sizes: "32x32", type: "image/png" },
+      { url: "/images/favicon.png", sizes: "16x16", type: "image/png" },
+    ],
+    shortcut: "/images/favicon.png",
+    apple: "/images/favicon.png",
   },
   alternates: {
     canonical: siteUrl,

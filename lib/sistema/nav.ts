@@ -14,6 +14,7 @@ import {
   Boxes,
   Banknote,
   Settings,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Comissões", href: "/sistema/comissoes", icon: Wallet },
   { label: "Linha Própria", href: "/sistema/estoque", icon: Boxes },
   { label: "Cobrança", href: "/sistema/cobranca", icon: Banknote },
+  { label: "Dropshipping", href: "/sistema/dropshipping", icon: Truck },
   { label: "CRM", href: "/sistema/crm", icon: KanbanSquare },
   { label: "Tarefas", href: "/sistema/tarefas", icon: CheckSquare },
   { label: "Campanhas", href: "/sistema/campanhas", icon: Megaphone },
@@ -60,6 +62,8 @@ export const SEGMENT_LABELS: Record<string, string> = {
   compras: "Compras",
   movimentos: "Movimentos",
   cobranca: "Cobrança",
+  dropshipping: "Dropshipping",
+  importar: "Importar",
   relatorios: "Relatórios",
   configuracoes: "Configurações",
   novo: "Novo",

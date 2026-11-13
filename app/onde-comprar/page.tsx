@@ -31,7 +31,7 @@ export default function OndeComprarPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-30 backdrop-blur-xl">
+      <div className="bg-white border-b border-gray-200 sticky top-16 lg:top-[99px] z-30 backdrop-blur-xl">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="relative">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />

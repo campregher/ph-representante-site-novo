@@ -57,7 +57,7 @@ export default function BrandPage({ params }: { params: Promise<{ brand: string 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-30 backdrop-blur-xl">
+      <div className="bg-white border-b border-gray-200 sticky top-16 lg:top-[99px] z-30 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
           <Link href="/catalogo" className="text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0">
             <ArrowRight size={18} className="rotate-180" />

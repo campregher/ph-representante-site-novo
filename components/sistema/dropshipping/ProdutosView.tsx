@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
@@ -9,10 +9,13 @@ import { salvarDropProduto, excluirDropProduto } from "@/lib/sistema/actions/dro
 import { formatBRL } from "@/lib/sistema/format";
 import { Modal, ConfirmDialog } from "@/components/sistema/ui/Modal";
 import { Button } from "@/components/sistema/ui/Button";
+import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Field, Input, Textarea, Select, FormGrid } from "@/components/sistema/ui/Field";
 import { Badge } from "@/components/sistema/ui/Badge";
 import { EmptyState } from "@/components/sistema/ui/State";
 import { TableScroll, Table, Thead, Tbody, Tr, Th, Td } from "@/components/sistema/ui/Table";
+
+const SEM_FORNECEDOR = "__sem_fornecedor__";
 
 interface CategoriaMlSugestao { id: string; nome: string; caminho: string[] }
 
@@ -41,6 +44,27 @@ export default function ProdutosView({
   const [buscandoMl, setBuscandoMl] = useState(false);
   const [sugestoesMl, setSugestoesMl] = useState<CategoriaMlSugestao[] | null>(null);
   const set = (k: keyof typeof empty, v: string | boolean) => setF((s) => ({ ...s, [k]: v }));
+
+  const grupos = useMemo(() => {
+    const porFornecedor = new Map<string, DropProdutoRow[]>();
+    for (const p of produtos) {
+      const chave = p.fornecedor_id ?? SEM_FORNECEDOR;
+      if (!porFornecedor.has(chave)) porFornecedor.set(chave, []);
+      porFornecedor.get(chave)!.push(p);
+    }
+    const grupos = fornecedores
+      .map((fo) => ({ id: fo.id, label: fo.label, itens: porFornecedor.get(fo.id) ?? [] }))
+      .filter((g) => g.itens.length > 0);
+    const semFornecedor = porFornecedor.get(SEM_FORNECEDOR);
+    if (semFornecedor?.length) grupos.push({ id: SEM_FORNECEDOR, label: "Sem fornecedor", itens: semFornecedor });
+    return grupos;
+  }, [produtos, fornecedores]);
+
+  function novoProdutoPara(fornecedorId?: string) {
+    setF({ ...empty, fornecedor_id: fornecedorId && fornecedorId !== SEM_FORNECEDOR ? fornecedorId : "" });
+    setSugestoesMl(null);
+    setOpen(true);
+  }
 
   async function buscarCategoriaMl() {
     setBuscandoMl(true);
@@ -109,7 +133,7 @@ export default function ProdutosView({
     <div>
       {podeEditar && (
         <div className="mb-4 flex justify-end">
-          <Button onClick={() => { setF(empty); setOpen(true); }}>
+          <Button onClick={() => novoProdutoPara()}>
             <Plus size={15} /> Novo produto
           </Button>
         </div>
@@ -118,43 +142,63 @@ export default function ProdutosView({
       {produtos.length === 0 ? (
         <EmptyState title="Nenhum produto" description="Cadastre um produto ou importe pelo CSV de fornecedores." />
       ) : (
-        <TableScroll>
-          <Table>
-            <Thead>
-              <Tr>
-                <Th>SKU</Th>
-                <Th>Produto</Th>
-                <Th>Fornecedor</Th>
-                <Th className="text-right">Custo</Th>
-                <Th className="text-right">Sugerido</Th>
-                <Th className="text-right">Estoque</Th>
-                <Th>Status</Th>
-                {podeEditar && <Th className="text-right">Ações</Th>}
-              </Tr>
-            </Thead>
-            <Tbody>
-              {produtos.map((p) => (
-                <Tr key={p.id}>
-                  <Td className="font-mono text-xs">{p.sku}</Td>
-                  <Td className="font-medium text-neutral-900">{p.nome}</Td>
-                  <Td>{p.fornecedor ?? "—"}</Td>
-                  <Td className="text-right">{p.custoCnpj != null ? formatBRL(p.custoCnpj) : "—"}</Td>
-                  <Td className="text-right">{p.precoSugeridoCnpj != null ? formatBRL(p.precoSugeridoCnpj) : "—"}</Td>
-                  <Td className="text-right">{p.estoque_atual}</Td>
-                  <Td><Badge tone={p.ativo ? "green" : "neutral"}>{p.ativo ? "Ativo" : "Inativo"}</Badge></Td>
-                  {podeEditar && (
-                    <Td className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => editar(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"><Pencil size={14} /></button>
-                        <button onClick={() => setDel(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
-                      </div>
-                    </Td>
-                  )}
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableScroll>
+        <div className="space-y-4">
+          {grupos.map((g) => (
+            <Card key={g.id}>
+              <CardHeader
+                title={g.label}
+                description={`${g.itens.length} produto${g.itens.length !== 1 ? "s" : ""}`}
+                action={
+                  podeEditar && (
+                    <button
+                      onClick={() => novoProdutoPara(g.id)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline"
+                    >
+                      <Plus size={13} /> Produto
+                    </button>
+                  )
+                }
+              />
+              <CardBody className="p-0">
+                <TableScroll>
+                  <Table>
+                    <Thead>
+                      <Tr>
+                        <Th>SKU</Th>
+                        <Th>Produto</Th>
+                        <Th className="text-right">Custo</Th>
+                        <Th className="text-right">Sugerido</Th>
+                        <Th className="text-right">Estoque</Th>
+                        <Th>Status</Th>
+                        {podeEditar && <Th className="text-right">Ações</Th>}
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {g.itens.map((p) => (
+                        <Tr key={p.id}>
+                          <Td className="font-mono text-xs">{p.sku}</Td>
+                          <Td className="font-medium text-neutral-900">{p.nome}</Td>
+                          <Td className="text-right">{p.custoCnpj != null ? formatBRL(p.custoCnpj) : "—"}</Td>
+                          <Td className="text-right">{p.precoSugeridoCnpj != null ? formatBRL(p.precoSugeridoCnpj) : "—"}</Td>
+                          <Td className="text-right">{p.estoque_atual}</Td>
+                          <Td><Badge tone={p.ativo ? "green" : "neutral"}>{p.ativo ? "Ativo" : "Inativo"}</Badge></Td>
+                          {podeEditar && (
+                            <Td className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <button onClick={() => editar(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"><Pencil size={14} /></button>
+                                <button onClick={() => setDel(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+                              </div>
+                            </Td>
+                          )}
+                        </Tr>
+                      ))}
+                    </Tbody>
+                  </Table>
+                </TableScroll>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
       )}
 
       <Modal

@@ -37,7 +37,6 @@ type ProdutoPrecoRow = {
 };
 
 function resolvePrecos(row: ProdutoPrecoRow): DropProdutoRow {
-  const cpf = row.produto_precos.find((p) => p.tabela?.codigo === "cpf");
   const cnpj = row.produto_precos.find((p) => p.tabela?.codigo === "cnpj");
   return {
     id: row.id,
@@ -55,8 +54,6 @@ function resolvePrecos(row: ProdutoPrecoRow): DropProdutoRow {
     created_at: row.created_at,
     updated_at: row.updated_at,
     fornecedor: row.fornecedor?.nome ?? null,
-    custoCpf: cpf?.custo ?? null,
-    precoSugeridoCpf: cpf?.preco_sugerido ?? null,
     custoCnpj: cnpj?.custo ?? null,
     precoSugeridoCnpj: cnpj?.preco_sugerido ?? null,
   };

@@ -13,7 +13,7 @@ type Modo = "cadastro" | "cadastro_produtos";
 const MODELOS: Record<Modo, string> = {
   cadastro: "nome,razao_social,cnpj,telefone,whatsapp,email\nATTIS,ATTIS Acessorios LTDA,12345678000100,1133334444,11999998888,contato@attis.com.br\n",
   cadastro_produtos:
-    "fornecedor,sku,nome,descricao,estoque_atual,custo_cpf,preco_sugerido_cpf,custo_cnpj,preco_sugerido_cnpj\nATTIS,ATT-001,Tapete bandeja universal,Tapete de borracha,50,45.90,79.90,32.50,79.90\n",
+    "fornecedor,sku,nome,descricao,estoque_atual,custo_cnpj,preco_sugerido_cnpj\nATTIS,ATT-001,Tapete bandeja universal,Tapete de borracha,50,32.50,79.90\n",
 };
 
 function baixarModelo(modo: Modo) {
@@ -62,7 +62,7 @@ export default function ImportarFornecedorForm() {
               <label className="flex items-start gap-2 text-sm text-neutral-700">
                 <input type="radio" className="mt-0.5" checked={modo === "cadastro_produtos"} onChange={() => setModo("cadastro_produtos")} />
                 <span>
-                  <strong>Cadastro + produtos</strong> — cada linha é um produto; cria o fornecedor (se ainda não existir) e o produto com os preços de CPF/CNPJ.
+                  <strong>Cadastro + produtos</strong> — cada linha é um produto; cria o fornecedor (se ainda não existir) e o produto com o preço (custo real de fábrica + sugerido).
                 </span>
               </label>
             </div>

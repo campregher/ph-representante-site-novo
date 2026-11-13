@@ -408,11 +408,9 @@ export interface DropProduto {
   updated_at: string;
 }
 
-/** Linha de produto já com os preços das duas tabelas resolvidos, pra tela de admin. */
+/** Linha de produto já com o preço (tabela CNPJ) resolvido, pra tela de admin. */
 export interface DropProdutoRow extends DropProduto {
   fornecedor: string | null;
-  custoCpf: number | null;
-  precoSugeridoCpf: number | null;
   custoCnpj: number | null;
   precoSugeridoCnpj: number | null;
 }

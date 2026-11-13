@@ -551,10 +551,7 @@ export const dropProdutoSchema = z.object({
   estoque_atual: optionalNumber,
   estoque_minimo: optionalNumber,
   ativo: z.boolean().default(true),
-  // preço por tabela — "custo" do CPF já é o preço que ele paga à PH (margem embutida);
-  // "custo" do CNPJ é o custo real de fábrica (CNPJ paga o fornecedor direto)
-  custoCpf: optionalNumber,
-  precoSugeridoCpf: optionalNumber,
+  // custo real de fábrica — seller CNPJ paga o fornecedor direto
   custoCnpj: optionalNumber,
   precoSugeridoCnpj: optionalNumber,
 });

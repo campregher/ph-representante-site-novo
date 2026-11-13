@@ -12,7 +12,7 @@ export default async function DropshippingPage() {
 
   return (
     <div>
-      <PageHeader title="Dropshipping" description="Catálogo próprio, separado da representação — CPF compra da PH, CNPJ negocia direto com o fornecedor." />
+      <PageHeader title="Dropshipping" description="Catálogo próprio, separado da representação — seller CNPJ negocia o preço direto com o fornecedor." />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Fornecedores" value={String(fornecedores.length)} icon={<Truck size={16} />} />
@@ -36,7 +36,7 @@ export default async function DropshippingPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/10 text-brand"><Boxes size={18} /></div>
             <div>
               <p className="font-semibold text-neutral-900">Produtos</p>
-              <p className="text-sm text-neutral-500">Catálogo com preço de CPF e CNPJ por produto.</p>
+              <p className="text-sm text-neutral-500">Catálogo com custo e preço sugerido por produto.</p>
             </div>
           </div>
           <ArrowRight size={16} className="text-neutral-300 group-hover:text-brand" />

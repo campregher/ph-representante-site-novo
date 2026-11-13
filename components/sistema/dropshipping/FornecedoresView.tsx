@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Download } from "lucide-react";
 import Link from "next/link";
 import type { DropFornecedor } from "@/lib/sistema/types";
-import { salvarDropFornecedor, excluirDropFornecedor } from "@/lib/sistema/actions/dropshipping";
+import { salvarDropFornecedor, excluirDropFornecedor, importarFornecedoresRepresentadas } from "@/lib/sistema/actions/dropshipping";
 import { formatCNPJ, formatPhone } from "@/lib/sistema/format";
 import { Modal, ConfirmDialog } from "@/components/sistema/ui/Modal";
 import { Button } from "@/components/sistema/ui/Button";
@@ -65,11 +65,22 @@ export default function FornecedoresView({
       router.refresh();
     });
   }
+  function importarRepresentadas() {
+    start(async () => {
+      const res = await importarFornecedoresRepresentadas();
+      if (!res.ok) { toast.error(res.error); return; }
+      toast.success(`${res.criados} fornecedor(es) importado(s)${res.ignorados ? `, ${res.ignorados} já existia(m)` : ""}.`);
+      router.refresh();
+    });
+  }
 
   return (
     <div>
       {podeEditar && (
         <div className="mb-4 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={importarRepresentadas} loading={pending}>
+            <Download size={15} /> Importar fornecedores do sistema
+          </Button>
           <Link href="/sistema/dropshipping/fornecedores/importar" className={buttonClass({ variant: "outline", size: "sm" })}>
             <Upload size={15} /> Importar CSV
           </Link>

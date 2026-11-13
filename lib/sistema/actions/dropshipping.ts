@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createDropshippingClient } from "@/lib/supabase/server";
+import { createDropshippingClient, createSistemaClient } from "@/lib/supabase/server";
 import { getSistemaProfile } from "@/lib/sistema/auth";
 import { canManage } from "@/lib/sistema/roles";
 import { dropFornecedorSchema, dropProdutoSchema } from "@/lib/sistema/schemas";
@@ -36,6 +36,59 @@ export async function salvarDropFornecedor(id: string | null, raw: unknown): Pro
   }
   revalidatePath("/sistema/dropshipping/fornecedores");
   return { ok: true };
+}
+
+export interface ImportarRepresentadasResultado {
+  criados: number;
+  ignorados: number;
+}
+
+/**
+ * Puxa as representadas já cadastradas no sistema (comercial.representadas)
+ * marcadas com modalidade "dropshipping" pra dentro de dropshipping.fornecedores
+ * — evita recadastrar manualmente fornecedor que a PH já tem relação comercial.
+ * Ignora (não duplica) quem já existe em dropshipping.fornecedores por CNPJ.
+ */
+export async function importarFornecedoresRepresentadas(): Promise<ActionResult<ImportarRepresentadasResultado>> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+
+  const comercial = await createSistemaClient();
+  const { data: representadas, error: repErro } = await comercial
+    .from("representadas")
+    .select("nome_fantasia, razao_social, cnpj, whatsapp, telefone, email")
+    .eq("ativa", true)
+    .contains("modalidades", ["dropshipping"]);
+  if (repErro) return { ok: false, error: repErro.message };
+  if (!representadas || representadas.length === 0) {
+    return { ok: false, error: "Nenhuma representada com modalidade dropshipping encontrada." };
+  }
+
+  const db = await createDropshippingClient();
+  const { data: existentes } = await db.from("fornecedores").select("cnpj");
+  const cnpjsExistentes = new Set((existentes ?? []).map((f) => onlyDigits((f.cnpj as string) ?? "")).filter(Boolean));
+
+  let criados = 0;
+  let ignorados = 0;
+  for (const r of representadas) {
+    const cnpj = r.cnpj ? onlyDigits(r.cnpj as string) : null;
+    if (cnpj && cnpjsExistentes.has(cnpj)) { ignorados++; continue; }
+    const { error } = await db.from("fornecedores").insert({
+      nome: (r.nome_fantasia as string) || (r.razao_social as string),
+      razao_social: r.razao_social,
+      cnpj,
+      whatsapp: r.whatsapp,
+      telefone: r.telefone,
+      email: r.email,
+      created_by: g.profile!.id,
+    });
+    if (error) { ignorados++; continue; }
+    if (cnpj) cnpjsExistentes.add(cnpj);
+    criados++;
+  }
+
+  revalidatePath("/sistema/dropshipping/fornecedores");
+  return { ok: true, criados, ignorados };
 }
 
 export async function excluirDropFornecedor(id: string): Promise<ActionResult> {
@@ -87,15 +140,11 @@ export async function salvarDropProduto(id: string | null, raw: unknown): Promis
   }
 
   const tabelas = await dropTabelaIds();
-  const precos = [
-    { tabela_preco_id: tabelas.cpf, custo: v.custoCpf ?? 0, preco_sugerido: v.precoSugeridoCpf ?? null },
-    { tabela_preco_id: tabelas.cnpj, custo: v.custoCnpj ?? 0, preco_sugerido: v.precoSugeridoCnpj ?? null },
-  ].filter((p) => p.tabela_preco_id);
-
-  for (const p of precos) {
-    const { error } = await db
-      .from("produto_precos")
-      .upsert({ produto_id: produtoId, ...p }, { onConflict: "produto_id,tabela_preco_id" });
+  if (tabelas.cnpj) {
+    const { error } = await db.from("produto_precos").upsert(
+      { produto_id: produtoId, tabela_preco_id: tabelas.cnpj, custo: v.custoCnpj ?? 0, preco_sugerido: v.precoSugeridoCnpj ?? null },
+      { onConflict: "produto_id,tabela_preco_id" }
+    );
     if (error) return { ok: false, error: error.message };
   }
 
@@ -164,8 +213,8 @@ export interface ImportarFornecedorResultado {
  * (colunas: nome, razao_social, cnpj, telefone, whatsapp, email). Modo
  * "cadastro_produtos": cada linha é um produto, com o fornecedor
  * identificado pelo nome (cria o fornecedor se não existir) — colunas:
- * fornecedor, sku, nome, descricao, estoque_atual, custo_cpf,
- * preco_sugerido_cpf, custo_cnpj, preco_sugerido_cnpj.
+ * fornecedor, sku, nome, descricao, estoque_atual, custo_cnpj,
+ * preco_sugerido_cnpj.
  */
 export async function importarDropFornecedorCsv(
   modo: "cadastro" | "cadastro_produtos",
@@ -252,13 +301,14 @@ export async function importarDropFornecedorCsv(
       .single();
     if (prodErr || !produto) { resultado.erros.push(`Linha ${i + 2}: ${prodErr?.message ?? "erro ao salvar produto"}`); continue; }
 
-    const precos = [
-      { tabela_preco_id: tabelas.cpf, custo: numOrNull(row.custo_cpf) ?? 0, preco_sugerido: numOrNull(row.preco_sugerido_cpf) },
-      { tabela_preco_id: tabelas.cnpj, custo: numOrNull(row.custo_cnpj) ?? 0, preco_sugerido: numOrNull(row.preco_sugerido_cnpj) },
-    ].filter((p) => p.tabela_preco_id);
-    for (const p of precos) {
+    if (tabelas.cnpj) {
       await db.from("produto_precos").upsert(
-        { produto_id: produto.id as string, ...p },
+        {
+          produto_id: produto.id as string,
+          tabela_preco_id: tabelas.cnpj,
+          custo: numOrNull(row.custo_cnpj) ?? 0,
+          preco_sugerido: numOrNull(row.preco_sugerido_cnpj),
+        },
         { onConflict: "produto_id,tabela_preco_id" }
       );
     }

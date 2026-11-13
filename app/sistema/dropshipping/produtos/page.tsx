@@ -21,7 +21,7 @@ export default async function DropProdutosPage({
 
   return (
     <div>
-      <PageHeader title="Produtos" description="Catálogo do dropshipping — preço de CPF e CNPJ lado a lado." />
+      <PageHeader title="Produtos" description="Catálogo do dropshipping — custo real de fábrica e preço sugerido de revenda." />
       <Filters searchPlaceholder="Buscar produto (SKU, nome)…" />
       <ProdutosView produtos={produtos} fornecedores={fornecedores} podeEditar={canManage(profile.role)} />
     </div>

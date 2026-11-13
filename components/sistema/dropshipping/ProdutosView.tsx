@@ -21,7 +21,7 @@ const empty = {
   sku: "", nome: "", descricao: "", imagem_url: "", marca: "", fornecedor_id: "",
   ml_category_id: "", ml_category_nome: "",
   estoque_atual: "0", estoque_minimo: "0", ativo: true,
-  custoCpf: "", precoSugeridoCpf: "", custoCnpj: "", precoSugeridoCnpj: "",
+  custoCnpj: "", precoSugeridoCnpj: "",
 };
 
 export default function ProdutosView({
@@ -70,8 +70,6 @@ export default function ProdutosView({
       ml_category_id: x.ml_category_id ?? "", ml_category_nome: x.ml_category_nome ?? "",
       estoque_atual: String(x.estoque_atual), estoque_minimo: String(x.estoque_minimo),
       ativo: x.ativo,
-      custoCpf: x.custoCpf != null ? String(x.custoCpf) : "",
-      precoSugeridoCpf: x.precoSugeridoCpf != null ? String(x.precoSugeridoCpf) : "",
       custoCnpj: x.custoCnpj != null ? String(x.custoCnpj) : "",
       precoSugeridoCnpj: x.precoSugeridoCnpj != null ? String(x.precoSugeridoCnpj) : "",
     });
@@ -86,8 +84,6 @@ export default function ProdutosView({
         ...f,
         estoque_atual: Number(f.estoque_atual) || 0,
         estoque_minimo: Number(f.estoque_minimo) || 0,
-        custoCpf: f.custoCpf ? Number(f.custoCpf) : null,
-        precoSugeridoCpf: f.precoSugeridoCpf ? Number(f.precoSugeridoCpf) : null,
         custoCnpj: f.custoCnpj ? Number(f.custoCnpj) : null,
         precoSugeridoCnpj: f.precoSugeridoCnpj ? Number(f.precoSugeridoCnpj) : null,
       });
@@ -129,10 +125,8 @@ export default function ProdutosView({
                 <Th>SKU</Th>
                 <Th>Produto</Th>
                 <Th>Fornecedor</Th>
-                <Th className="text-right">Custo CPF</Th>
-                <Th className="text-right">Sugerido CPF</Th>
-                <Th className="text-right">Custo CNPJ</Th>
-                <Th className="text-right">Sugerido CNPJ</Th>
+                <Th className="text-right">Custo</Th>
+                <Th className="text-right">Sugerido</Th>
                 <Th className="text-right">Estoque</Th>
                 <Th>Status</Th>
                 {podeEditar && <Th className="text-right">Ações</Th>}
@@ -144,8 +138,6 @@ export default function ProdutosView({
                   <Td className="font-mono text-xs">{p.sku}</Td>
                   <Td className="font-medium text-neutral-900">{p.nome}</Td>
                   <Td>{p.fornecedor ?? "—"}</Td>
-                  <Td className="text-right">{p.custoCpf != null ? formatBRL(p.custoCpf) : "—"}</Td>
-                  <Td className="text-right">{p.precoSugeridoCpf != null ? formatBRL(p.precoSugeridoCpf) : "—"}</Td>
                   <Td className="text-right">{p.custoCnpj != null ? formatBRL(p.custoCnpj) : "—"}</Td>
                   <Td className="text-right">{p.precoSugeridoCnpj != null ? formatBRL(p.precoSugeridoCnpj) : "—"}</Td>
                   <Td className="text-right">{p.estoque_atual}</Td>
@@ -223,15 +215,7 @@ export default function ProdutosView({
           </div>
 
           <div className="rounded-lg border border-neutral-200 p-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Tabela CPF</p>
-            <FormGrid>
-              <Field label="Custo (preço que o CPF paga à PH)"><Input value={f.custoCpf} onChange={(e) => set("custoCpf", e.target.value)} inputMode="decimal" /></Field>
-              <Field label="Preço sugerido de revenda"><Input value={f.precoSugeridoCpf} onChange={(e) => set("precoSugeridoCpf", e.target.value)} inputMode="decimal" /></Field>
-            </FormGrid>
-          </div>
-
-          <div className="rounded-lg border border-neutral-200 p-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Tabela CNPJ</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Preço</p>
             <FormGrid>
               <Field label="Custo real de fábrica"><Input value={f.custoCnpj} onChange={(e) => set("custoCnpj", e.target.value)} inputMode="decimal" /></Field>
               <Field label="Preço sugerido de revenda"><Input value={f.precoSugeridoCnpj} onChange={(e) => set("precoSugeridoCnpj", e.target.value)} inputMode="decimal" /></Field>

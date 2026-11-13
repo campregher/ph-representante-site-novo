@@ -1,0 +1,176 @@
+import { createDropshippingAdminClient } from "@/lib/supabase/server";
+import { getValidMlToken } from "@/lib/sistema/ml-auth";
+
+/**
+ * Publicação de anúncios no Mercado Livre para o catálogo de dropshipping
+ * (schema `dropshipping`). Mesma lógica de `lib/sistema/ml-catalogo.ts`
+ * (linha própria / schema `comercial`) — duplicada em vez de parametrizada
+ * porque aquele arquivo ainda é usado pelo fluxo de sincronização de pedidos
+ * (`ml-pedido-sync.ts`, `pedido-drop.ts`, `linha-propria.ts`), que continua
+ * no schema antigo; não dá pra repontar sem quebrar esses três chamadores.
+ */
+
+const ML_BASE = "https://api.mercadolibre.com";
+
+export interface AnuncioProdutoDrop {
+  id: string;
+  sku: string;
+  nome: string;
+  descricao: string | null;
+  marca: string | null;
+  imagem_url: string | null;
+  ml_category_id: string | null;
+}
+
+type MlResult<T> = ({ ok: true } & T) | { ok: false; error: string };
+
+function mlErro(data: unknown, fallback: string): string {
+  const d = data as { cause?: { message?: string }[]; message?: string };
+  return d.cause?.[0]?.message ?? d.message ?? fallback;
+}
+
+interface CategoriaAttr {
+  id: string;
+  hierarchy?: string;
+  value_type: string;
+  tags?: { required?: boolean };
+  values?: { id: string; name: string }[];
+}
+
+async function atributosFamilyObrigatorios(
+  categoryId: string
+): Promise<{ id: string; value_id: string }[] | { ambiguo: string }> {
+  const res = await fetch(`${ML_BASE}/categories/${categoryId}/attributes`);
+  if (!res.ok) return [];
+  const attrs = (await res.json()) as CategoriaAttr[];
+  const obrigatorios = attrs.filter((a) => a.tags?.required && a.hierarchy === "FAMILY");
+  const resolvidos: { id: string; value_id: string }[] = [];
+  for (const a of obrigatorios) {
+    if (a.value_type === "list" && a.values?.length === 1) {
+      resolvidos.push({ id: a.id, value_id: a.values[0].id });
+    } else {
+      return { ambiguo: a.id };
+    }
+  }
+  return resolvidos;
+}
+
+/**
+ * Publica um produto do catálogo de dropshipping como anúncio novo no ML e
+ * grava o vínculo em `dropshipping.seller_ml_anuncios`.
+ */
+export async function publicarAnuncioMLDrop(
+  clienteId: string,
+  mlContaId: string,
+  produto: AnuncioProdutoDrop,
+  precoRevenda: number
+): Promise<MlResult<{ mlItemId: string; permalink: string }>> {
+  if (!produto.ml_category_id)
+    return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
+
+  let token: string;
+  try {
+    token = await getValidMlToken(mlContaId);
+  } catch {
+    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
+  }
+
+  const familyAttrs = await atributosFamilyObrigatorios(produto.ml_category_id);
+  if ("ambiguo" in familyAttrs) {
+    return {
+      ok: false,
+      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH pra configurar.`,
+    };
+  }
+
+  const pictures = produto.imagem_url ? [{ source: produto.imagem_url }] : [];
+  const attributes = [
+    ...(produto.marca ? [{ id: "BRAND", value_name: produto.marca }] : []),
+    { id: "PART_NUMBER", value_name: produto.sku },
+    ...familyAttrs,
+  ];
+  const nomeCurto = produto.nome.slice(0, 60);
+  const isFamily = familyAttrs.length > 0;
+
+  const body = {
+    ...(isFamily ? { family_name: nomeCurto } : { title: nomeCurto }),
+    category_id: produto.ml_category_id,
+    price: precoRevenda,
+    currency_id: "BRL",
+    available_quantity: 1,
+    buying_mode: "buy_it_now",
+    condition: "new",
+    listing_type_id: "gold_pro",
+    pictures,
+    attributes,
+  };
+
+  const res = await fetch(`${ML_BASE}/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao publicar no Mercado Livre.") };
+
+  if (produto.descricao) {
+    await fetch(`${ML_BASE}/items/${data.id}/description`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ plain_text: produto.descricao }),
+    }).catch(() => {});
+  }
+
+  const db = await createDropshippingAdminClient();
+  const { error } = await db.from("seller_ml_anuncios").upsert(
+    {
+      cliente_id: clienteId,
+      produto_id: produto.id,
+      ml_conta_id: mlContaId,
+      ml_item_id: data.id,
+      ml_status: data.status ?? "active",
+      ml_permalink: data.permalink ?? null,
+      preco_revenda: precoRevenda,
+    },
+    { onConflict: "cliente_id,produto_id,ml_conta_id" }
+  );
+  if (error) return { ok: false, error: `Anunciado no ML, mas falhou salvar localmente: ${error.message}` };
+
+  return { ok: true, mlItemId: data.id as string, permalink: data.permalink as string };
+}
+
+/** Atualiza preço e/ou status (pausar/reativar) de um anúncio do catálogo de dropshipping já publicado. */
+export async function atualizarAnuncioMLDrop(
+  mlContaId: string,
+  produtoId: string,
+  mlItemId: string,
+  patch: { price?: number; status?: "active" | "paused" }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let token: string;
+  try {
+    token = await getValidMlToken(mlContaId);
+  } catch {
+    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
+  }
+
+  const res = await fetch(`${ML_BASE}/items/${mlItemId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(patch),
+  });
+  const data = await res.json();
+  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao atualizar anúncio no Mercado Livre.") };
+
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.price != null) dbPatch.preco_revenda = patch.price;
+  if (patch.status) dbPatch.ml_status = (data.status as string) ?? patch.status;
+  if (Object.keys(dbPatch).length) {
+    const db = await createDropshippingAdminClient();
+    await db
+      .from("seller_ml_anuncios")
+      .update(dbPatch)
+      .eq("ml_conta_id", mlContaId)
+      .eq("produto_id", produtoId);
+  }
+  return { ok: true };
+}

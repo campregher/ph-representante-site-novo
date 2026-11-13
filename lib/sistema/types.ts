@@ -398,6 +398,9 @@ export interface DropProduto {
   nome: string;
   descricao: string | null;
   imagem_url: string | null;
+  ml_category_id: string | null;
+  ml_category_nome: string | null;
+  marca: string | null;
   estoque_atual: number;
   estoque_minimo: number;
   ativo: boolean;

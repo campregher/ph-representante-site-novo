@@ -1,5 +1,4 @@
-import { createSistemaAdminClient } from "@/lib/supabase/server";
-import { margemMinimaEfetiva, precoMinimoVenda } from "@/lib/sistema/preco";
+import { createDropshippingAdminClient, createSistemaAdminClient } from "@/lib/supabase/server";
 
 export interface AnuncioInfo {
   mlContaId: string;
@@ -26,33 +25,30 @@ export interface CatalogoDropItem {
 }
 
 /**
- * Catálogo do seller (drop): só linha própria, ativos e com saldo em
- * estoque. Usa o client admin porque é chamado do portal sem sessão (por
- * token). Não expõe custo — só o preço mínimo de revenda já calculado.
- * Produto sem margem definida (nem no produto, nem na categoria) fica de
- * fora — sem margem não dá pra saber o preço mínimo. `clienteId` opcional:
- * quando informado, traz também o(s) anúncio(s) do ML desse seller pra cada
- * produto — um mesmo produto pode estar anunciado em mais de uma conta (D5).
+ * Catálogo do seller CNPJ de dropshipping: produtos ativos e com saldo em
+ * estoque do schema `dropshipping`, com preço mínimo de revenda = preço
+ * sugerido da tabela CNPJ (custo real de fábrica já embutido pelo admin).
+ * Usa o client admin porque é chamado do portal sem sessão (por token). Não
+ * expõe custo — só o preço mínimo já calculado. `clienteId` opcional: quando
+ * informado, traz também o(s) anúncio(s) do ML desse seller pra cada produto
+ * (um mesmo produto pode estar anunciado em mais de uma conta).
  */
 export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDropItem[]> {
-  const db = await createSistemaAdminClient();
+  const drop = await createDropshippingAdminClient();
   const [{ data }, { data: anunciosData }] = await Promise.all([
-    db
+    drop
       .from("produtos")
       .select(
-        "id, sku, nome, imagem_url, custo, estoque_atual, margem_minima_percentual, ml_category_id, fornecedor_id, fornecedor:fornecedores(nome), categoria:categorias_produtos(nome, margem_minima_percentual)"
+        "id, sku, nome, imagem_url, estoque_atual, ml_category_id, fornecedor_id, fornecedor:fornecedores(nome), produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
       )
-      .eq("linha_propria", true)
       .eq("ativo", true)
       .gt("estoque_atual", 0)
       .order("nome")
       .limit(2000),
     clienteId
-      ? db
+      ? drop
           .from("seller_ml_anuncios")
-          .select(
-            "produto_id, ml_conta_id, conta:cliente_ml_tokens(ml_nickname), ml_item_id, ml_status, preco_revenda, ml_permalink"
-          )
+          .select("produto_id, ml_conta_id, ml_item_id, ml_status, preco_revenda, ml_permalink")
           .eq("cliente_id", clienteId)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
@@ -62,29 +58,39 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     sku: string;
     nome: string;
     imagem_url: string | null;
-    custo: number | null;
     estoque_atual: number;
-    margem_minima_percentual: number | null;
     ml_category_id: string | null;
     fornecedor_id: string | null;
     fornecedor: { nome: string } | null;
-    categoria: { nome: string; margem_minima_percentual: number | null } | null;
+    produto_precos: { preco_sugerido: number | null; tabela: { codigo: string } | null }[];
   }[];
 
-  const anunciosPorProduto = new Map<string, AnuncioInfo[]>();
-  for (const a of (anunciosData ?? []) as unknown as {
+  const anunciosRows = (anunciosData ?? []) as unknown as {
     produto_id: string;
     ml_conta_id: string;
-    conta: { ml_nickname: string | null } | null;
     ml_item_id: string;
     ml_status: string;
     preco_revenda: number;
     ml_permalink: string | null;
-  }[]) {
+  }[];
+
+  // `cliente_ml_tokens` (nickname da conta) mora no schema `comercial` — não
+  // dá pra fazer embed cross-schema via PostgREST, então resolve numa
+  // segunda consulta e junta em código.
+  const contaIds = [...new Set(anunciosRows.map((a) => a.ml_conta_id))];
+  const nicknamePorConta = new Map<string, string | null>();
+  if (contaIds.length) {
+    const sistema = await createSistemaAdminClient();
+    const { data: contas } = await sistema.from("cliente_ml_tokens").select("id, ml_nickname").in("id", contaIds);
+    for (const c of contas ?? []) nicknamePorConta.set(c.id as string, c.ml_nickname as string | null);
+  }
+
+  const anunciosPorProduto = new Map<string, AnuncioInfo[]>();
+  for (const a of anunciosRows) {
     const lista = anunciosPorProduto.get(a.produto_id) ?? [];
     lista.push({
       mlContaId: a.ml_conta_id,
-      contaNickname: a.conta?.ml_nickname ?? null,
+      contaNickname: nicknamePorConta.get(a.ml_conta_id) ?? null,
       mlItemId: a.ml_item_id,
       status: a.ml_status,
       precoRevenda: Number(a.preco_revenda),
@@ -95,15 +101,15 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
 
   return rows
     .map((r) => {
-      const margem = margemMinimaEfetiva(r.margem_minima_percentual, r.categoria?.margem_minima_percentual);
+      const cnpj = r.produto_precos.find((p) => p.tabela?.codigo === "cnpj");
       return {
         id: r.id,
         sku: r.sku,
         nome: r.nome,
         imagem_url: r.imagem_url,
-        categoria: r.categoria?.nome ?? null,
+        categoria: null,
         estoque_atual: r.estoque_atual,
-        precoMinimo: precoMinimoVenda(r.custo, margem),
+        precoMinimo: cnpj?.preco_sugerido ?? null,
         mlCategoriaDefinida: !!r.ml_category_id,
         anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,

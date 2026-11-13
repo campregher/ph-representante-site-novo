@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import type { DropProdutoRow } from "@/lib/sistema/types";
 import { salvarDropProduto, excluirDropProduto } from "@/lib/sistema/actions/dropshipping";
 import { formatBRL } from "@/lib/sistema/format";
@@ -14,9 +14,12 @@ import { Badge } from "@/components/sistema/ui/Badge";
 import { EmptyState } from "@/components/sistema/ui/State";
 import { TableScroll, Table, Thead, Tbody, Tr, Th, Td } from "@/components/sistema/ui/Table";
 
+interface CategoriaMlSugestao { id: string; nome: string; caminho: string[] }
+
 const empty = {
   id: null as string | null,
-  sku: "", nome: "", descricao: "", imagem_url: "", fornecedor_id: "",
+  sku: "", nome: "", descricao: "", imagem_url: "", marca: "", fornecedor_id: "",
+  ml_category_id: "", ml_category_nome: "",
   estoque_atual: "0", estoque_minimo: "0", ativo: true,
   custoCpf: "", precoSugeridoCpf: "", custoCnpj: "", precoSugeridoCnpj: "",
 };
@@ -35,18 +38,44 @@ export default function ProdutosView({
   const [open, setOpen] = useState(false);
   const [f, setF] = useState(empty);
   const [del, setDel] = useState<DropProdutoRow | null>(null);
+  const [buscandoMl, setBuscandoMl] = useState(false);
+  const [sugestoesMl, setSugestoesMl] = useState<CategoriaMlSugestao[] | null>(null);
   const set = (k: keyof typeof empty, v: string | boolean) => setF((s) => ({ ...s, [k]: v }));
+
+  async function buscarCategoriaMl() {
+    setBuscandoMl(true);
+    setSugestoesMl(null);
+    try {
+      const res = await fetch(`/api/sistema/ml/categoria-preditor?q=${encodeURIComponent(f.nome.trim())}`);
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Falha ao buscar categorias do Mercado Livre."); return; }
+      setSugestoesMl(json as CategoriaMlSugestao[]);
+    } catch {
+      toast.error("Erro de rede ao buscar categorias.");
+    } finally {
+      setBuscandoMl(false);
+    }
+  }
+
+  function escolherCategoriaMl(s: CategoriaMlSugestao) {
+    set("ml_category_id", s.id);
+    set("ml_category_nome", [...s.caminho, s.nome].join(" > "));
+    setSugestoesMl(null);
+  }
 
   function editar(x: DropProdutoRow) {
     setF({
       id: x.id, sku: x.sku, nome: x.nome, descricao: x.descricao ?? "", imagem_url: x.imagem_url ?? "",
-      fornecedor_id: x.fornecedor_id ?? "", estoque_atual: String(x.estoque_atual), estoque_minimo: String(x.estoque_minimo),
+      marca: x.marca ?? "", fornecedor_id: x.fornecedor_id ?? "",
+      ml_category_id: x.ml_category_id ?? "", ml_category_nome: x.ml_category_nome ?? "",
+      estoque_atual: String(x.estoque_atual), estoque_minimo: String(x.estoque_minimo),
       ativo: x.ativo,
       custoCpf: x.custoCpf != null ? String(x.custoCpf) : "",
       precoSugeridoCpf: x.precoSugeridoCpf != null ? String(x.precoSugeridoCpf) : "",
       custoCnpj: x.custoCnpj != null ? String(x.custoCnpj) : "",
       precoSugeridoCnpj: x.precoSugeridoCnpj != null ? String(x.precoSugeridoCnpj) : "",
     });
+    setSugestoesMl(null);
     setOpen(true);
   }
   function salvar() {
@@ -153,11 +182,45 @@ export default function ProdutosView({
                 {fornecedores.map((fo) => <option key={fo.id} value={fo.id}>{fo.label}</option>)}
               </Select>
             </Field>
+            <Field label="Marca"><Input value={f.marca} onChange={(e) => set("marca", e.target.value)} /></Field>
             <Field label="URL da imagem"><Input value={f.imagem_url} onChange={(e) => set("imagem_url", e.target.value)} /></Field>
             <Field label="Estoque atual"><Input value={f.estoque_atual} onChange={(e) => set("estoque_atual", e.target.value)} inputMode="numeric" /></Field>
             <Field label="Estoque mínimo"><Input value={f.estoque_minimo} onChange={(e) => set("estoque_minimo", e.target.value)} inputMode="numeric" /></Field>
           </FormGrid>
           <Field label="Descrição"><Textarea value={f.descricao} onChange={(e) => set("descricao", e.target.value)} rows={2} /></Field>
+
+          <div className="rounded-lg border border-neutral-200 p-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Categoria no Mercado Livre</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+                {f.ml_category_nome || <span className="text-neutral-400">Nenhuma categoria definida</span>}
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={buscarCategoriaMl} loading={buscandoMl}>
+                <Search size={14} /> Buscar categoria
+              </Button>
+            </div>
+            {sugestoesMl && (
+              <div className="mt-2 overflow-hidden rounded-lg border border-neutral-200">
+                {sugestoesMl.length === 0 ? (
+                  <p className="p-3 text-sm text-neutral-400">Nenhuma sugestão encontrada.</p>
+                ) : (
+                  sugestoesMl.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => escolherCategoriaMl(s)}
+                      className="block w-full border-b border-neutral-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-neutral-50"
+                    >
+                      <span className="text-neutral-900">{s.nome}</span>
+                      {s.caminho.length > 0 && (
+                        <span className="block text-xs text-neutral-400">{s.caminho.join(" > ")}</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="rounded-lg border border-neutral-200 p-3">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Tabela CPF</p>

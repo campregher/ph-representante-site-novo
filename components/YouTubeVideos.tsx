@@ -47,7 +47,7 @@ async function VideoGrid() {
           href={video.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="group bg-dark-900 rounded-2xl overflow-hidden border border-white/7 hover:border-brand/30 transition-all duration-300"
+          className="group bg-white rounded-md overflow-hidden border border-gray-200 hover:border-brand/50 hover:shadow-lg transition-all duration-300"
         >
           <div className="relative aspect-video">
             <Image
@@ -56,14 +56,14 @@ async function VideoGrid() {
               fill
               className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
-              <div className="w-14 h-14 rounded-full bg-brand/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+            <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors duration-300 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-brand flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                 <Play size={22} className="text-white fill-white ml-1" />
               </div>
             </div>
           </div>
           <div className="p-4">
-            <p className="text-sm font-semibold text-white leading-snug line-clamp-2">
+            <p className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2">
               {video.title}
             </p>
           </div>
@@ -79,12 +79,12 @@ function GridSkeleton() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="bg-dark-900 rounded-2xl overflow-hidden border border-white/7 animate-pulse"
+          className="bg-white rounded-md overflow-hidden border border-gray-200 animate-pulse"
         >
-          <div className="aspect-video bg-white/5" />
+          <div className="aspect-video bg-gray-100" />
           <div className="p-4 space-y-2">
-            <div className="h-3 bg-white/5 rounded w-full" />
-            <div className="h-3 bg-white/5 rounded w-2/3" />
+            <div className="h-3 bg-gray-100 rounded w-full" />
+            <div className="h-3 bg-gray-100 rounded w-2/3" />
           </div>
         </div>
       ))}
@@ -94,20 +94,18 @@ function GridSkeleton() {
 
 export default function YouTubeVideos() {
   return (
-    <section id="youtube" className="relative py-24 bg-dark-900">
-      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
-      <div className="absolute inset-0 bg-grid opacity-50 pointer-events-none" />
-
+    <section id="youtube" className="relative py-24 bg-gray-50">
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-semibold text-brand bg-brand/10 border border-brand/25 rounded-full mb-4">
-            <Play size={15} />
-            Canal YouTube
-          </span>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-4 text-white">
-            Conteúdo no <span className="text-gradient">YouTube</span>
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <span className="w-6 h-[3px] bg-brand flex-shrink-0" />
+            <span className="text-xs font-bold text-brand uppercase tracking-widest">Canal YouTube</span>
+            <span className="w-6 h-[3px] bg-brand flex-shrink-0" />
+          </div>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-4 text-gray-900">
+            Conteúdo no <span className="text-brand">YouTube</span>
           </h2>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
             Dicas, estratégias e conteúdo educativo para sellers e distribuidores.
           </p>
         </div>

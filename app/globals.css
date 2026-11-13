@@ -89,21 +89,21 @@ body {
 }
 .pulse-green { animation: pulse-glow 2s infinite; }
 
-/* Modality badges — dark */
+/* Modality badges — light */
 .badge-atacado {
-  background: rgba(59,130,246,0.12);
-  border: 1px solid rgba(59,130,246,0.30);
-  color: #93c5fd;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
 }
 .badge-drop {
-  background: rgba(220,38,38,0.12);
-  border: 1px solid rgba(220,38,38,0.30);
-  color: #fca5a5;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
 }
 .badge-both {
-  background: rgba(249,115,22,0.12);
-  border: 1px solid rgba(249,115,22,0.30);
-  color: #fdba74;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
 }
 
 /* Top red accent line */

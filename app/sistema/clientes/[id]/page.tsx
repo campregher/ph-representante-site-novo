@@ -36,6 +36,16 @@ import VinculosManager, {
   type VinculoRow,
 } from "@/components/sistema/clientes/VinculosManager";
 import type { Cliente, ClienteContato } from "@/lib/sistema/types";
+import {
+  SELLER_TEMPO_VENDENDO_OPTIONS,
+  SELLER_METODO_ENVIO_OPTIONS,
+  SELLER_VENDAS_MES_OPTIONS,
+} from "@/lib/sistema/schemas";
+
+function labelDe(opcoes: readonly { value: string; label: string }[], valor: string | null): string | null {
+  if (!valor) return null;
+  return opcoes.find((o) => o.value === valor)?.label ?? valor;
+}
 
 const TABS = [
   { key: "resumo", label: "Resumo" },
@@ -281,6 +291,35 @@ function ResumoTab({
           <DefRow label="CEP" value={c.cep} />
         </CardBody>
       </Card>
+      {c.is_seller && (
+        <Card className="lg:col-span-2">
+          <CardHeader
+            title="Questionário do seller"
+            description={c.onboarding_completo ? "Respondido no primeiro acesso ao portal." : "Ainda não respondeu."}
+          />
+          <CardBody>
+            {c.onboarding_completo ? (
+              <>
+                <DefRow label="Já vendia em marketplace?" value={c.onboarding_ja_vende ? "Sim" : "Ainda não, na época"} />
+                {c.onboarding_ja_vende && (
+                  <>
+                    <DefRow label="Há quanto tempo vendia" value={labelDe(SELLER_TEMPO_VENDENDO_OPTIONS, c.onboarding_tempo_vendendo)} />
+                    <DefRow
+                      label="Métodos de envio"
+                      value={c.onboarding_metodos_envio?.length
+                        ? c.onboarding_metodos_envio.map((m) => labelDe(SELLER_METODO_ENVIO_OPTIONS, m)).join(", ")
+                        : null}
+                    />
+                    <DefRow label="Vendas por mês" value={labelDe(SELLER_VENDAS_MES_OPTIONS, c.onboarding_vendas_mes)} />
+                  </>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-neutral-400">Seller ainda não concluiu o questionário pós-cadastro.</p>
+            )}
+          </CardBody>
+        </Card>
+      )}
       {c.observacoes && (
         <Card className="lg:col-span-2">
           <CardHeader title="Observações" />

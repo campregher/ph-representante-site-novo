@@ -166,6 +166,11 @@ export interface Cliente {
   is_seller: boolean;
   desconto_cascata: number[];
   observacoes: string | null;
+  onboarding_completo: boolean;
+  onboarding_ja_vende: boolean | null;
+  onboarding_tempo_vendendo: string | null;
+  onboarding_metodos_envio: string[] | null;
+  onboarding_vendas_mes: string | null;
   created_at: string;
   updated_at: string;
 }

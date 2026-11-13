@@ -3,10 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Truck, Megaphone, Package, MessageCircle, CheckCircle2, ArrowRight } from "lucide-react";
+import { Truck, Megaphone, Package, MessageCircle, CheckCircle2, ArrowRight, Rocket } from "lucide-react";
 import { salvarOnboardingSeller } from "@/lib/sistema/actions/seller-onboarding";
 import {
-  SELLER_INTERESSE_OPTIONS,
   SELLER_TEMPO_VENDENDO_OPTIONS,
   SELLER_METODO_ENVIO_OPTIONS,
   SELLER_VENDAS_MES_OPTIONS,
@@ -37,6 +36,27 @@ function Chip({
   );
 }
 
+const PASSOS_TUTORIAL = [
+  {
+    icon: Truck,
+    tone: "bg-blue-50 text-blue-600",
+    titulo: "Fornecedores e produtos",
+    texto: "Em “Produtos”, escolha um fornecedor e veja os produtos disponíveis com o preço de revenda.",
+  },
+  {
+    icon: Megaphone,
+    tone: "bg-violet-50 text-violet-600",
+    titulo: "Anuncie em massa",
+    texto: "Selecione vários produtos de um fornecedor e publique todos de uma vez no Mercado Livre.",
+  },
+  {
+    icon: Package,
+    tone: "bg-green-50 text-green-600",
+    titulo: "Quando você vender",
+    texto: "Um pedido é criado automaticamente e você combina o pagamento direto com o fornecedor, nas condições negociadas.",
+  },
+] as const;
+
 export default function OnboardingFlow({
   portalToken,
 }: {
@@ -49,11 +69,6 @@ export default function OnboardingFlow({
   const [tempoVendendo, setTempoVendendo] = useState("");
   const [metodosEnvio, setMetodosEnvio] = useState<string[]>([]);
   const [vendasMes, setVendasMes] = useState("");
-  const [interesses, setInteresses] = useState<string[]>([]);
-
-  function toggleInteresse(item: string) {
-    setInteresses((s) => (s.includes(item) ? s.filter((i) => i !== item) : [...s, item]));
-  }
 
   function toggleMetodoEnvio(valor: string) {
     setMetodosEnvio((s) => (s.includes(valor) ? s.filter((i) => i !== valor) : [...s, valor]));
@@ -66,7 +81,6 @@ export default function OnboardingFlow({
       if (metodosEnvio.length === 0) return toast.error("Selecione pelo menos um método de envio.");
       if (!vendasMes) return toast.error("Selecione quantas vendas você faz por mês.");
     }
-    if (interesses.length === 0) return toast.error("Selecione pelo menos uma categoria.");
     setEtapa("tutorial");
   }
 
@@ -77,7 +91,6 @@ export default function OnboardingFlow({
         tempoVendendo: jaVende ? tempoVendendo : undefined,
         metodosEnvio: jaVende ? metodosEnvio : undefined,
         vendasMes: jaVende ? vendasMes : undefined,
-        interesses,
       });
       if (!res.ok) { toast.error(res.error); return; }
       toast.success("Tudo pronto! Bem-vindo ao portal.");
@@ -89,40 +102,38 @@ export default function OnboardingFlow({
   if (etapa === "tutorial") {
     return (
       <div className="space-y-5">
-        <div>
-          <h1 className="text-xl font-bold text-neutral-900">Como funciona o portal</h1>
-          <p className="mt-1 text-sm text-neutral-500">Um resumo rápido antes de começar a vender.</p>
+        <div className="overflow-hidden rounded-xl bg-gradient-to-br from-neutral-900 to-neutral-800 p-5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand/20 text-brand">
+              <Rocket size={20} />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold">Como funciona o portal</h1>
+              <p className="text-sm text-neutral-300">Um resumo rápido antes de começar a vender.</p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3">
-          <div className="flex gap-3 rounded-lg border border-neutral-200 p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand"><Truck size={18} /></div>
-            <div>
-              <p className="font-semibold text-neutral-900">Fornecedores e produtos</p>
-              <p className="text-sm text-neutral-500">Em &ldquo;Produtos&rdquo;, escolha um fornecedor e veja os produtos disponíveis com o preço de revenda.</p>
+          {PASSOS_TUTORIAL.map((p) => (
+            <div
+              key={p.titulo}
+              className="flex gap-3 rounded-xl border border-neutral-200 p-4 transition-shadow hover:shadow-sm"
+            >
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${p.tone}`}>
+                <p.icon size={18} />
+              </div>
+              <div>
+                <p className="font-semibold text-neutral-900">{p.titulo}</p>
+                <p className="text-sm text-neutral-500">{p.texto}</p>
+              </div>
             </div>
-          </div>
+          ))}
 
-          <div className="flex gap-3 rounded-lg border border-neutral-200 p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand"><Megaphone size={18} /></div>
-            <div>
-              <p className="font-semibold text-neutral-900">Anuncie em massa</p>
-              <p className="text-sm text-neutral-500">Selecione vários produtos de um fornecedor e publique todos de uma vez no Mercado Livre.</p>
+          <div className="flex gap-3 rounded-xl border border-neutral-200 p-4 transition-shadow hover:shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <MessageCircle size={18} />
             </div>
-          </div>
-
-          <div className="flex gap-3 rounded-lg border border-neutral-200 p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand"><Package size={18} /></div>
-            <div>
-              <p className="font-semibold text-neutral-900">Quando você vender</p>
-              <p className="text-sm text-neutral-500">
-                Um pedido é criado automaticamente e você combina o pagamento direto com o fornecedor, nas condições negociadas.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-3 rounded-lg border border-neutral-200 p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand"><MessageCircle size={18} /></div>
             <div>
               <p className="font-semibold text-neutral-900">Precisa de ajuda?</p>
               <p className="text-sm text-neutral-500">
@@ -144,7 +155,7 @@ export default function OnboardingFlow({
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold text-neutral-900">Bem-vindo! Só mais uma etapa</h1>
-        <p className="mt-1 text-sm text-neutral-500">Responda rapidinho pra gente te mostrar os produtos certos.</p>
+        <p className="mt-1 text-sm text-neutral-500">Responda rapidinho pra gente te conhecer melhor.</p>
       </div>
 
       <div>
@@ -185,17 +196,6 @@ export default function OnboardingFlow({
           </Field>
         </>
       )}
-
-      <div>
-        <p className="mb-2 text-sm font-semibold text-neutral-700">Quais categorias você tem mais interesse?</p>
-        <div className="flex flex-wrap gap-2">
-          {SELLER_INTERESSE_OPTIONS.map((item) => (
-            <Chip key={item} active={interesses.includes(item)} onClick={() => toggleInteresse(item)}>
-              {item}
-            </Chip>
-          ))}
-        </div>
-      </div>
 
       <Button onClick={avancar} className="w-full">
         Continuar <ArrowRight size={16} />

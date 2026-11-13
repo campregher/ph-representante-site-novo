@@ -34,7 +34,6 @@ export async function salvarOnboardingSeller(portalToken: string, raw: unknown):
   const { error } = await ctx.db
     .from("clientes")
     .update({
-      onboarding_interesses: v.interesses,
       onboarding_ja_vende: v.jaVendeMarketplace,
       onboarding_tempo_vendendo: v.jaVendeMarketplace ? v.tempoVendendo : null,
       onboarding_metodos_envio: v.jaVendeMarketplace ? v.metodosEnvio : null,

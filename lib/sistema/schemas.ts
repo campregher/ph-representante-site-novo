@@ -294,7 +294,6 @@ export const sellerOnboardingSchema = z
     tempoVendendo: z.enum(["menos_6m", "seis_12m", "um_2anos", "mais_2anos"]).optional(),
     metodosEnvio: z.array(z.string()).optional(),
     vendasMes: z.enum(["ate_10", "11_50", "51_200", "mais_200"]).optional(),
-    interesses: z.array(z.string()).min(1, "Selecione pelo menos uma categoria"),
   })
   .superRefine((d, ctx) => {
     if (!d.jaVendeMarketplace) return;

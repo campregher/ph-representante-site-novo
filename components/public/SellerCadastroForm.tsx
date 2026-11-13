@@ -193,7 +193,7 @@ export default function SellerCadastroForm() {
             <CardHeader title="Identificação" />
             <CardBody>
               <FormGrid>
-                <Field label="CNPJ" error={errors.cnpj?.message} className="sm:col-span-2">
+                <Field label="CNPJ" required error={errors.cnpj?.message} className="sm:col-span-2">
                   <div className="flex gap-2">
                     <Input {...register("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" className="flex-1 min-w-0" />
                     <div className="shrink-0">
@@ -206,6 +206,7 @@ export default function SellerCadastroForm() {
                 </Field>
                 <Field
                   label="Razão social"
+                  required
                   error={errors.razao_social?.message}
                   className="sm:col-span-2"
                 >
@@ -230,7 +231,7 @@ export default function SellerCadastroForm() {
                 <Field label="WhatsApp" error={errors.whatsapp?.message}>
                   <Input {...register("whatsapp")} inputMode="tel" placeholder="(11) 99999-9999" />
                 </Field>
-                <Field label="E-mail" error={errors.email?.message} className="sm:col-span-2">
+                <Field label="E-mail" required error={errors.email?.message} className="sm:col-span-2">
                   <Input {...register("email")} type="email" />
                 </Field>
               </FormGrid>
@@ -243,13 +244,13 @@ export default function SellerCadastroForm() {
             <CardHeader title="Acesso ao portal" />
             <CardBody>
               <FormGrid>
-                <Field label="Senha" error={errors.senha?.message}>
+                <Field label="Senha" required error={errors.senha?.message}>
                   <div className="relative">
                     <Lock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <Input {...register("senha")} type="password" autoComplete="new-password" className="pl-9" />
                   </div>
                 </Field>
-                <Field label="Confirmar senha" error={errors.confirmar_senha?.message}>
+                <Field label="Confirmar senha" required error={errors.confirmar_senha?.message}>
                   <div className="relative">
                     <Lock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <Input {...register("confirmar_senha")} type="password" autoComplete="new-password" className="pl-9" />

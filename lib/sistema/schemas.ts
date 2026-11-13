@@ -478,6 +478,36 @@ export const compraItemSchema = z.object({
   custo_unitario: z.coerce.number().nonnegative(),
 });
 
+// ═══════════════════════════ Dropshipping (schema novo) ═══════════════════
+
+export const dropFornecedorSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome"),
+  razao_social: optionalText,
+  cnpj: optionalText,
+  telefone: optionalText,
+  whatsapp: optionalText,
+  email: optionalEmail,
+  observacoes: optionalText,
+  ativo: z.boolean().default(true),
+});
+
+export const dropProdutoSchema = z.object({
+  sku: z.string().trim().min(1, "Informe o SKU"),
+  nome: z.string().trim().min(2, "Informe o nome"),
+  descricao: optionalText,
+  imagem_url: optionalText,
+  fornecedor_id: optionalText,
+  estoque_atual: optionalNumber,
+  estoque_minimo: optionalNumber,
+  ativo: z.boolean().default(true),
+  // preço por tabela — "custo" do CPF já é o preço que ele paga à PH (margem embutida);
+  // "custo" do CNPJ é o custo real de fábrica (CNPJ paga o fornecedor direto)
+  custoCpf: optionalNumber,
+  precoSugeridoCpf: optionalNumber,
+  custoCnpj: optionalNumber,
+  precoSugeridoCnpj: optionalNumber,
+});
+
 export const compraSchema = z.object({
   fornecedor_id: optionalText,
   numero_nota: optionalText,

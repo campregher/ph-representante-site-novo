@@ -51,3 +51,40 @@ export async function createSistemaAdminClient() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
+
+/**
+ * Cliente SSR ligado à sessão do usuário (cookies), schema `dropshipping`.
+ * RLS é aplicada — use em Server Components / Server Actions / Route Handlers
+ * do admin novo de dropshipping (`/sistema/dropshipping`).
+ */
+export async function createDropshippingClient() {
+  const cookieStore = await cookies();
+  return createServerClient(SUPABASE_URL, ANON_KEY, {
+    db: { schema: "dropshipping" },
+    cookies: {
+      getAll: () => cookieStore.getAll(),
+      setAll: (toSet) => {
+        try {
+          toSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        } catch {
+          // chamado de um Server Component — ignorável, o middleware renova a sessão
+        }
+      },
+    },
+  });
+}
+
+/**
+ * Admin (service_role) no schema `dropshipping`, sem sessão.
+ * Ignora RLS — usado pelo portal público do seller (sem sessão interna,
+ * autorização checada na aplicação por cliente_id), igual o resto do
+ * portal hoje.
+ */
+export async function createDropshippingAdminClient() {
+  return createSupabaseClient(SUPABASE_URL, SERVICE_KEY, {
+    db: { schema: "dropshipping" },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}

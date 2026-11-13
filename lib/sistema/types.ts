@@ -363,6 +363,57 @@ export interface Fornecedor {
   updated_at: string;
 }
 
+// ──────────────────── Dropshipping (schema `dropshipping`) ────────────────────
+// Sistema novo, separado da representação. Fornecedores/produtos/preços
+// próprios — não confundir com comercial.Fornecedor/Representada acima.
+
+export interface DropFornecedor {
+  id: string;
+  nome: string;
+  razao_social: string | null;
+  cnpj: string | null;
+  telefone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const DROP_TABELA_CODIGOS = ["cpf", "cnpj"] as const;
+export type DropTabelaCodigo = (typeof DROP_TABELA_CODIGOS)[number];
+
+export interface DropTabelaPreco {
+  id: string;
+  codigo: DropTabelaCodigo;
+  nome: string;
+  descricao: string | null;
+}
+
+export interface DropProduto {
+  id: string;
+  fornecedor_id: string | null;
+  sku: string;
+  nome: string;
+  descricao: string | null;
+  imagem_url: string | null;
+  estoque_atual: number;
+  estoque_minimo: number;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Linha de produto já com os preços das duas tabelas resolvidos, pra tela de admin. */
+export interface DropProdutoRow extends DropProduto {
+  fornecedor: string | null;
+  custoCpf: number | null;
+  precoSugeridoCpf: number | null;
+  custoCnpj: number | null;
+  precoSugeridoCnpj: number | null;
+}
+
 export interface Compra {
   id: string;
   fornecedor_id: string | null;

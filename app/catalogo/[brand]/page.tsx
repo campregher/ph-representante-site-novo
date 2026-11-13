@@ -55,32 +55,34 @@ export default function BrandPage({ params }: { params: Promise<{ brand: string 
   }, [query, products]);
 
   return (
-    <div className="min-h-screen bg-dark-950">
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="bg-dark-950 border-b border-white/6 sticky top-16 z-30 backdrop-blur-xl">
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-30 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
-          <Link href="/catalogo" className="text-gray-500 hover:text-white transition-colors flex-shrink-0">
+          <Link href="/catalogo" className="text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0">
             <ArrowRight size={18} className="rotate-180" />
           </Link>
           {brand && !imgError ? (
-            <Image src={brand.logo} alt={brand.name} width={100} height={36} className="object-contain h-8 w-auto" onError={() => setImgError(true)} />
+            <div className="rounded-md bg-gray-900 px-2.5 py-1.5 flex-shrink-0">
+              <Image src={brand.logo} alt={brand.name} width={100} height={36} className="object-contain h-7 w-auto" onError={() => setImgError(true)} />
+            </div>
           ) : (
-            <span className="font-black text-white text-sm">{brand?.name ?? brandSlug.toUpperCase()}</span>
+            <span className="font-black text-gray-900 text-sm">{brand?.name ?? brandSlug.toUpperCase()}</span>
           )}
           <div className="relative flex-1 max-w-sm ml-auto">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar produto..."
-              className="w-full pl-9 pr-8 py-2 bg-dark-800 border border-white/8 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:border-brand/50 transition-all"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-gray-300 rounded-md text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:border-brand transition-all"
             />
             {query && (
-              <button onClick={() => setQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+              <button onClick={() => setQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900">
                 <X size={13} />
               </button>
             )}
           </div>
           <button onClick={downloadPDF} disabled={pdfLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-dark-800 border border-white/10 hover:border-brand/30 text-gray-300 hover:text-white text-sm font-semibold rounded-xl transition-all disabled:opacity-50 flex-shrink-0"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-900 hover:bg-gray-50 text-gray-900 text-sm font-bold uppercase tracking-wide rounded-md transition-all disabled:opacity-50 flex-shrink-0"
           >
             <FileDown size={15} className={pdfLoading ? "animate-bounce" : ""} />
             <span className="hidden sm:inline">{pdfLoading ? "Gerando..." : "Baixar PDF"}</span>
@@ -92,7 +94,7 @@ export default function BrandPage({ params }: { params: Promise<{ brand: string 
         {/* Brand info */}
         {brand && (
           <div className="mb-8">
-            <h1 className="text-2xl font-black text-white mb-1">{brand.name}</h1>
+            <h1 className="text-2xl font-black text-gray-900 mb-1">{brand.name}</h1>
             <p className="text-gray-500 text-sm">{brand.segment}</p>
           </div>
         )}
@@ -100,18 +102,18 @@ export default function BrandPage({ params }: { params: Promise<{ brand: string 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="bg-dark-800 rounded-2xl overflow-hidden border border-white/7 animate-pulse">
-                <div className="aspect-square bg-white/5" />
+              <div key={i} className="bg-white rounded-md overflow-hidden border border-gray-200 animate-pulse">
+                <div className="aspect-square bg-gray-100" />
                 <div className="p-3 space-y-2">
-                  <div className="h-2 bg-white/5 rounded w-1/3" />
-                  <div className="h-3 bg-white/5 rounded" />
+                  <div className="h-2 bg-gray-100 rounded w-1/3" />
+                  <div className="h-3 bg-gray-100 rounded" />
                 </div>
               </div>
             ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
-            <Package size={40} className="text-gray-700 mx-auto mb-4" />
+            <Package size={40} className="text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">
               {query ? `Nenhum produto encontrado para "${query}"` : "Nenhum produto cadastrado para esta marca ainda."}
             </p>
@@ -119,7 +121,7 @@ export default function BrandPage({ params }: { params: Promise<{ brand: string 
           </div>
         ) : (
           <>
-            <p className="text-gray-600 text-xs mb-5">{filtered.length} produto{filtered.length !== 1 ? "s" : ""}</p>
+            <p className="text-gray-500 text-xs mb-5">{filtered.length} produto{filtered.length !== 1 ? "s" : ""}</p>
             <motion.div variants={container} initial="hidden" animate="show"
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
             >
@@ -141,19 +143,19 @@ export default function BrandPage({ params }: { params: Promise<{ brand: string 
 function ProductCard({ product, onClick }: { product: Product; onClick: () => void }) {
   const [imgError, setImgError] = useState(false);
   return (
-    <motion.button variants={item} onClick={onClick} whileHover={{ scale: 1.02, y: -3 }}
-      className="bg-dark-800 rounded-2xl overflow-hidden border border-white/7 hover:border-brand/30 transition-all duration-300 text-left group"
+    <motion.button variants={item} onClick={onClick} whileHover={{ y: -3 }}
+      className="bg-white rounded-md overflow-hidden border border-gray-200 hover:border-brand/40 hover:shadow-lg transition-all duration-300 text-left group"
     >
-      <div className="relative aspect-square bg-dark-900">
+      <div className="relative aspect-square bg-gray-50">
         {product.images[0] && !imgError ? (
           <Image src={product.images[0]} alt={product.name} fill className="object-contain p-2 group-hover:scale-105 transition-transform duration-300" onError={() => setImgError(true)} unoptimized />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-700 text-xs">Sem imagem</div>
+          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">Sem imagem</div>
         )}
       </div>
       <div className="p-3">
         <span className="text-xs font-mono text-brand/70 mb-1 block">{product.sku}</span>
-        <p className="text-sm font-semibold text-white leading-snug line-clamp-2">{product.name}</p>
+        <p className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2">{product.name}</p>
       </div>
     </motion.button>
   );

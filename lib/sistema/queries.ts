@@ -157,3 +157,42 @@ export async function variacaoCountMap(produtoIds: string[]): Promise<Map<string
   }
   return m;
 }
+
+// ───────────────────────── Novos cadastros (dashboard) ─────────────────────
+
+export interface NovoCadastroRow {
+  id: string;
+  nome: string;
+  isSeller: boolean;
+  documento: string | null;
+  email: string | null;
+  createdAt: string;
+}
+
+/** Cadastros em `prospect` (clientes e sellers) aguardando aprovação do admin. */
+export async function listNovosCadastros(limit = 6): Promise<NovoCadastroRow[]> {
+  const supabase = await createSistemaClient();
+  const { data } = await supabase
+    .from("clientes")
+    .select("id, nome_fantasia, razao_social, is_seller, cnpj, cpf, email, created_at")
+    .eq("status", "prospect")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    nome: (c.nome_fantasia as string) || (c.razao_social as string) || "—",
+    isSeller: !!c.is_seller,
+    documento: (c.cnpj as string) || (c.cpf as string) || null,
+    email: c.email as string | null,
+    createdAt: c.created_at as string,
+  }));
+}
+
+export async function countNovosCadastros(): Promise<number> {
+  const supabase = await createSistemaClient();
+  const { count } = await supabase
+    .from("clientes")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "prospect");
+  return count ?? 0;
+}

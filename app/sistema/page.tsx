@@ -13,12 +13,13 @@ import {
 } from "lucide-react";
 import { requireSistemaProfile } from "@/lib/sistema/auth";
 import { canManage } from "@/lib/sistema/roles";
-import { listRepresentadaOptions, listVendedorOptions } from "@/lib/sistema/queries";
+import { listRepresentadaOptions, listVendedorOptions, listNovosCadastros, countNovosCadastros } from "@/lib/sistema/queries";
 import { getDashboard } from "@/lib/sistema/dashboard";
 import { formatBRL } from "@/lib/sistema/format";
 import { PageHeader } from "@/components/sistema/ui/State";
 import { StatCard, Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import DashboardFilters from "@/components/sistema/DashboardFilters";
+import NovosCadastrosCard from "@/components/sistema/NovosCadastrosCard";
 import LineChart from "@/components/sistema/charts/LineChart";
 import BarList from "@/components/sistema/charts/BarList";
 
@@ -67,10 +68,12 @@ export default async function DashboardPage({
   const representadaId = sp.representada || undefined;
   const vendedorId = gestor ? sp.vendedor || undefined : undefined;
 
-  const [dash, representadas, vendedores] = await Promise.all([
+  const [dash, representadas, vendedores, novosCadastros, totalNovosCadastros] = await Promise.all([
     getDashboard({ mes, representadaId, vendedorId }),
     listRepresentadaOptions(),
     gestor ? listVendedorOptions() : Promise.resolve([]),
+    gestor ? listNovosCadastros() : Promise.resolve([]),
+    gestor ? countNovosCadastros() : Promise.resolve(0),
   ]);
 
   const mesLabel = meses.find((m) => m.value === mes)?.label ?? mes;
@@ -81,6 +84,12 @@ export default async function DashboardPage({
         title={`Olá, ${primeiroNome}`}
         description={`Resumo comercial de ${mesLabel}.`}
       />
+
+      {gestor && (
+        <div className="mb-4">
+          <NovosCadastrosCard itens={novosCadastros} total={totalNovosCadastros} />
+        </div>
+      )}
 
       <DashboardFilters
         meses={meses}

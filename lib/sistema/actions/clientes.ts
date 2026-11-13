@@ -70,6 +70,40 @@ export async function saveCliente(id: string | null, raw: unknown): Promise<Acti
   return { ok: true, id: data.id as string };
 }
 
+/** Aprova um cadastro novo (prospect -> ativo) — ex.: seller aguardando revisão manual. */
+export async function aprovarCliente(id: string): Promise<ActionResult> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+  const supabase = await createSistemaClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({ status: "ativo", email_confirmado: true, updated_by: g.profile!.id })
+    .eq("id", id)
+    .eq("status", "prospect");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/sistema");
+  revalidatePath("/sistema/clientes");
+  revalidatePath(`/sistema/clientes/${id}`);
+  return { ok: true };
+}
+
+/** Recusa um cadastro novo (prospect -> bloqueado). */
+export async function recusarCliente(id: string): Promise<ActionResult> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+  const supabase = await createSistemaClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({ status: "bloqueado", updated_by: g.profile!.id })
+    .eq("id", id)
+    .eq("status", "prospect");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/sistema");
+  revalidatePath("/sistema/clientes");
+  revalidatePath(`/sistema/clientes/${id}`);
+  return { ok: true };
+}
+
 export async function deleteCliente(id: string): Promise<ActionResult> {
   const g = await guard();
   if (g.error) return { ok: false, error: g.error };

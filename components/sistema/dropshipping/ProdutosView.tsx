@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import type { DropProdutoRow } from "@/lib/sistema/types";
 import { salvarDropProduto, excluirDropProduto } from "@/lib/sistema/actions/dropshipping";
+import { SELLER_INTERESSE_OPTIONS, SELLER_METODO_ENVIO_OPTIONS } from "@/lib/sistema/schemas";
 import { formatBRL } from "@/lib/sistema/format";
 import { Modal, ConfirmDialog } from "@/components/sistema/ui/Modal";
 import { Button } from "@/components/sistema/ui/Button";
@@ -22,7 +23,8 @@ interface CategoriaMlSugestao { id: string; nome: string; caminho: string[] }
 const empty = {
   id: null as string | null,
   sku: "", nome: "", descricao: "", imagem_url: "", marca: "", fornecedor_id: "",
-  ml_category_id: "", ml_category_nome: "",
+  ml_category_id: "", ml_category_nome: "", categoria_interna: "",
+  transporte_aceito: [] as string[],
   estoque_atual: "0", estoque_minimo: "0", ativo: true,
   custoCnpj: "", precoSugeridoCnpj: "",
 };
@@ -43,7 +45,16 @@ export default function ProdutosView({
   const [del, setDel] = useState<DropProdutoRow | null>(null);
   const [buscandoMl, setBuscandoMl] = useState(false);
   const [sugestoesMl, setSugestoesMl] = useState<CategoriaMlSugestao[] | null>(null);
-  const set = (k: keyof typeof empty, v: string | boolean) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k: keyof typeof empty, v: string | boolean | string[]) => setF((s) => ({ ...s, [k]: v }));
+
+  function toggleTransporte(valor: string) {
+    setF((s) => ({
+      ...s,
+      transporte_aceito: s.transporte_aceito.includes(valor)
+        ? s.transporte_aceito.filter((t) => t !== valor)
+        : [...s.transporte_aceito, valor],
+    }));
+  }
 
   const grupos = useMemo(() => {
     const porFornecedor = new Map<string, DropProdutoRow[]>();
@@ -92,6 +103,7 @@ export default function ProdutosView({
       id: x.id, sku: x.sku, nome: x.nome, descricao: x.descricao ?? "", imagem_url: x.imagem_url ?? "",
       marca: x.marca ?? "", fornecedor_id: x.fornecedor_id ?? "",
       ml_category_id: x.ml_category_id ?? "", ml_category_nome: x.ml_category_nome ?? "",
+      categoria_interna: x.categoria_interna ?? "", transporte_aceito: x.transporte_aceito ?? [],
       estoque_atual: String(x.estoque_atual), estoque_minimo: String(x.estoque_minimo),
       ativo: x.ativo,
       custoCnpj: x.custoCnpj != null ? String(x.custoCnpj) : "",
@@ -219,6 +231,12 @@ export default function ProdutosView({
               </Select>
             </Field>
             <Field label="Marca"><Input value={f.marca} onChange={(e) => set("marca", e.target.value)} /></Field>
+            <Field label="Categoria interna">
+              <Select value={f.categoria_interna} onChange={(e) => set("categoria_interna", e.target.value)}>
+                <option value="">Selecione...</option>
+                {SELLER_INTERESSE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </Select>
+            </Field>
             <Field label="URL da imagem"><Input value={f.imagem_url} onChange={(e) => set("imagem_url", e.target.value)} /></Field>
             <Field label="Estoque atual"><Input value={f.estoque_atual} onChange={(e) => set("estoque_atual", e.target.value)} inputMode="numeric" /></Field>
             <Field label="Estoque mínimo"><Input value={f.estoque_minimo} onChange={(e) => set("estoque_minimo", e.target.value)} inputMode="numeric" /></Field>
@@ -256,6 +274,28 @@ export default function ProdutosView({
                 )}
               </div>
             )}
+          </div>
+
+          <div className="rounded-lg border border-neutral-200 p-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
+              Transporte aceito <span className="font-normal normal-case text-neutral-400">(pode marcar mais de um)</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SELLER_METODO_ENVIO_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => toggleTransporte(o.value)}
+                  className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    f.transporte_aceito.includes(o.value)
+                      ? "border-brand bg-brand text-white"
+                      : "border-neutral-300 text-neutral-700 hover:border-brand/50"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-lg border border-neutral-200 p-3">

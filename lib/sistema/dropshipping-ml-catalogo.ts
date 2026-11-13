@@ -20,9 +20,44 @@ export interface AnuncioProdutoDrop {
   marca: string | null;
   imagem_url: string | null;
   ml_category_id: string | null;
+  transporte_aceito: string[];
 }
 
 type MlResult<T> = ({ ok: true } & T) | { ok: false; error: string };
+
+/**
+ * Mapeia o(s) transporte(s) que o produto aceita (definidos no admin) pro
+ * objeto `shipping` que a API do Mercado Livre espera na criação do item.
+ * "shopee_express" não existe no ML — só serve pro catálogo da Shopee — e
+ * por isso nunca entra nesse mapa. Prioridade quando o produto aceita mais
+ * de um: Mercado Envios (mode "me2", sem logistic_type — deixa a conta do
+ * seller decidir qual sub-tipo ela tem habilitado) > Flex (me2 +
+ * logistic_type "self_service", só funciona se a conta do seller tiver Flex
+ * habilitado pelo ML) > Correios/Entrega Direta (mode "custom" — seller
+ * cuida do envio fora da rede do Mercado Envios).
+ *
+ * IMPORTANTE: essa parte ainda não foi testada contra uma conta real do ML
+ * conectada — os nomes dos campos (mode/logistic_type/self_service/custom)
+ * seguem a documentação pública da API de Items + Shipping do Mercado Livre,
+ * mas elegibilidade de Flex/me2 depende de habilitação por conta e categoria
+ * que só a resposta real da API confirma. Teste com uma publicação real
+ * antes de confiar nisso em produção.
+ */
+function resolverShippingML(transporteAceito: string[]): { shipping: Record<string, unknown> } | { error: string } {
+  if (transporteAceito.includes("mercado_envios")) {
+    return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false } };
+  }
+  if (transporteAceito.includes("flex")) {
+    return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false, logistic_type: "self_service" } };
+  }
+  if (transporteAceito.includes("correios") || transporteAceito.includes("entrega_direta")) {
+    return { shipping: { mode: "custom" } };
+  }
+  if (transporteAceito.length === 0) {
+    return { error: "Produto sem transporte aceito configurado (fale com a PH)." };
+  }
+  return { error: "Nenhum dos transportes aceitos por esse produto funciona no Mercado Livre (ex.: Shopee Express é só pra Shopee)." };
+}
 
 function mlErro(data: unknown, fallback: string): string {
   const d = data as { cause?: { message?: string }[]; message?: string };
@@ -68,6 +103,9 @@ export async function publicarAnuncioMLDrop(
   if (!produto.ml_category_id)
     return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
 
+  const shippingRes = resolverShippingML(produto.transporte_aceito);
+  if ("error" in shippingRes) return { ok: false, error: shippingRes.error };
+
   let token: string;
   try {
     token = await getValidMlToken(mlContaId);
@@ -103,6 +141,7 @@ export async function publicarAnuncioMLDrop(
     listing_type_id: "gold_pro",
     pictures,
     attributes,
+    shipping: shippingRes.shipping,
   };
 
   const res = await fetch(`${ML_BASE}/items`, {

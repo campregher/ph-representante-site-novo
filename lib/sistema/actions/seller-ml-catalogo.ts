@@ -48,7 +48,7 @@ async function buscarProdutoElegivel(
   const { data: p } = await db
     .from("produtos")
     .select(
-      "id, sku, nome, descricao, marca, imagem_url, ml_category_id, ativo, estoque_atual, produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
+      "id, sku, nome, descricao, marca, imagem_url, ml_category_id, transporte_aceito, ativo, estoque_atual, produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
     )
     .eq("id", produtoId)
     .maybeSingle();
@@ -66,6 +66,7 @@ async function buscarProdutoElegivel(
       marca: p.marca as string | null,
       imagem_url: p.imagem_url as string | null,
       ml_category_id: p.ml_category_id as string | null,
+      transporte_aceito: (p.transporte_aceito as string[] | null) ?? [],
     },
     precoMinimo,
   };

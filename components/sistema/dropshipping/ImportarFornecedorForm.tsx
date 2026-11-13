@@ -13,7 +13,7 @@ type Modo = "cadastro" | "cadastro_produtos";
 const MODELOS: Record<Modo, string> = {
   cadastro: "nome,razao_social,cnpj,telefone,whatsapp,email\nATTIS,ATTIS Acessorios LTDA,12345678000100,1133334444,11999998888,contato@attis.com.br\n",
   cadastro_produtos:
-    "fornecedor,sku,nome,descricao,estoque_atual,custo_cnpj,preco_sugerido_cnpj\nATTIS,ATT-001,Tapete bandeja universal,Tapete de borracha,50,32.50,79.90\n",
+    "fornecedor,sku,nome,descricao,marca,imagem_url,estoque_atual,custo_cnpj,preco_sugerido_cnpj\nATTIS,ATT-001,Tapete bandeja universal,Tapete de borracha,ATTIS,https://exemplo.com/foto.jpg,50,32.50,79.90\n",
 };
 
 function baixarModelo(modo: Modo) {

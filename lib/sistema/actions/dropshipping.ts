@@ -119,6 +119,8 @@ export async function salvarDropProduto(id: string | null, raw: unknown): Promis
     ml_category_id: v.ml_category_id || null,
     ml_category_nome: v.ml_category_nome || null,
     marca: v.marca,
+    categoria_interna: v.categoria_interna || null,
+    transporte_aceito: v.transporte_aceito,
     fornecedor_id: v.fornecedor_id || null,
     estoque_atual: Math.round(Number(v.estoque_atual ?? 0)),
     estoque_minimo: Math.round(Number(v.estoque_minimo ?? 0)),
@@ -164,34 +166,53 @@ export async function excluirDropProduto(id: string): Promise<ActionResult> {
 
 // ──────────────────────── Importação via CSV ───────────────────────────────
 
-/** Parser de CSV simples (vírgula, aspas opcionais, sem libs externas). */
+/**
+ * Parser de CSV simples (vírgula, aspas opcionais, sem libs externas).
+ * Tokeniza o texto inteiro num passe só (não quebra por linha antes de ler
+ * aspas) — assim um campo entre aspas com quebra de linha de verdade (ex.:
+ * descrição de produto em várias linhas) não vira várias linhas erradas.
+ */
 function parseCsv(texto: string): Record<string, string>[] {
-  const linhas = texto.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
-  if (linhas.length < 2) return [];
-  const splitLinha = (linha: string): string[] => {
-    const campos: string[] = [];
-    let atual = "";
-    let dentroAspas = false;
-    for (let i = 0; i < linha.length; i++) {
-      const c = linha[i];
+  const linhasDeCamposos: string[][] = [];
+  let linhaAtual: string[] = [];
+  let campoAtual = "";
+  let dentroAspas = false;
+  let i = 0;
+  while (i < texto.length) {
+    const c = texto[i];
+    if (dentroAspas) {
       if (c === '"') {
-        if (dentroAspas && linha[i + 1] === '"') { atual += '"'; i++; }
-        else dentroAspas = !dentroAspas;
-      } else if (c === "," && !dentroAspas) {
-        campos.push(atual.trim());
-        atual = "";
-      } else {
-        atual += c;
+        if (texto[i + 1] === '"') { campoAtual += '"'; i += 2; continue; }
+        dentroAspas = false;
+        i++;
+        continue;
       }
+      campoAtual += c;
+      i++;
+      continue;
     }
-    campos.push(atual.trim());
-    return campos;
-  };
-  const cabecalho = splitLinha(linhas[0]).map((h) => h.toLowerCase());
-  return linhas.slice(1).map((linha) => {
-    const valores = splitLinha(linha);
+    if (c === '"') { dentroAspas = true; i++; continue; }
+    if (c === ",") { linhaAtual.push(campoAtual.trim()); campoAtual = ""; i++; continue; }
+    if (c === "\r") { i++; continue; }
+    if (c === "\n") {
+      linhaAtual.push(campoAtual.trim());
+      campoAtual = "";
+      if (linhaAtual.some((v) => v !== "")) linhasDeCamposos.push(linhaAtual);
+      linhaAtual = [];
+      i++;
+      continue;
+    }
+    campoAtual += c;
+    i++;
+  }
+  linhaAtual.push(campoAtual.trim());
+  if (linhaAtual.some((v) => v !== "")) linhasDeCamposos.push(linhaAtual);
+
+  if (linhasDeCamposos.length < 2) return [];
+  const cabecalho = linhasDeCamposos[0].map((h) => h.toLowerCase());
+  return linhasDeCamposos.slice(1).map((valores) => {
     const row: Record<string, string> = {};
-    cabecalho.forEach((h, i) => { row[h] = (valores[i] ?? "").trim(); });
+    cabecalho.forEach((h, idx) => { row[h] = valores[idx] ?? ""; });
     return row;
   });
 }
@@ -213,8 +234,8 @@ export interface ImportarFornecedorResultado {
  * (colunas: nome, razao_social, cnpj, telefone, whatsapp, email). Modo
  * "cadastro_produtos": cada linha é um produto, com o fornecedor
  * identificado pelo nome (cria o fornecedor se não existir) — colunas:
- * fornecedor, sku, nome, descricao, estoque_atual, custo_cnpj,
- * preco_sugerido_cnpj.
+ * fornecedor, sku, nome, descricao, marca, imagem_url, estoque_atual,
+ * custo_cnpj, preco_sugerido_cnpj.
  */
 export async function importarDropFornecedorCsv(
   modo: "cadastro" | "cadastro_produtos",
@@ -284,21 +305,34 @@ export async function importarDropFornecedorCsv(
     const fid = await fornecedorId(nomeFornecedor);
     if (!fid) { resultado.erros.push(`Linha ${i + 2}: não consegui criar/achar o fornecedor "${nomeFornecedor}".`); continue; }
 
-    const { data: produto, error: prodErr } = await db
-      .from("produtos")
-      .upsert(
-        {
-          sku,
-          nome,
-          descricao: row.descricao || null,
-          fornecedor_id: fid,
-          estoque_atual: Math.round(numOrNull(row.estoque_atual) ?? 0),
-          created_by: g.profile!.id,
-        },
-        { onConflict: "sku" }
-      )
-      .select("id")
-      .single();
+    // produtos.sku tem índice único por lower(sku) (expressão) — o upsert do
+    // PostgREST com onConflict só mira índice/constraint de coluna literal,
+    // não expressão, então faz sempre select-then-insert-or-update à mão.
+    const produtoRow = {
+      sku,
+      nome,
+      descricao: row.descricao || null,
+      marca: row.marca || null,
+      imagem_url: row.imagem_url || null,
+      fornecedor_id: fid,
+      estoque_atual: Math.round(numOrNull(row.estoque_atual) ?? 0),
+    };
+    const { data: existente } = await db.from("produtos").select("id").ilike("sku", sku).maybeSingle();
+    let produto: { id: string } | null = null;
+    let prodErr: { message: string } | null = null;
+    if (existente) {
+      const { error } = await db.from("produtos").update(produtoRow).eq("id", existente.id as string);
+      prodErr = error;
+      produto = error ? null : { id: existente.id as string };
+    } else {
+      const { data, error } = await db
+        .from("produtos")
+        .insert({ ...produtoRow, created_by: g.profile!.id })
+        .select("id")
+        .single();
+      prodErr = error;
+      produto = data ? { id: data.id as string } : null;
+    }
     if (prodErr || !produto) { resultado.erros.push(`Linha ${i + 2}: ${prodErr?.message ?? "erro ao salvar produto"}`); continue; }
 
     if (tabelas.cnpj) {

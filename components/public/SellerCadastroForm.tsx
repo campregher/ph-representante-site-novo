@@ -116,16 +116,19 @@ export default function SellerCadastroForm() {
       subtitle="Cadastre sua empresa para vender nossos produtos por dropshipping."
       maxWidthClassName="max-w-2xl"
       visual
+      semCnpjCta
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Card>
           <CardHeader title="Identificação" />
           <CardBody>
             <FormGrid>
-              <Field label="CNPJ" error={errors.cnpj?.message}>
+              <Field label="CNPJ" error={errors.cnpj?.message} className="sm:col-span-2">
                 <div className="flex gap-2">
-                  <Input {...register("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" />
-                  <CnpjLookup cnpj={cnpjValue} onData={fillFromCnpj} endpoint="/api/drop/cnpj" />
+                  <Input {...register("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" className="flex-1 min-w-0" />
+                  <div className="shrink-0">
+                    <CnpjLookup cnpj={cnpjValue} onData={fillFromCnpj} endpoint="/api/drop/cnpj" />
+                  </div>
                 </div>
               </Field>
               <Field label="Inscrição estadual" error={errors.inscricao_estadual?.message}>

@@ -29,14 +29,10 @@ export default function SellerCadastroForm() {
     formState: { errors },
   } = useForm<SellerCadastroInput>({
     resolver: zodResolver(sellerCadastroSchema),
-    defaultValues: { tipo_pessoa: "juridica" },
-    shouldUnregister: true, // limpa cnpj/cpf ao trocar o toggle PJ/PF
   });
 
-  const tipo = (useWatch({ control, name: "tipo_pessoa" }) ?? "juridica") as string;
   const cnpjValue = (useWatch({ control, name: "cnpj" }) ?? "") as string;
   const wpp = (useWatch({ control, name: "whatsapp" }) ?? "") as string;
-  const isPJ = tipo !== "fisica";
 
   function fillFromCep(d: CepData) {
     const set = (k: keyof SellerCadastroInput, v: string) => {
@@ -126,49 +122,25 @@ export default function SellerCadastroForm() {
           <CardHeader title="Identificação" />
           <CardBody>
             <FormGrid>
-              <Field label="Tipo de pessoa">
-                <Select {...register("tipo_pessoa")}>
-                  <option value="juridica">Pessoa jurídica</option>
-                  <option value="fisica">Pessoa física</option>
-                </Select>
+              <Field label="CNPJ" error={errors.cnpj?.message}>
+                <div className="flex gap-2">
+                  <Input {...register("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" />
+                  <CnpjLookup cnpj={cnpjValue} onData={fillFromCnpj} endpoint="/api/drop/cnpj" />
+                </div>
               </Field>
-
-              {isPJ ? (
-                <>
-                  <Field label="CNPJ" error={errors.cnpj?.message}>
-                    <div className="flex gap-2">
-                      <Input {...register("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" />
-                      <CnpjLookup cnpj={cnpjValue} onData={fillFromCnpj} endpoint="/api/drop/cnpj" />
-                    </div>
-                  </Field>
-                  <Field label="Inscrição estadual" error={errors.inscricao_estadual?.message}>
-                    <Input {...register("inscricao_estadual")} />
-                  </Field>
-                  <Field
-                    label="Razão social"
-                    error={errors.razao_social?.message}
-                    className="sm:col-span-2"
-                  >
-                    <Input {...register("razao_social")} />
-                  </Field>
-                  <Field label="Nome fantasia" error={errors.nome_fantasia?.message}>
-                    <Input {...register("nome_fantasia")} />
-                  </Field>
-                </>
-              ) : (
-                <>
-                  <Field label="CPF" error={errors.cpf?.message}>
-                    <Input {...register("cpf")} inputMode="numeric" placeholder="000.000.000-00" />
-                  </Field>
-                  <Field
-                    label="Nome completo"
-                    error={errors.razao_social?.message}
-                    className="sm:col-span-2"
-                  >
-                    <Input {...register("razao_social")} />
-                  </Field>
-                </>
-              )}
+              <Field label="Inscrição estadual" error={errors.inscricao_estadual?.message}>
+                <Input {...register("inscricao_estadual")} />
+              </Field>
+              <Field
+                label="Razão social"
+                error={errors.razao_social?.message}
+                className="sm:col-span-2"
+              >
+                <Input {...register("razao_social")} />
+              </Field>
+              <Field label="Nome fantasia" error={errors.nome_fantasia?.message}>
+                <Input {...register("nome_fantasia")} />
+              </Field>
             </FormGrid>
           </CardBody>
         </Card>

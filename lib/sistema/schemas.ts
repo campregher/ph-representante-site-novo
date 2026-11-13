@@ -227,9 +227,7 @@ export const clienteSchema = z
  *  seller pode preencher; status/is_seller/vendedor são fixados pela action. */
 export const sellerCadastroSchema = z
   .object({
-    tipo_pessoa: z.enum(["juridica", "fisica"]).default("juridica"),
     cnpj: optionalText,
-    cpf: optionalText,
     razao_social: optionalText,
     nome_fantasia: optionalText,
     inscricao_estadual: optionalText,
@@ -250,8 +248,8 @@ export const sellerCadastroSchema = z
     message: "Informe a razão social ou o nome",
     path: ["razao_social"],
   })
-  .refine((d) => !!(d.cnpj || d.cpf), {
-    message: "Informe o CNPJ ou o CPF",
+  .refine((d) => !!d.cnpj, {
+    message: "Informe o CNPJ",
     path: ["cnpj"],
   })
   .refine((d) => d.senha === d.confirmar_senha, {
@@ -282,12 +280,6 @@ export const sellerOnboardingSchema = z.object({
   interesses: z.array(z.string()).min(1, "Selecione pelo menos uma categoria"),
   canal: z.enum(["mercado_livre", "shopee", "ambos", "ainda_nao"], { message: "Selecione uma opção" }),
   volumeMensal: z.enum(["ate_5k", "5k_20k", "20k_50k", "acima_50k"], { message: "Selecione uma opção" }),
-});
-
-export const trocarTipoPessoaSchema = z.object({
-  novoTipo: z.enum(["juridica", "fisica"]),
-  novoDocumento: z.string().trim().min(11, "Documento inválido"),
-  aceite: z.literal(true, { message: "Confirme que entendeu a mudança de condições" }),
 });
 
 export type ClienteInput = z.input<typeof clienteSchema>;

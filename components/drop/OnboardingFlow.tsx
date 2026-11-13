@@ -16,10 +16,8 @@ import { WHATSAPP_URL } from "@/lib/constants";
 
 export default function OnboardingFlow({
   portalToken,
-  tipoPessoa,
 }: {
   portalToken: string;
-  tipoPessoa: "juridica" | "fisica";
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -79,9 +77,7 @@ export default function OnboardingFlow({
             <div>
               <p className="font-semibold text-neutral-900">Quando você vender</p>
               <p className="text-sm text-neutral-500">
-                {tipoPessoa === "fisica"
-                  ? "Um pedido é criado automaticamente. Pra liberar o envio, é preciso pagar à vista via Pix — você recebe o link assim que vender."
-                  : "Um pedido é criado automaticamente e você combina o pagamento direto com o fornecedor, nas condições negociadas."}
+                Um pedido é criado automaticamente e você combina o pagamento direto com o fornecedor, nas condições negociadas.
               </p>
             </div>
           </div>

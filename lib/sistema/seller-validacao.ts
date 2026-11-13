@@ -41,13 +41,7 @@ export async function validarDocumentoSeller(cliente: {
     };
   }
   if (cliente.cpf) {
-    const ok = cpfValido(cliente.cpf);
-    return {
-      aprovado: ok,
-      motivo: ok
-        ? "CPF com dígito verificador válido (não confirma situação na Receita)."
-        : "CPF inválido — dígito verificador não confere.",
-    };
+    return { aprovado: false, motivo: "Cadastro de pessoa física não é mais aceito para sellers." };
   }
   return { aprovado: false, motivo: "Cadastro sem CNPJ ou CPF." };
 }

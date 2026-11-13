@@ -2,9 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSistemaAdminClient } from "@/lib/supabase/server";
-import { sellerOnboardingSchema, trocarTipoPessoaSchema } from "@/lib/sistema/schemas";
-import { validateCNPJ, validateCPF } from "@/utils/cnpj";
-import { onlyDigits } from "@/lib/sistema/format";
+import { sellerOnboardingSchema } from "@/lib/sistema/schemas";
 import type { ActionResult } from "@/lib/sistema/types";
 
 type Db = Awaited<ReturnType<typeof createSistemaAdminClient>>;
@@ -45,39 +43,6 @@ export async function salvarOnboardingSeller(portalToken: string, raw: unknown):
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/drop/onboarding");
-  revalidatePath("/drop/dashboard");
-  return { ok: true };
-}
-
-/**
- * Seller muda o próprio tipo de cadastro (CPF <-> CNPJ) — exige o documento
- * novo (nunca reaproveita o antigo) e a confirmação de que isso muda a
- * tabela de preço/condições (CPF compra da PH; CNPJ vê custo e negocia
- * direto com o fornecedor).
- */
-export async function trocarTipoPessoaSeller(portalToken: string, raw: unknown): Promise<ActionResult> {
-  const ctx = await resolveClienteLiberado(portalToken);
-  if ("error" in ctx) return { ok: false, error: ctx.error };
-  const parsed = trocarTipoPessoaSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  const v = parsed.data;
-
-  const digits = onlyDigits(v.novoDocumento);
-  if (v.novoTipo === "juridica" && !validateCNPJ(digits)) return { ok: false, error: "CNPJ inválido." };
-  if (v.novoTipo === "fisica" && !validateCPF(digits)) return { ok: false, error: "CPF inválido." };
-
-  const patch =
-    v.novoTipo === "juridica"
-      ? { tipo_pessoa: "juridica", cnpj: digits, cpf: null }
-      : { tipo_pessoa: "fisica", cpf: digits, cnpj: null };
-
-  const { error } = await ctx.db.from("clientes").update(patch).eq("id", ctx.clienteId);
-  if (error) {
-    if (error.code === "23505") return { ok: false, error: "Esse documento já está cadastrado em outra conta." };
-    return { ok: false, error: error.message };
-  }
-
-  revalidatePath("/drop/dashboard/configuracao");
   revalidatePath("/drop/dashboard");
   return { ok: true };
 }

@@ -10,7 +10,7 @@ export default async function OnboardingPage() {
 
   return (
     <AuthCard visual maxWidthClassName="max-w-xl">
-      <OnboardingFlow portalToken={seller.portalToken} tipoPessoa={seller.tipoPessoa} />
+      <OnboardingFlow portalToken={seller.portalToken} />
     </AuthCard>
   );
 }

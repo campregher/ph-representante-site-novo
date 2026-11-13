@@ -35,8 +35,10 @@ export async function salvarOnboardingSeller(portalToken: string, raw: unknown):
     .from("clientes")
     .update({
       onboarding_interesses: v.interesses,
-      onboarding_canal: v.canal,
-      onboarding_volume_mensal: v.volumeMensal,
+      onboarding_ja_vende: v.jaVendeMarketplace,
+      onboarding_tempo_vendendo: v.jaVendeMarketplace ? v.tempoVendendo : null,
+      onboarding_metodos_envio: v.jaVendeMarketplace ? v.metodosEnvio : null,
+      onboarding_vendas_mes: v.jaVendeMarketplace ? v.vendasMes : null,
       onboarding_completo: true,
     })
     .eq("id", ctx.clienteId);

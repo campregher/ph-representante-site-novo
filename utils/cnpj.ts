@@ -19,6 +19,33 @@ export function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
 }
 
+export function formatCPF(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9)
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+export function validateCPF(cpf: string): boolean {
+  const stripped = cpf.replace(/\D/g, "");
+  if (stripped.length !== 11) return false;
+  if (/^(\d)\1+$/.test(stripped)) return false;
+
+  const calcDigit = (base: string, factor: number): number => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) sum += parseInt(base[i]) * (factor - i);
+    const remainder = (sum * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+
+  const d1 = calcDigit(stripped.slice(0, 9), 10);
+  const d2 = calcDigit(stripped.slice(0, 10), 11);
+
+  return parseInt(stripped[9]) === d1 && parseInt(stripped[10]) === d2;
+}
+
 export function validateCNPJ(cnpj: string): boolean {
   const stripped = cnpj.replace(/\D/g, "");
 

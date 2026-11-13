@@ -1,0 +1,83 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createSistemaAdminClient } from "@/lib/supabase/server";
+import { sellerOnboardingSchema, trocarTipoPessoaSchema } from "@/lib/sistema/schemas";
+import { validateCNPJ, validateCPF } from "@/utils/cnpj";
+import { onlyDigits } from "@/lib/sistema/format";
+import type { ActionResult } from "@/lib/sistema/types";
+
+type Db = Awaited<ReturnType<typeof createSistemaAdminClient>>;
+
+async function resolveClienteLiberado(
+  portalToken: string
+): Promise<{ db: Db; clienteId: string } | { error: string }> {
+  const db = await createSistemaAdminClient();
+  const { data: cliente } = await db
+    .from("clientes")
+    .select("id, status, email_confirmado")
+    .eq("portal_token", portalToken)
+    .maybeSingle();
+  if (!cliente) return { error: "Link inválido." };
+  if (cliente.status === "bloqueado") return { error: "Acesso bloqueado." };
+  if (!cliente.email_confirmado || cliente.status === "prospect")
+    return { error: "Cadastro ainda não liberado." };
+  return { db, clienteId: cliente.id as string };
+}
+
+/** Questionário pós-aprovação — direciona quais fornecedores/produtos mostrar pro seller. */
+export async function salvarOnboardingSeller(portalToken: string, raw: unknown): Promise<ActionResult> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const parsed = sellerOnboardingSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const v = parsed.data;
+
+  const { error } = await ctx.db
+    .from("clientes")
+    .update({
+      onboarding_interesses: v.interesses,
+      onboarding_canal: v.canal,
+      onboarding_volume_mensal: v.volumeMensal,
+      onboarding_completo: true,
+    })
+    .eq("id", ctx.clienteId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/drop/onboarding");
+  revalidatePath("/drop/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Seller muda o próprio tipo de cadastro (CPF <-> CNPJ) — exige o documento
+ * novo (nunca reaproveita o antigo) e a confirmação de que isso muda a
+ * tabela de preço/condições (CPF compra da PH; CNPJ vê custo e negocia
+ * direto com o fornecedor).
+ */
+export async function trocarTipoPessoaSeller(portalToken: string, raw: unknown): Promise<ActionResult> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const parsed = trocarTipoPessoaSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const v = parsed.data;
+
+  const digits = onlyDigits(v.novoDocumento);
+  if (v.novoTipo === "juridica" && !validateCNPJ(digits)) return { ok: false, error: "CNPJ inválido." };
+  if (v.novoTipo === "fisica" && !validateCPF(digits)) return { ok: false, error: "CPF inválido." };
+
+  const patch =
+    v.novoTipo === "juridica"
+      ? { tipo_pessoa: "juridica", cnpj: digits, cpf: null }
+      : { tipo_pessoa: "fisica", cpf: digits, cnpj: null };
+
+  const { error } = await ctx.db.from("clientes").update(patch).eq("id", ctx.clienteId);
+  if (error) {
+    if (error.code === "23505") return { ok: false, error: "Esse documento já está cadastrado em outra conta." };
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/drop/dashboard/configuracao");
+  revalidatePath("/drop/dashboard");
+  return { ok: true };
+}

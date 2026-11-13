@@ -260,6 +260,36 @@ export const sellerCadastroSchema = z
   });
 export type SellerCadastroInput = z.input<typeof sellerCadastroSchema>;
 
+export const SELLER_INTERESSE_OPTIONS = [
+  "Calotas", "Tapetes", "Engates", "Acessórios internos", "Frisos", "Outros",
+] as const;
+
+export const SELLER_CANAL_OPTIONS = [
+  { value: "mercado_livre", label: "Mercado Livre" },
+  { value: "shopee", label: "Shopee" },
+  { value: "ambos", label: "Mercado Livre e Shopee" },
+  { value: "ainda_nao", label: "Ainda não vendo" },
+] as const;
+
+export const SELLER_VOLUME_OPTIONS = [
+  { value: "ate_5k", label: "Até R$ 5 mil" },
+  { value: "5k_20k", label: "R$ 5 mil – 20 mil" },
+  { value: "20k_50k", label: "R$ 20 mil – 50 mil" },
+  { value: "acima_50k", label: "Acima de R$ 50 mil" },
+] as const;
+
+export const sellerOnboardingSchema = z.object({
+  interesses: z.array(z.string()).min(1, "Selecione pelo menos uma categoria"),
+  canal: z.enum(["mercado_livre", "shopee", "ambos", "ainda_nao"], { message: "Selecione uma opção" }),
+  volumeMensal: z.enum(["ate_5k", "5k_20k", "20k_50k", "acima_50k"], { message: "Selecione uma opção" }),
+});
+
+export const trocarTipoPessoaSchema = z.object({
+  novoTipo: z.enum(["juridica", "fisica"]),
+  novoDocumento: z.string().trim().min(11, "Documento inválido"),
+  aceite: z.literal(true, { message: "Confirme que entendeu a mudança de condições" }),
+});
+
 export type ClienteInput = z.input<typeof clienteSchema>;
 export type ClienteValues = z.output<typeof clienteSchema>;
 

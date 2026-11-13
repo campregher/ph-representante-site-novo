@@ -8,7 +8,7 @@ import { CheckCircle2, ArrowRight, ArrowLeft, Lock } from "lucide-react";
 import { sellerCadastroSchema, type SellerCadastroInput } from "@/lib/sistema/schemas";
 import { cadastrarSeller } from "@/lib/sistema/actions/seller-cadastro";
 import { UF_LIST } from "@/lib/sistema/types";
-import { Field, Input, Select, FormGrid } from "@/components/sistema/ui/Field";
+import { Field, Input, Select, FormGrid, Checkbox } from "@/components/sistema/ui/Field";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Button } from "@/components/sistema/ui/Button";
 import AuthCard from "@/components/sistema/AuthCard";
@@ -30,6 +30,7 @@ export default function SellerCadastroForm() {
   const [enviando, setEnviando] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [feito, setFeito] = useState<{ jaExistia: boolean } | null>(null);
+  const [isento, setIsento] = useState(false);
 
   const {
     register,
@@ -83,7 +84,10 @@ export default function SellerCadastroForm() {
     };
     set("razao_social", d.razao_social);
     set("nome_fantasia", d.nome_fantasia);
-    set("inscricao_estadual", d.inscricao_estadual);
+    if (d.inscricao_estadual) {
+      set("inscricao_estadual", d.inscricao_estadual);
+      setIsento(false);
+    }
     set("telefone", d.telefone);
     if (d.telefone && !wpp) set("whatsapp", d.telefone);
     set("email", d.email);
@@ -94,6 +98,11 @@ export default function SellerCadastroForm() {
     set("bairro", d.bairro);
     set("cidade", d.cidade);
     set("estado", d.estado);
+  }
+
+  function toggleIsento(checked: boolean) {
+    setIsento(checked);
+    setValue("inscricao_estadual", checked ? "ISENTO" : "", { shouldDirty: true, shouldValidate: true });
   }
 
   async function avancar() {
@@ -202,7 +211,13 @@ export default function SellerCadastroForm() {
                   </div>
                 </Field>
                 <Field label="Inscrição estadual" error={errors.inscricao_estadual?.message}>
-                  <Input {...register("inscricao_estadual")} />
+                  <Input {...register("inscricao_estadual")} disabled={isento} placeholder={isento ? "ISENTO" : undefined} />
+                  <Checkbox
+                    label="Isento de Inscrição Estadual"
+                    checked={isento}
+                    onChange={(e) => toggleIsento(e.target.checked)}
+                    className="mt-1.5"
+                  />
                 </Field>
                 <Field
                   label="Razão social"

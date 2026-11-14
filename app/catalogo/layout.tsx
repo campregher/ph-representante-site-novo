@@ -4,7 +4,7 @@ export default function CatalogoLayout({ children }: { children: React.ReactNode
   return (
     <>
       <Navbar />
-      <div className="pt-16">{children}</div>
+      <div className="pt-16 lg:pt-[99px]">{children}</div>
     </>
   );
 }

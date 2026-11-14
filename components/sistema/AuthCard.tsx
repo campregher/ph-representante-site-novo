@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import ProductWall from "@/components/ProductWall";
 
-function PainelVisual() {
+const MEI_URL = "https://www.gov.br/empresas-e-negocios/pt-br/empreendedor";
+
+function PainelVisual({ semCnpjCta }: { semCnpjCta?: boolean }) {
   return (
     <div className="relative hidden w-[42%] shrink-0 overflow-hidden lg:block">
       {/* fundo — fotos reais do catálogo em tela cheia, sempre preenchendo a altura real */}
@@ -31,6 +33,20 @@ function PainelVisual() {
           <p className="mt-2 text-sm text-gray-300 max-w-xs">
             Catálogo de +1.000 produtos, condições diferenciadas e suporte comercial dedicado.
           </p>
+
+          {semCnpjCta && (
+            <div className="mt-5 max-w-xs rounded-md border border-white/15 bg-white/5 p-4">
+              <p className="text-sm text-gray-300">Ainda não tem CNPJ?</p>
+              <a
+                href={MEI_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
+              >
+                Abra seu MEI grátis no gov.br <ArrowRight size={14} />
+              </a>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-6 text-sm text-gray-300 border-t border-white/15 pt-5">
@@ -56,6 +72,7 @@ export default function AuthCard({
   footer,
   maxWidthClassName = "max-w-sm",
   visual = false,
+  semCnpjCta = false,
 }: {
   title?: string;
   subtitle?: ReactNode;
@@ -65,16 +82,18 @@ export default function AuthCard({
   maxWidthClassName?: string;
   /** painel com fotos reais de produto + marca ao lado do formulário (telas de entrada: login e cadastro) */
   visual?: boolean;
+  /** mostra no painel visual a chamada pra quem não tem CNPJ abrir um MEI (só faz sentido no cadastro de seller) */
+  semCnpjCta?: boolean;
 }) {
   if (visual) {
     return (
       <div data-sistema className="flex min-h-screen bg-neutral-100 text-neutral-900">
-        <PainelVisual />
+        <PainelVisual semCnpjCta={semCnpjCta} />
         <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-10">
           <div className={`w-full ${maxWidthClassName}`}>
             <Link
               href="/"
-              className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-brand lg:hidden"
+              className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-brand"
             >
               <ArrowLeft size={15} /> Voltar para o site
             </Link>

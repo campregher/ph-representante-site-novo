@@ -116,12 +116,8 @@ export async function cadastrarSeller(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const v = parsed.data;
-  // o campo escondido pelo toggle PJ/PF pode chegar com valor antigo (RHF não
-  // limpa input desmontado por padrão) — ignora o que não corresponde ao tipo escolhido
-  const cnpj = v.tipo_pessoa === "juridica" && v.cnpj ? onlyDigits(v.cnpj) : null;
-  const cpf = v.tipo_pessoa === "fisica" && v.cpf ? onlyDigits(v.cpf) : null;
+  const cnpj = v.cnpj ? onlyDigits(v.cnpj) : null;
   if (cnpj && cnpj.length !== 14) return { ok: false, error: "CNPJ inválido — precisa ter 14 dígitos." };
-  if (cpf && cpf.length !== 11) return { ok: false, error: "CPF inválido — precisa ter 11 dígitos." };
 
   const db = await createSistemaAdminClient();
 
@@ -132,7 +128,7 @@ export async function cadastrarSeller(
     .select(
       "id, is_seller, portal_token, auth_user_id, telefone, whatsapp, email, cep, logradouro, numero, complemento, bairro, cidade, estado"
     )
-    .eq(cnpj ? "cnpj" : "cpf", cnpj ?? cpf)
+    .eq("cnpj", cnpj)
     .maybeSingle();
 
   if (existente) {
@@ -192,9 +188,8 @@ export async function cadastrarSeller(
   const { data: novo, error } = await db
     .from("clientes")
     .insert({
-      tipo_pessoa: v.tipo_pessoa,
+      tipo_pessoa: "juridica",
       cnpj,
-      cpf,
       razao_social: v.razao_social,
       nome_fantasia: v.nome_fantasia,
       inscricao_estadual: v.inscricao_estadual,

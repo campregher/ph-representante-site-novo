@@ -166,6 +166,11 @@ export interface Cliente {
   is_seller: boolean;
   desconto_cascata: number[];
   observacoes: string | null;
+  onboarding_completo: boolean;
+  onboarding_ja_vende: boolean | null;
+  onboarding_tempo_vendendo: string | null;
+  onboarding_metodos_envio: string[] | null;
+  onboarding_vendas_mes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -398,6 +403,13 @@ export interface DropProduto {
   nome: string;
   descricao: string | null;
   imagem_url: string | null;
+  imagens: string[];
+  ml_category_id: string | null;
+  ml_category_nome: string | null;
+  marca: string | null;
+  categoria_interna: string | null;
+  variacao: string | null;
+  transporte_aceito: string[];
   estoque_atual: number;
   estoque_minimo: number;
   ativo: boolean;
@@ -405,11 +417,9 @@ export interface DropProduto {
   updated_at: string;
 }
 
-/** Linha de produto já com os preços das duas tabelas resolvidos, pra tela de admin. */
+/** Linha de produto já com o preço (tabela CNPJ) resolvido, pra tela de admin. */
 export interface DropProdutoRow extends DropProduto {
   fornecedor: string | null;
-  custoCpf: number | null;
-  precoSugeridoCpf: number | null;
   custoCnpj: number | null;
   precoSugeridoCnpj: number | null;
 }

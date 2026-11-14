@@ -227,9 +227,7 @@ export const clienteSchema = z
  *  seller pode preencher; status/is_seller/vendedor são fixados pela action. */
 export const sellerCadastroSchema = z
   .object({
-    tipo_pessoa: z.enum(["juridica", "fisica"]).default("juridica"),
     cnpj: optionalText,
-    cpf: optionalText,
     razao_social: optionalText,
     nome_fantasia: optionalText,
     inscricao_estadual: optionalText,
@@ -250,8 +248,8 @@ export const sellerCadastroSchema = z
     message: "Informe a razão social ou o nome",
     path: ["razao_social"],
   })
-  .refine((d) => !!(d.cnpj || d.cpf), {
-    message: "Informe o CNPJ ou o CPF",
+  .refine((d) => !!d.cnpj, {
+    message: "Informe o CNPJ",
     path: ["cnpj"],
   })
   .refine((d) => d.senha === d.confirmar_senha, {
@@ -264,31 +262,67 @@ export const SELLER_INTERESSE_OPTIONS = [
   "Calotas", "Tapetes", "Engates", "Acessórios internos", "Frisos", "Outros",
 ] as const;
 
-export const SELLER_CANAL_OPTIONS = [
-  { value: "mercado_livre", label: "Mercado Livre" },
-  { value: "shopee", label: "Shopee" },
-  { value: "ambos", label: "Mercado Livre e Shopee" },
-  { value: "ainda_nao", label: "Ainda não vendo" },
+export const SELLER_TEMPO_VENDENDO_OPTIONS = [
+  { value: "menos_6m", label: "Menos de 6 meses" },
+  { value: "seis_12m", label: "6 meses a 1 ano" },
+  { value: "um_2anos", label: "1 a 2 anos" },
+  { value: "mais_2anos", label: "Mais de 2 anos" },
 ] as const;
 
-export const SELLER_VOLUME_OPTIONS = [
-  { value: "ate_5k", label: "Até R$ 5 mil" },
-  { value: "5k_20k", label: "R$ 5 mil – 20 mil" },
-  { value: "20k_50k", label: "R$ 20 mil – 50 mil" },
-  { value: "acima_50k", label: "Acima de R$ 50 mil" },
+/** Métodos de envio — nome já indica o marketplace (Mercado Envios = ML,
+ *  Shopee Express = Shopee), então cobre a pergunta "qual marketplace" sem
+ *  precisar de um campo separado. Qual produto serve pra cada tipo de envio
+ *  é um cadastro futuro, feito depois, fora desse questionário. */
+export const SELLER_METODO_ENVIO_OPTIONS = [
+  { value: "correios", label: "Correios" },
+  { value: "mercado_envios", label: "Mercado Envios" },
+  { value: "shopee_express", label: "Shopee Express" },
+  { value: "flex", label: "Flex" },
+  { value: "entrega_direta", label: "Entrega Direta" },
 ] as const;
 
-export const sellerOnboardingSchema = z.object({
-  interesses: z.array(z.string()).min(1, "Selecione pelo menos uma categoria"),
-  canal: z.enum(["mercado_livre", "shopee", "ambos", "ainda_nao"], { message: "Selecione uma opção" }),
-  volumeMensal: z.enum(["ate_5k", "5k_20k", "20k_50k", "acima_50k"], { message: "Selecione uma opção" }),
-});
+/** Mesmas opções, sem "Shopee Express" — não existe no Mercado Livre, então
+ *  não entra na escolha de método de envio pra publicar lá (ver
+ *  lib/sistema/dropshipping-ml-catalogo.ts). */
+export const ML_METODO_ENVIO_OPTIONS = SELLER_METODO_ENVIO_OPTIONS.filter((o) => o.value !== "shopee_express");
 
-export const trocarTipoPessoaSchema = z.object({
-  novoTipo: z.enum(["juridica", "fisica"]),
-  novoDocumento: z.string().trim().min(11, "Documento inválido"),
-  aceite: z.literal(true, { message: "Confirme que entendeu a mudança de condições" }),
-});
+/** Os dois tipos de anúncio de verdade pra revenda no Mercado Livre — ids
+ *  confirmados contra GET /sites/MLB/listing_types. Os outros tiers que a
+ *  API lista (Diamante/Ouro/Prata/Bronze/Grátis) são legados/promocionais,
+ *  não uma escolha real na hora de publicar. "gold_pro" (Premium) é o
+ *  padrão quando o seller não escolhe (ver resolverListingType em
+ *  lib/sistema/dropshipping-ml-catalogo.ts). */
+export const ML_TIPO_ANUNCIO_OPTIONS = [
+  { value: "gold_special", label: "Clássico (comissão menor)" },
+  { value: "gold_pro", label: "Premium (mais exposição)" },
+] as const;
+
+export const SELLER_VENDAS_MES_OPTIONS = [
+  { value: "ate_10", label: "Até 10 vendas" },
+  { value: "11_50", label: "11 a 50 vendas" },
+  { value: "51_200", label: "51 a 200 vendas" },
+  { value: "mais_200", label: "Mais de 200 vendas" },
+] as const;
+
+export const sellerOnboardingSchema = z
+  .object({
+    jaVendeMarketplace: z.boolean(),
+    tempoVendendo: z.enum(["menos_6m", "seis_12m", "um_2anos", "mais_2anos"]).optional(),
+    metodosEnvio: z.array(z.string()).optional(),
+    vendasMes: z.enum(["ate_10", "11_50", "51_200", "mais_200"]).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (!d.jaVendeMarketplace) return;
+    if (!d.tempoVendendo) {
+      ctx.addIssue({ code: "custom", path: ["tempoVendendo"], message: "Selecione uma opção" });
+    }
+    if (!d.metodosEnvio || d.metodosEnvio.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["metodosEnvio"], message: "Selecione pelo menos um método" });
+    }
+    if (!d.vendasMes) {
+      ctx.addIssue({ code: "custom", path: ["vendasMes"], message: "Selecione uma opção" });
+    }
+  });
 
 export type ClienteInput = z.input<typeof clienteSchema>;
 export type ClienteValues = z.output<typeof clienteSchema>;
@@ -526,14 +560,18 @@ export const dropProdutoSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome"),
   descricao: optionalText,
   imagem_url: optionalText,
+  imagens: z.array(z.string()).default([]),
+  ml_category_id: optionalText,
+  ml_category_nome: optionalText,
+  marca: optionalText,
+  categoria_interna: optionalText,
+  variacao: optionalText,
+  transporte_aceito: z.array(z.string()).default([]),
   fornecedor_id: optionalText,
   estoque_atual: optionalNumber,
   estoque_minimo: optionalNumber,
   ativo: z.boolean().default(true),
-  // preço por tabela — "custo" do CPF já é o preço que ele paga à PH (margem embutida);
-  // "custo" do CNPJ é o custo real de fábrica (CNPJ paga o fornecedor direto)
-  custoCpf: optionalNumber,
-  precoSugeridoCpf: optionalNumber,
+  // custo real de fábrica — seller CNPJ paga o fornecedor direto
   custoCnpj: optionalNumber,
   precoSugeridoCnpj: optionalNumber,
 });

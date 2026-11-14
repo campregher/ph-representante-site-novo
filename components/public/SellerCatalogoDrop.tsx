@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
 import { ExternalLink, Pause, Play, Upload } from "lucide-react";
 import {
@@ -27,6 +28,7 @@ export interface CatalogoDropItemView {
   id: string;
   sku: string;
   nome: string;
+  imagem_url: string | null;
   categoria: string | null;
   estoque_atual: number;
   precoMinimo: number;
@@ -229,6 +231,13 @@ export default function SellerCatalogoDrop({
                       className="mt-1 h-4 w-4 rounded border-neutral-300 text-brand"
                     />
                   )}
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100">
+                    {p.imagem_url ? (
+                      <Image src={p.imagem_url} alt={p.nome} fill className="object-contain" unoptimized />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
+                    )}
+                  </div>
                   <div className="min-w-0">
                     <p className="truncate font-medium text-neutral-900">{p.nome}</p>
                     <p className="text-xs text-neutral-400">

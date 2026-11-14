@@ -15,7 +15,7 @@ export async function dropFornecedorOptions(): Promise<{ id: string; label: stri
 }
 
 const PRODUTO_COLS =
-  "id, fornecedor_id, sku, nome, descricao, imagem_url, ml_category_id, ml_category_nome, marca, categoria_interna, transporte_aceito, estoque_atual, estoque_minimo, ativo, created_at, updated_at, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))";
+  "id, fornecedor_id, sku, nome, descricao, imagem_url, imagens, ml_category_id, ml_category_nome, marca, categoria_interna, transporte_aceito, estoque_atual, estoque_minimo, ativo, created_at, updated_at, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))";
 
 type ProdutoPrecoRow = {
   id: string;
@@ -24,6 +24,7 @@ type ProdutoPrecoRow = {
   nome: string;
   descricao: string | null;
   imagem_url: string | null;
+  imagens: string[] | null;
   ml_category_id: string | null;
   ml_category_nome: string | null;
   marca: string | null;
@@ -47,6 +48,7 @@ function resolvePrecos(row: ProdutoPrecoRow): DropProdutoRow {
     nome: row.nome,
     descricao: row.descricao,
     imagem_url: row.imagem_url,
+    imagens: row.imagens ?? [],
     ml_category_id: row.ml_category_id,
     ml_category_nome: row.ml_category_nome,
     marca: row.marca,

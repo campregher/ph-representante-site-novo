@@ -14,18 +14,22 @@ type DropDb = Awaited<ReturnType<typeof createDropshippingAdminClient>>;
  *  do seller mora no schema `comercial`, mesmo pro catálogo de dropshipping. */
 async function resolveClienteLiberado(
   portalToken: string
-): Promise<{ db: SistemaDb; clienteId: string } | { error: string }> {
+): Promise<{ db: SistemaDb; clienteId: string; metodosEnvio: string[] } | { error: string }> {
   const db = await createSistemaAdminClient();
   const { data: cliente } = await db
     .from("clientes")
-    .select("id, status, email_confirmado")
+    .select("id, status, email_confirmado, onboarding_metodos_envio")
     .eq("portal_token", portalToken)
     .maybeSingle();
   if (!cliente) return { error: "Link inválido." };
   if (cliente.status === "bloqueado") return { error: "Acesso bloqueado." };
   if (!cliente.email_confirmado || cliente.status === "prospect")
     return { error: "Cadastro ainda não liberado." };
-  return { db, clienteId: cliente.id as string };
+  return {
+    db,
+    clienteId: cliente.id as string,
+    metodosEnvio: (cliente.onboarding_metodos_envio as string[] | null) ?? [],
+  };
 }
 
 /** Garante que a conta do ML informada é mesmo desse seller — nunca confia
@@ -48,7 +52,7 @@ async function buscarProdutoElegivel(
   const { data: p } = await db
     .from("produtos")
     .select(
-      "id, sku, nome, descricao, marca, imagem_url, ml_category_id, transporte_aceito, ativo, estoque_atual, produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
+      "id, sku, nome, descricao, marca, imagem_url, imagens, ml_category_id, transporte_aceito, ativo, estoque_atual, produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
     )
     .eq("id", produtoId)
     .maybeSingle();
@@ -65,6 +69,7 @@ async function buscarProdutoElegivel(
       descricao: p.descricao as string | null,
       marca: p.marca as string | null,
       imagem_url: p.imagem_url as string | null,
+      imagens: (p.imagens as string[] | null) ?? [],
       ml_category_id: p.ml_category_id as string | null,
       transporte_aceito: (p.transporte_aceito as string[] | null) ?? [],
     },
@@ -88,7 +93,7 @@ export async function publicarProdutoML(
   if (!Number.isFinite(precoRevenda) || precoRevenda < pr.precoMinimo)
     return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(pr.precoMinimo)}.` };
 
-  const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda);
+  const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda, ctx.metodosEnvio);
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true, permalink: res.permalink };
@@ -132,7 +137,7 @@ export async function publicarEmMassaML(
       });
       continue;
     }
-    const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, item.precoRevenda);
+    const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, item.precoRevenda, ctx.metodosEnvio);
     resultados.push({ produtoId: item.produtoId, ok: res.ok, error: res.ok ? undefined : res.error });
   }
 

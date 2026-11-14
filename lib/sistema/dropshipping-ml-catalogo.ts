@@ -19,6 +19,7 @@ export interface AnuncioProdutoDrop {
   descricao: string | null;
   marca: string | null;
   imagem_url: string | null;
+  imagens: string[];
   ml_category_id: string | null;
   transporte_aceito: string[];
 }
@@ -27,14 +28,17 @@ type MlResult<T> = ({ ok: true } & T) | { ok: false; error: string };
 
 /**
  * Mapeia o(s) transporte(s) que o produto aceita (definidos no admin) pro
- * objeto `shipping` que a API do Mercado Livre espera na criação do item.
- * "shopee_express" não existe no ML — só serve pro catálogo da Shopee — e
- * por isso nunca entra nesse mapa. Prioridade quando o produto aceita mais
- * de um: Mercado Envios (mode "me2", sem logistic_type — deixa a conta do
- * seller decidir qual sub-tipo ela tem habilitado) > Flex (me2 +
- * logistic_type "self_service", só funciona se a conta do seller tiver Flex
- * habilitado pelo ML) > Correios/Entrega Direta (mode "custom" — seller
- * cuida do envio fora da rede do Mercado Envios).
+ * objeto `shipping` que a API do Mercado Livre espera na criação do item —
+ * mas só considera um método se o SELLER também disse (no questionário de
+ * onboarding) que usa esse método; se o seller não respondeu/não declarou
+ * nenhum, cai de volta pra lista do produto sozinha (não bloqueia quem ainda
+ * não preencheu o questionário). "shopee_express" não existe no ML — só
+ * serve pro catálogo da Shopee — e por isso nunca entra nesse mapa.
+ * Prioridade quando mais de um método bate: Mercado Envios (mode "me2", sem
+ * logistic_type — deixa a conta do seller decidir qual sub-tipo ela tem
+ * habilitado) > Flex (me2 + logistic_type "self_service", só funciona se a
+ * conta do seller tiver Flex habilitado pelo ML) > Correios/Entrega Direta
+ * (mode "custom" — seller cuida do envio fora da rede do Mercado Envios).
  *
  * IMPORTANTE: essa parte ainda não foi testada contra uma conta real do ML
  * conectada — os nomes dos campos (mode/logistic_type/self_service/custom)
@@ -43,18 +47,32 @@ type MlResult<T> = ({ ok: true } & T) | { ok: false; error: string };
  * que só a resposta real da API confirma. Teste com uma publicação real
  * antes de confiar nisso em produção.
  */
-function resolverShippingML(transporteAceito: string[]): { shipping: Record<string, unknown> } | { error: string } {
-  if (transporteAceito.includes("mercado_envios")) {
+function resolverShippingML(
+  transporteAceito: string[],
+  sellerMetodosEnvio: string[]
+): { shipping: Record<string, unknown> } | { error: string } {
+  const disponiveis =
+    sellerMetodosEnvio.length > 0
+      ? transporteAceito.filter((t) => sellerMetodosEnvio.includes(t))
+      : transporteAceito;
+
+  if (disponiveis.includes("mercado_envios")) {
     return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false } };
   }
-  if (transporteAceito.includes("flex")) {
+  if (disponiveis.includes("flex")) {
     return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false, logistic_type: "self_service" } };
   }
-  if (transporteAceito.includes("correios") || transporteAceito.includes("entrega_direta")) {
+  if (disponiveis.includes("correios") || disponiveis.includes("entrega_direta")) {
     return { shipping: { mode: "custom" } };
   }
   if (transporteAceito.length === 0) {
     return { error: "Produto sem transporte aceito configurado (fale com a PH)." };
+  }
+  if (disponiveis.length === 0) {
+    return {
+      error:
+        "Nenhum dos métodos de envio que você usa (configurados no seu cadastro) bate com o transporte aceito por esse produto.",
+    };
   }
   return { error: "Nenhum dos transportes aceitos por esse produto funciona no Mercado Livre (ex.: Shopee Express é só pra Shopee)." };
 }
@@ -98,12 +116,13 @@ export async function publicarAnuncioMLDrop(
   clienteId: string,
   mlContaId: string,
   produto: AnuncioProdutoDrop,
-  precoRevenda: number
+  precoRevenda: number,
+  sellerMetodosEnvio: string[] = []
 ): Promise<MlResult<{ mlItemId: string; permalink: string }>> {
   if (!produto.ml_category_id)
     return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
 
-  const shippingRes = resolverShippingML(produto.transporte_aceito);
+  const shippingRes = resolverShippingML(produto.transporte_aceito, sellerMetodosEnvio);
   if ("error" in shippingRes) return { ok: false, error: shippingRes.error };
 
   let token: string;
@@ -121,7 +140,8 @@ export async function publicarAnuncioMLDrop(
     };
   }
 
-  const pictures = produto.imagem_url ? [{ source: produto.imagem_url }] : [];
+  const fotos = produto.imagens.length > 0 ? produto.imagens : produto.imagem_url ? [produto.imagem_url] : [];
+  const pictures = fotos.map((url) => ({ source: url }));
   const attributes = [
     ...(produto.marca ? [{ id: "BRAND", value_name: produto.marca }] : []),
     { id: "PART_NUMBER", value_name: produto.sku },

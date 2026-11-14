@@ -115,7 +115,8 @@ export async function salvarDropProduto(id: string | null, raw: unknown): Promis
     sku: v.sku,
     nome: v.nome,
     descricao: v.descricao,
-    imagem_url: v.imagem_url,
+    imagem_url: v.imagens[0] || v.imagem_url || null,
+    imagens: v.imagens,
     ml_category_id: v.ml_category_id || null,
     ml_category_nome: v.ml_category_nome || null,
     marca: v.marca,
@@ -162,6 +163,33 @@ export async function excluirDropProduto(id: string): Promise<ActionResult> {
   if (error) return { ok: false, error: error.message };
   revalidatePath("/sistema/dropshipping/produtos");
   return { ok: true };
+}
+
+export interface PatchDropProdutosEmMassa {
+  categoria_interna?: string;
+  transporte_aceito?: string[];
+  ml_category_id?: string;
+  ml_category_nome?: string;
+}
+
+/** Aplica o mesmo patch (categoria interna, transporte aceito e/ou categoria
+ *  do ML) pra vários produtos de uma vez — evita abrir um por um pra
+ *  classificar uma importação grande. */
+export async function salvarDropProdutosEmMassa(
+  produtoIds: string[],
+  patch: PatchDropProdutosEmMassa
+): Promise<ActionResult<{ atualizados: number }>> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+  if (produtoIds.length === 0) return { ok: false, error: "Nenhum produto selecionado." };
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Nenhuma alteração pra aplicar." };
+
+  const db = await createDropshippingClient();
+  const { error } = await db.from("produtos").update(patch).in("id", produtoIds);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/sistema/dropshipping/produtos");
+  return { ok: true, atualizados: produtoIds.length };
 }
 
 // ──────────────────────── Importação via CSV ───────────────────────────────
@@ -234,7 +262,8 @@ export interface ImportarFornecedorResultado {
  * (colunas: nome, razao_social, cnpj, telefone, whatsapp, email). Modo
  * "cadastro_produtos": cada linha é um produto, com o fornecedor
  * identificado pelo nome (cria o fornecedor se não existir) — colunas:
- * fornecedor, sku, nome, descricao, marca, imagem_url, estoque_atual,
+ * fornecedor, sku, nome, descricao, marca, imagens (várias URLs
+ * separadas por ";" — a primeira vira a capa), estoque_atual,
  * custo_cnpj, preco_sugerido_cnpj.
  */
 export async function importarDropFornecedorCsv(
@@ -308,12 +337,17 @@ export async function importarDropFornecedorCsv(
     // produtos.sku tem índice único por lower(sku) (expressão) — o upsert do
     // PostgREST com onConflict só mira índice/constraint de coluna literal,
     // não expressão, então faz sempre select-then-insert-or-update à mão.
+    const imagens = (row.imagens || row.imagem_url || "")
+      .split(";")
+      .map((u) => u.trim())
+      .filter(Boolean);
     const produtoRow = {
       sku,
       nome,
       descricao: row.descricao || null,
       marca: row.marca || null,
-      imagem_url: row.imagem_url || null,
+      imagem_url: imagens[0] || null,
+      imagens,
       fornecedor_id: fid,
       estoque_atual: Math.round(numOrNull(row.estoque_atual) ?? 0),
     };

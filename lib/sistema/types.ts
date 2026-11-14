@@ -403,6 +403,7 @@ export interface DropProduto {
   nome: string;
   descricao: string | null;
   imagem_url: string | null;
+  imagens: string[];
   ml_category_id: string | null;
   ml_category_nome: string | null;
   marca: string | null;

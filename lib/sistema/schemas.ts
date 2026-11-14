@@ -544,6 +544,7 @@ export const dropProdutoSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome"),
   descricao: optionalText,
   imagem_url: optionalText,
+  imagens: z.array(z.string()).default([]),
   ml_category_id: optionalText,
   ml_category_nome: optionalText,
   marca: optionalText,

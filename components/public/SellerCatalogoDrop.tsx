@@ -106,10 +106,12 @@ export default function SellerCatalogoDrop({
     return mlContas.filter((c) => !usadas.has(c.id));
   };
 
-  // Produtos com o mesmo título são variações (cor/acabamento) do MESMO
-  // anúncio no ML — agrupa pra publicar como 1 anúncio com variações (não
-  // N anúncios simples separados, que era o bug) e pra não listar várias
-  // linhas repetidas por produto.
+  // Produtos com o mesmo título são variações (cor/acabamento) do mesmo
+  // produto — agrupa pra publicar todas de uma vez (cada uma ainda vira um
+  // item próprio no ML, mas com BRAND+PART_NUMBER iguais, que é o que faz
+  // o próprio Mercado Livre juntar elas visualmente — ver
+  // lib/sistema/dropshipping-ml-catalogo.ts) e pra não listar várias linhas
+  // repetidas por produto.
   const grupos = useMemo(() => {
     const porNome = new Map<string, CatalogoDropItemView[]>();
     for (const p of itens) {
@@ -220,7 +222,7 @@ export default function SellerCatalogoDrop({
       }
       const falhas = res.resultados.filter((r) => !r.ok);
       if (falhas.length === 0)
-        toast.success(`Publicado em ${res.resultados.length} conta(s), ${variantes.length} variações no mesmo anúncio.`);
+        toast.success(`Publicado em ${res.resultados.length} conta(s), ${variantes.length} variações.`);
       else toast.error(`${res.resultados.length - falhas.length} publicado(s), ${falhas.length} falhou(aram): ${falhas[0].error}`);
       router.refresh();
     });
@@ -405,8 +407,8 @@ export default function SellerCatalogoDrop({
   }
 
   /** `indentado` = variação dentro de um grupo: publicar/pausar/preço são
-   *  controlados no cabeçalho do grupo (1 anúncio com variações), não aqui —
-   *  essa linha só mostra os dados da variação e "ver cadastro". */
+   *  controlados no cabeçalho do grupo (publica todas de uma vez), não
+   *  aqui — essa linha só mostra os dados da variação e "ver cadastro". */
   function linhaItem(p: CatalogoDropItemView, indentado: boolean) {
     const disponiveis = contasDisponiveis(p);
     const podeSelecionar = !indentado && p.mlCategoriaDefinida && disponiveis.length > 0;
@@ -618,7 +620,7 @@ export default function SellerCatalogoDrop({
                     <div className="min-w-0">
                       <p className="truncate font-medium text-neutral-900">{base.nome}</p>
                       <p className="text-xs text-neutral-400">
-                        {variantes.length} variações (1 anúncio) · {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
+                        {variantes.length} variações (agrupadas no ML) · {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
                       </p>
                       {!base.mlCategoriaDefinida && (
                         <p className="text-xs text-yellow-600">Categoria do ML ainda não configurada — fale com a PH.</p>
@@ -636,7 +638,7 @@ export default function SellerCatalogoDrop({
                       />
                       {disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
                         <Button size="sm" onClick={() => publicarGrupo(variantes)} loading={pending} disabled={!mlConectado}>
-                          <Upload size={13} /> Publicar c/ variações
+                          <Upload size={13} /> Publicar variações
                         </Button>
                       )}
                     </div>
@@ -679,7 +681,7 @@ export default function SellerCatalogoDrop({
                           ) : (
                             <>
                               <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
-                                Anunciado (com variações)
+                                Anunciado (variações agrupadas)
                               </span>
                               {a.permalink && (
                                 <a

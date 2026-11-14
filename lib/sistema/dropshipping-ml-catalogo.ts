@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createDropshippingAdminClient } from "@/lib/supabase/server";
 import { getValidMlToken } from "@/lib/sistema/ml-auth";
 
@@ -114,33 +115,6 @@ async function atributosFamilyObrigatorios(
 }
 
 /**
- * Acha o atributo que o Mercado Livre usa como variação nessa categoria
- * (ex.: COLOR pra "Apoios de Braço" — tag `allow_variations`). Se a
- * categoria não tiver exatamente um, não dá pra publicar como variações
- * (o chamador cai pra erro pedindo contato com a PH).
- */
-async function atributoVariacaoML(categoryId: string): Promise<CategoriaAttr | null> {
-  const attrs = await categoriaAttrs(categoryId);
-  const candidatos = attrs.filter((a) => a.tags?.allow_variations);
-  return candidatos.length === 1 ? candidatos[0] : null;
-}
-
-/** Resolve o valor desse atributo de variação pro texto da cor/variação
- *  cadastrada (ex.: "Couro Bege") — value_name direto se o atributo aceita
- *  texto livre, ou acha o value_id correspondente se é uma lista fechada. */
-function valorAtributoVariacao(
-  attr: CategoriaAttr,
-  variacaoTexto: string
-): { value_name: string } | { value_id: string } | null {
-  if (attr.value_type === "string") return { value_name: variacaoTexto };
-  if (attr.value_type === "list") {
-    const match = attr.values?.find((v) => v.name.toLowerCase() === variacaoTexto.toLowerCase());
-    return match ? { value_id: match.id } : null;
-  }
-  return null;
-}
-
-/**
  * Publica um produto do catálogo de dropshipping como anúncio novo no ML e
  * grava o vínculo em `dropshipping.seller_ml_anuncios`.
  */
@@ -248,19 +222,47 @@ export interface AnuncioGrupoDrop {
 }
 
 /**
- * Publica um GRUPO de variações (cor/acabamento) do mesmo produto como UM
- * único anúncio com variações no ML — corrige o bug de cada variação virar
- * um anúncio simples separado. Grava uma linha em
- * `dropshipping.seller_ml_anuncios` por produto/variação, todas apontando
- * pro mesmo `ml_item_id` (cada uma com seu `ml_variation_id` próprio).
+ * PART_NUMBER sintético e estável, compartilhado por todas as variações do
+ * mesmo produto (hash do nome) — é isso que faz o Mercado Livre agrupar os
+ * itens na mesma "família" (visualmente, 1 produto com seletor de cor),
+ * com COLOR como o atributo que varia entre eles.
+ *
+ * IMPORTANTE — por que não usa `variations[]`: pra categorias com atributo
+ * FAMILY obrigatório (a maioria de peças automotivas daqui, ex.: COLOR
+ * exige VEHICLE_TYPE), testei ao vivo contra a API real e o ML REJEITA o
+ * item ("the field variations is invalid with family name") quando o body
+ * tem `variations` E `family_name` juntos. O jeito certo é publicar cada
+ * variação como item SEPARADO, com BRAND+PART_NUMBER iguais (atributos
+ * PARENT_PK dessa categoria) e COLOR (CHILD_PK) diferente — confirmado
+ * criando 2 itens de teste reais: vieram com o mesmo `family_id`.
  */
-export async function publicarAnuncioMLDropComVariacoes(
+function partNumberDoGrupo(nome: string): string {
+  return createHash("sha1").update(nome).digest("hex").slice(0, 16);
+}
+
+export interface PublicarVarianteResultado {
+  produtoId: string;
+  sku: string;
+  ok: boolean;
+  error?: string;
+  mlItemId?: string;
+  permalink?: string;
+}
+
+/**
+ * Publica um GRUPO de variações (cor/acabamento) do mesmo produto no ML —
+ * um item por variação (ver `partNumberDoGrupo`), que o próprio ML agrupa
+ * visualmente numa família. Continua (parcialmente, se alguma variação
+ * falhar) salvando 1 linha por produto/variação em
+ * `dropshipping.seller_ml_anuncios`, cada uma com seu PRÓPRIO ml_item_id.
+ */
+export async function publicarGrupoMLDrop(
   clienteId: string,
   mlContaId: string,
   grupo: AnuncioGrupoDrop,
   precoRevenda: number,
   sellerMetodosEnvio: string[] = []
-): Promise<MlResult<{ mlItemId: string; permalink: string }>> {
+): Promise<MlResult<{ resultados: PublicarVarianteResultado[] }>> {
   if (!grupo.ml_category_id)
     return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
   if (grupo.variantes.length < 2) return { ok: false, error: "Esse produto não tem variações pra agrupar." };
@@ -283,134 +285,72 @@ export async function publicarAnuncioMLDropComVariacoes(
     };
   }
 
-  const attrVariacao = await atributoVariacaoML(grupo.ml_category_id);
-  if (!attrVariacao) {
-    return {
-      ok: false,
-      error: "Essa categoria do Mercado Livre não tem um atributo de variação (ex.: cor) bem definido — fale com a PH.",
-    };
-  }
-
-  const variations: Record<string, unknown>[] = [];
-  for (const v of grupo.variantes) {
-    const valor = valorAtributoVariacao(attrVariacao, v.variacao);
-    if (!valor) {
-      return {
-        ok: false,
-        error: `Não consegui mapear a variação "${v.variacao}" (produto ${v.sku}) pro Mercado Livre — fale com a PH.`,
-      };
-    }
-    variations.push({
-      attribute_combinations: [{ id: attrVariacao.id, ...valor }],
-      price: precoRevenda,
-      available_quantity: v.estoque_atual,
-      seller_custom_field: v.sku,
-    });
-  }
-
-  // Pool de fotos compartilhado por todas as variações — a API do ML permite
-  // atribuir foto específica por variação (picture_ids), mas isso exige um
-  // 2º passo (upload de fotos retorna id, só depois dá pra linkar na
-  // variação); não implementado ainda, então todas as variações mostram a
-  // mesma galeria por enquanto (hoje elas já compartilham as mesmas fotos
-  // na prática, então não há perda real).
-  const fotos = [...new Set(grupo.variantes.flatMap((v) => v.imagens))];
-  const pictures = fotos.map((url) => ({ source: url }));
-  const attributes = [...(grupo.marca ? [{ id: "BRAND", value_name: grupo.marca }] : []), ...familyAttrs];
+  const partNumber = partNumberDoGrupo(grupo.nome);
   const nomeCurto = grupo.nome.slice(0, 60);
   const isFamily = familyAttrs.length > 0;
+  const db = await createDropshippingAdminClient();
+  const resultados: PublicarVarianteResultado[] = [];
 
-  const body = {
-    ...(isFamily ? { family_name: nomeCurto } : { title: nomeCurto }),
-    category_id: grupo.ml_category_id,
-    currency_id: "BRL",
-    buying_mode: "buy_it_now",
-    condition: "new",
-    listing_type_id: "gold_pro",
-    pictures,
-    attributes,
-    variations,
-    shipping: shippingRes.shipping,
-  };
+  for (const v of grupo.variantes) {
+    const attributes = [
+      ...(grupo.marca ? [{ id: "BRAND", value_name: grupo.marca }] : []),
+      { id: "PART_NUMBER", value_name: partNumber },
+      { id: "COLOR", value_name: v.variacao },
+      ...familyAttrs,
+    ];
+    const body = {
+      ...(isFamily ? { family_name: nomeCurto } : { title: nomeCurto }),
+      category_id: grupo.ml_category_id,
+      price: precoRevenda,
+      currency_id: "BRL",
+      available_quantity: 1,
+      buying_mode: "buy_it_now",
+      condition: "new",
+      listing_type_id: "gold_pro",
+      pictures: v.imagens.map((url) => ({ source: url })),
+      attributes,
+      shipping: shippingRes.shipping,
+    };
 
-  const res = await fetch(`${ML_BASE}/items`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao publicar no Mercado Livre.") };
-
-  if (grupo.descricao) {
-    await fetch(`${ML_BASE}/items/${data.id}/description`, {
+    const res = await fetch(`${ML_BASE}/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ plain_text: grupo.descricao }),
-    }).catch(() => {});
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      resultados.push({ produtoId: v.id, sku: v.sku, ok: false, error: mlErro(data, "Erro ao publicar no Mercado Livre.") });
+      continue;
+    }
+
+    if (grupo.descricao) {
+      await fetch(`${ML_BASE}/items/${data.id}/description`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ plain_text: grupo.descricao }),
+      }).catch(() => {});
+    }
+
+    const { error } = await db.from("seller_ml_anuncios").upsert(
+      {
+        cliente_id: clienteId,
+        produto_id: v.id,
+        ml_conta_id: mlContaId,
+        ml_item_id: data.id as string,
+        ml_status: (data.status as string) ?? "active",
+        ml_permalink: data.permalink as string | null,
+        preco_revenda: precoRevenda,
+      },
+      { onConflict: "cliente_id,produto_id,ml_conta_id" }
+    );
+    if (error) {
+      resultados.push({ produtoId: v.id, sku: v.sku, ok: false, error: `Publicado no ML, mas falhou salvar localmente: ${error.message}` });
+      continue;
+    }
+    resultados.push({ produtoId: v.id, sku: v.sku, ok: true, mlItemId: data.id as string, permalink: data.permalink as string });
   }
 
-  const variacoesResp = (data.variations ?? []) as { id: number | string; seller_custom_field?: string }[];
-  const variationIdPorSku = new Map<string, string>();
-  for (const vr of variacoesResp) {
-    if (vr.seller_custom_field) variationIdPorSku.set(vr.seller_custom_field, String(vr.id));
-  }
-
-  const db = await createDropshippingAdminClient();
-  const linhas = grupo.variantes.map((v) => ({
-    cliente_id: clienteId,
-    produto_id: v.id,
-    ml_conta_id: mlContaId,
-    ml_item_id: data.id as string,
-    ml_variation_id: variationIdPorSku.get(v.sku) ?? null,
-    ml_status: (data.status as string) ?? "active",
-    ml_permalink: data.permalink as string | null,
-    preco_revenda: precoRevenda,
-  }));
-  const { error } = await db
-    .from("seller_ml_anuncios")
-    .upsert(linhas, { onConflict: "cliente_id,produto_id,ml_conta_id" });
-  if (error) return { ok: false, error: `Anunciado no ML, mas falhou salvar localmente: ${error.message}` };
-
-  return { ok: true, mlItemId: data.id as string, permalink: data.permalink as string };
-}
-
-/** Atualiza preço (em todas as variações, que precisam ficar com o mesmo
- *  preço — regra do próprio ML pra esse tipo de anúncio) e/ou status de um
- *  anúncio com variações já publicado. */
-export async function atualizarAnuncioMLDropComVariacoes(
-  mlContaId: string,
-  mlItemId: string,
-  patch: { price?: number; status?: "active" | "paused" | "closed"; mlVariationIds: string[] }
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  let token: string;
-  try {
-    token = await getValidMlToken(mlContaId);
-  } catch {
-    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
-  }
-
-  const body: Record<string, unknown> = {};
-  if (patch.status) body.status = patch.status;
-  if (patch.price != null) {
-    body.variations = patch.mlVariationIds.map((id) => ({ id: Number(id), price: patch.price }));
-  }
-
-  const res = await fetch(`${ML_BASE}/items/${mlItemId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao atualizar anúncio no Mercado Livre.") };
-
-  const dbPatch: Record<string, unknown> = {};
-  if (patch.price != null) dbPatch.preco_revenda = patch.price;
-  if (patch.status) dbPatch.ml_status = (data.status as string) ?? patch.status;
-  if (Object.keys(dbPatch).length) {
-    const db = await createDropshippingAdminClient();
-    await db.from("seller_ml_anuncios").update(dbPatch).eq("ml_conta_id", mlContaId).eq("ml_item_id", mlItemId);
-  }
-  return { ok: true };
+  return { ok: true, resultados };
 }
 
 /** Atualiza preço e/ou status (pausar/reativar) de um anúncio do catálogo de dropshipping já publicado. */

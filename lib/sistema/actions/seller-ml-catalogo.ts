@@ -5,8 +5,7 @@ import { createSistemaAdminClient, createDropshippingAdminClient } from "@/lib/s
 import {
   publicarAnuncioMLDrop,
   atualizarAnuncioMLDrop,
-  publicarAnuncioMLDropComVariacoes,
-  atualizarAnuncioMLDropComVariacoes,
+  publicarGrupoMLDrop,
   type AnuncioProdutoDrop,
   type AnuncioGrupoDrop,
   type VariacaoProdutoDrop,
@@ -163,21 +162,19 @@ async function buscarGrupoElegivel(
 }
 
 /** Busca o(s) anúncio(s) já publicado(s) por esse grupo de produtos nessa
- *  conta — normalmente é 1 item só (anúncio com variações), mas agrupa por
- *  `ml_item_id` em vez de assumir isso: produtos publicados ANTES da
- *  correção do bug de variações viraram N anúncios simples separados (um
- *  ml_item_id por produto), e pausar/reativar/excluir precisa alcançar
- *  todos eles, não só o primeiro — senão os outros ficam órfãos no ML sem
- *  ninguém rastreando. */
+ *  conta — cada variação vira seu PRÓPRIO item no ML (ver
+ *  `publicarGrupoMLDrop`), então normalmente é N ml_item_id distintos, um
+ *  por produto/variação; agrupa por `ml_item_id` só por segurança (nunca
+ *  assume 1:1), pra pausar/reativar/excluir alcançar todos. */
 async function buscarAnunciosGrupo(
   dropDb: DropDb,
   clienteId: string,
   mlContaId: string,
   produtoIds: string[]
-): Promise<{ mlItemId: string; variationIds: string[] }[] | { error: string }> {
+): Promise<{ mlItemId: string; produtoIds: string[] }[] | { error: string }> {
   const { data } = await dropDb
     .from("seller_ml_anuncios")
-    .select("ml_item_id, ml_variation_id")
+    .select("produto_id, ml_item_id")
     .eq("cliente_id", clienteId)
     .eq("ml_conta_id", mlContaId)
     .in("produto_id", produtoIds);
@@ -186,14 +183,15 @@ async function buscarAnunciosGrupo(
   for (const d of data) {
     const mlItemId = d.ml_item_id as string;
     const lista = porItem.get(mlItemId) ?? [];
-    if (d.ml_variation_id) lista.push(d.ml_variation_id as string);
+    lista.push(d.produto_id as string);
     porItem.set(mlItemId, lista);
   }
-  return [...porItem.entries()].map(([mlItemId, variationIds]) => ({ mlItemId, variationIds }));
+  return [...porItem.entries()].map(([mlItemId, pids]) => ({ mlItemId, produtoIds: pids }));
 }
 
-/** Publica um GRUPO de variações (cor/acabamento) do mesmo produto como UM
- *  único anúncio com variações, em várias contas do ML de uma vez. */
+/** Publica cada variação (cor/acabamento) do grupo como item separado,
+ *  agrupados visualmente pelo próprio ML (ver `publicarGrupoMLDrop`), em
+ *  várias contas do ML de uma vez. */
 export async function publicarGrupoMLVariasContas(
   portalToken: string,
   mlContaIds: string[],
@@ -217,12 +215,21 @@ export async function publicarGrupoMLVariasContas(
       resultados.push({ mlContaId, ok: false, error: donoErro });
       continue;
     }
-    const res = await publicarAnuncioMLDropComVariacoes(ctx.clienteId, mlContaId, gr.grupo, precoRevenda, ctx.metodosEnvio);
+    const res = await publicarGrupoMLDrop(ctx.clienteId, mlContaId, gr.grupo, precoRevenda, ctx.metodosEnvio);
+    if (!res.ok) {
+      resultados.push({ mlContaId, ok: false, error: res.error });
+      continue;
+    }
+    const falhas = res.resultados.filter((r) => !r.ok);
+    const sucesso = res.resultados.find((r) => r.ok);
     resultados.push({
       mlContaId,
-      ok: res.ok,
-      error: res.ok ? undefined : res.error,
-      permalink: res.ok ? res.permalink : undefined,
+      ok: falhas.length === 0,
+      error:
+        falhas.length > 0
+          ? `${falhas.length} variação(ões) falharam: ${falhas.map((f) => `${f.sku} (${f.error})`).join("; ")}`
+          : undefined,
+      permalink: sucesso?.permalink,
     });
   }
   revalidatePath(`/drop/portal/${portalToken}`);
@@ -241,7 +248,7 @@ async function mudarStatusGrupoAnuncio(
   const anuncios = await buscarAnunciosGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
   if ("error" in anuncios) return { ok: false, error: anuncios.error };
   for (const anuncio of anuncios) {
-    const res = await atualizarAnuncioMLDropComVariacoes(mlContaId, anuncio.mlItemId, { status, mlVariationIds: anuncio.variationIds });
+    const res = await atualizarAnuncioMLDrop(mlContaId, anuncio.produtoIds[0], anuncio.mlItemId, { status });
     if (!res.ok) return { ok: false, error: res.error };
   }
   revalidatePath(`/drop/portal/${portalToken}`);
@@ -272,7 +279,7 @@ export async function atualizarPrecoGrupoML(
   const anuncios = await buscarAnunciosGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
   if ("error" in anuncios) return { ok: false, error: anuncios.error };
   for (const anuncio of anuncios) {
-    const res = await atualizarAnuncioMLDropComVariacoes(mlContaId, anuncio.mlItemId, { price: novoPreco, mlVariationIds: anuncio.variationIds });
+    const res = await atualizarAnuncioMLDrop(mlContaId, anuncio.produtoIds[0], anuncio.mlItemId, { price: novoPreco });
     if (!res.ok) return { ok: false, error: res.error };
   }
   revalidatePath(`/drop/portal/${portalToken}`);
@@ -281,37 +288,21 @@ export async function atualizarPrecoGrupoML(
 
 /** Fecha o(s) anúncio(s) desse grupo no ML (definitivo — não dá pra reabrir)
  *  e apaga só os vínculos locais dos que fecharam de verdade, liberando a
- *  conta pra publicar de novo do zero. Fecha um ml_item_id por vez (ver
- *  nota em `buscarAnunciosGrupo` sobre grupos com mais de 1 item — dado
- *  antigo de antes da correção do bug de variações): se algum falhar,
+ *  conta pra publicar de novo do zero. Se algum item falhar ao fechar,
  *  avisa quais SKUs continuam publicados e não apaga a linha deles, pra
  *  não perder o rastro de um anúncio que na real continua ativo no ML. */
 export async function excluirGrupoAnuncioML(portalToken: string, mlContaId: string, produtoIds: string[]): Promise<ActionResult> {
   const ctx = await resolveClienteLiberado(portalToken);
   if ("error" in ctx) return { ok: false, error: ctx.error };
   const dropDb = await createDropshippingAdminClient();
-  const { data: linhas } = await dropDb
-    .from("seller_ml_anuncios")
-    .select("produto_id, ml_item_id, ml_variation_id")
-    .eq("cliente_id", ctx.clienteId)
-    .eq("ml_conta_id", mlContaId)
-    .in("produto_id", produtoIds);
-  if (!linhas || linhas.length === 0) return { ok: false, error: "Anúncio não encontrado." };
-
-  const porItem = new Map<string, { produtoIds: string[]; variationIds: string[] }>();
-  for (const l of linhas) {
-    const mlItemId = l.ml_item_id as string;
-    const grupo = porItem.get(mlItemId) ?? { produtoIds: [], variationIds: [] };
-    grupo.produtoIds.push(l.produto_id as string);
-    if (l.ml_variation_id) grupo.variationIds.push(l.ml_variation_id as string);
-    porItem.set(mlItemId, grupo);
-  }
+  const anuncios = await buscarAnunciosGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
+  if ("error" in anuncios) return { ok: false, error: anuncios.error };
 
   const produtoIdsFechados: string[] = [];
   const erros: string[] = [];
-  for (const [mlItemId, grupo] of porItem) {
-    const res = await atualizarAnuncioMLDropComVariacoes(mlContaId, mlItemId, { status: "closed", mlVariationIds: grupo.variationIds });
-    if (res.ok) produtoIdsFechados.push(...grupo.produtoIds);
+  for (const anuncio of anuncios) {
+    const res = await atualizarAnuncioMLDrop(mlContaId, anuncio.produtoIds[0], anuncio.mlItemId, { status: "closed" });
+    if (res.ok) produtoIdsFechados.push(...anuncio.produtoIds);
     else erros.push(res.error);
   }
 

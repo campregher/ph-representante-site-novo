@@ -28,7 +28,7 @@ interface CategoriaMlSugestao { id: string; nome: string; caminho: string[] }
 const empty = {
   id: null as string | null,
   sku: "", nome: "", descricao: "", imagens: "", marca: "", fornecedor_id: "",
-  ml_category_id: "", ml_category_nome: "", categoria_interna: "",
+  ml_category_id: "", ml_category_nome: "", categoria_interna: "", variacao: "",
   transporte_aceito: [] as string[],
   estoque_atual: "0", estoque_minimo: "0", ativo: true,
   custoCnpj: "", precoSugeridoCnpj: "",
@@ -198,7 +198,7 @@ export default function ProdutosView({
       imagens: (x.imagens?.length ? x.imagens : x.imagem_url ? [x.imagem_url] : []).join("\n"),
       marca: x.marca ?? "", fornecedor_id: x.fornecedor_id ?? "",
       ml_category_id: x.ml_category_id ?? "", ml_category_nome: x.ml_category_nome ?? "",
-      categoria_interna: x.categoria_interna ?? "", transporte_aceito: x.transporte_aceito ?? [],
+      categoria_interna: x.categoria_interna ?? "", variacao: x.variacao ?? "", transporte_aceito: x.transporte_aceito ?? [],
       estoque_atual: String(x.estoque_atual), estoque_minimo: String(x.estoque_minimo),
       ativo: x.ativo,
       custoCnpj: x.custoCnpj != null ? String(x.custoCnpj) : "",
@@ -266,7 +266,7 @@ export default function ProdutosView({
             <div className="min-w-0">
               {!indentado && <p className="truncate font-medium text-neutral-900">{p.nome}</p>}
               {indentado && (
-                <p className="text-xs text-neutral-400">Variação {p.sku.split("-").pop()}</p>
+                <p className="text-xs text-neutral-400">{p.variacao || `Variação ${p.sku.split("-").pop()}`}</p>
               )}
               {p.imagens.length > 1 && (
                 <p className="text-xs text-neutral-400">{p.imagens.length} fotos</p>
@@ -534,6 +534,9 @@ export default function ProdutosView({
                 <option value="">Selecione...</option>
                 {SELLER_INTERESSE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
               </Select>
+            </Field>
+            <Field label="Cor / variação" hint="Só preenche quando esse produto é uma variação (mesmo nome, cor diferente) de outro.">
+              <Input value={f.variacao} onChange={(e) => set("variacao", e.target.value)} placeholder="Ex.: Couro bege" />
             </Field>
             <Field label="Estoque atual"><Input value={f.estoque_atual} onChange={(e) => set("estoque_atual", e.target.value)} inputMode="numeric" /></Field>
             <Field label="Estoque mínimo"><Input value={f.estoque_minimo} onChange={(e) => set("estoque_minimo", e.target.value)} inputMode="numeric" /></Field>

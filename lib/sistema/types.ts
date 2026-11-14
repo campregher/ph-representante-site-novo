@@ -408,6 +408,7 @@ export interface DropProduto {
   ml_category_nome: string | null;
   marca: string | null;
   categoria_interna: string | null;
+  variacao: string | null;
   transporte_aceito: string[];
   estoque_atual: number;
   estoque_minimo: number;

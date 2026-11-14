@@ -121,6 +121,7 @@ export async function salvarDropProduto(id: string | null, raw: unknown): Promis
     ml_category_nome: v.ml_category_nome || null,
     marca: v.marca,
     categoria_interna: v.categoria_interna || null,
+    variacao: v.variacao || null,
     transporte_aceito: v.transporte_aceito,
     fornecedor_id: v.fornecedor_id || null,
     estoque_atual: Math.round(Number(v.estoque_atual ?? 0)),
@@ -348,6 +349,7 @@ export async function importarDropFornecedorCsv(
       marca: row.marca || null,
       imagem_url: imagens[0] || null,
       imagens,
+      variacao: row.variacao || null,
       fornecedor_id: fid,
       estoque_atual: Math.round(numOrNull(row.estoque_atual) ?? 0),
     };

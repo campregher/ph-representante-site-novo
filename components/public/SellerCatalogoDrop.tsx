@@ -30,6 +30,7 @@ export interface CatalogoDropItemView {
   nome: string;
   imagem_url: string | null;
   imagens: string[];
+  variacao: string | null;
   categoria: string | null;
   estoque_atual: number;
   precoMinimo: number;
@@ -264,7 +265,7 @@ export default function SellerCatalogoDrop({
             <div className="min-w-0">
               {!indentado && <p className="truncate font-medium text-neutral-900">{p.nome}</p>}
               <p className="text-xs text-neutral-400">
-                {indentado ? `Variação ${p.sku.split("-").pop()} · ` : ""}SKU {p.sku}
+                {indentado ? `${p.variacao || `Variação ${p.sku.split("-").pop()}`} · ` : ""}SKU {p.sku}
                 {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín.{" "}
                 {formatBRL(p.precoMinimo)}
               </p>

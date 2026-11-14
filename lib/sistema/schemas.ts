@@ -549,6 +549,7 @@ export const dropProdutoSchema = z.object({
   ml_category_nome: optionalText,
   marca: optionalText,
   categoria_interna: optionalText,
+  variacao: optionalText,
   transporte_aceito: z.array(z.string()).default([]),
   fornecedor_id: optionalText,
   estoque_atual: optionalNumber,

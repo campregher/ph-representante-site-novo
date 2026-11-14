@@ -2,7 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createSistemaAdminClient, createDropshippingAdminClient } from "@/lib/supabase/server";
-import { publicarAnuncioMLDrop, atualizarAnuncioMLDrop, type AnuncioProdutoDrop } from "@/lib/sistema/dropshipping-ml-catalogo";
+import {
+  publicarAnuncioMLDrop,
+  atualizarAnuncioMLDrop,
+  publicarAnuncioMLDropComVariacoes,
+  atualizarAnuncioMLDropComVariacoes,
+  type AnuncioProdutoDrop,
+  type AnuncioGrupoDrop,
+  type VariacaoProdutoDrop,
+} from "@/lib/sistema/dropshipping-ml-catalogo";
 import { formatBRL } from "@/lib/sistema/format";
 import type { ActionResult } from "@/lib/sistema/types";
 
@@ -89,6 +97,174 @@ async function buscarProdutoElegivel(
     },
     precoMinimo,
   };
+}
+
+/** Mesma coisa que `buscarProdutoElegivel`, mas pra um GRUPO de variações
+ *  (cor/acabamento) do mesmo produto, que precisam virar UM anúncio com
+ *  variações no ML, não N anúncios simples separados (ver migration 047 e
+ *  publicarAnuncioMLDropComVariacoes). Preço mínimo do grupo = o maior
+ *  preço mínimo entre as variações, já que elas compartilham UM preço só. */
+async function buscarGrupoElegivel(
+  db: DropDb,
+  produtoIds: string[],
+  clienteId: string
+): Promise<{ grupo: AnuncioGrupoDrop; precoMinimo: number } | { error: string }> {
+  const [{ data: rows }, { data: customRows }] = await Promise.all([
+    db
+      .from("produtos")
+      .select(
+        "id, sku, nome, descricao, marca, imagens, variacao, ml_category_id, transporte_aceito, ativo, estoque_atual, produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
+      )
+      .in("id", produtoIds),
+    db.from("seller_produto_customizacoes").select("produto_id, nome, descricao, imagens").eq("cliente_id", clienteId).in("produto_id", produtoIds),
+  ]);
+  if (!rows || rows.length !== produtoIds.length) return { error: "Alguma variação desse produto não foi encontrada." };
+  const indisponivel = rows.find((p) => !p.ativo || Number(p.estoque_atual) <= 0);
+  if (indisponivel) return { error: `Variação "${indisponivel.sku}" está indisponível.` };
+
+  const categorias = new Set(rows.map((p) => p.ml_category_id));
+  if (categorias.size > 1 || categorias.has(null))
+    return { error: "As variações desse produto não têm todas a mesma categoria do Mercado Livre definida — fale com a PH." };
+
+  const customPorProduto = new Map((customRows ?? []).map((c) => [c.produto_id as string, c]));
+
+  let precoMinimo = 0;
+  const variantes: VariacaoProdutoDrop[] = [];
+  for (const p of rows) {
+    const precos = p.produto_precos as unknown as { preco_sugerido: number | null; tabela: { codigo: string } | null }[];
+    const cnpj = precos.find((x) => x.tabela?.codigo === "cnpj");
+    if (cnpj?.preco_sugerido == null) return { error: `Variação "${p.sku}" sem preço sugerido definido.` };
+    precoMinimo = Math.max(precoMinimo, cnpj.preco_sugerido);
+    const custom = customPorProduto.get(p.id as string);
+    const imagensCustom = custom?.imagens as string[] | null;
+    const imagens = imagensCustom?.length ? imagensCustom : ((p.imagens as string[] | null) ?? []);
+    variantes.push({
+      id: p.id as string,
+      sku: p.sku as string,
+      variacao: (p.variacao as string | null) || (p.sku as string),
+      estoque_atual: Number(p.estoque_atual),
+      imagens,
+    });
+  }
+
+  const base = rows[0];
+  const baseCustom = customPorProduto.get(base.id as string);
+  return {
+    grupo: {
+      nome: baseCustom?.nome || (base.nome as string),
+      descricao: baseCustom?.descricao || (base.descricao as string | null),
+      marca: base.marca as string | null,
+      ml_category_id: base.ml_category_id as string | null,
+      transporte_aceito: (base.transporte_aceito as string[] | null) ?? [],
+      variantes,
+    },
+    precoMinimo,
+  };
+}
+
+/** Busca o anúncio (com variações) já publicado por esse grupo de produtos
+ *  nessa conta — pra pausar/reativar/atualizar preço do item todo de uma
+ *  vez (não dá pra mexer numa variação isolada, o anúncio é um só). */
+async function buscarAnuncioGrupo(
+  dropDb: DropDb,
+  clienteId: string,
+  mlContaId: string,
+  produtoIds: string[]
+): Promise<{ mlItemId: string; variationIds: string[] } | { error: string }> {
+  const { data } = await dropDb
+    .from("seller_ml_anuncios")
+    .select("ml_item_id, ml_variation_id")
+    .eq("cliente_id", clienteId)
+    .eq("ml_conta_id", mlContaId)
+    .in("produto_id", produtoIds);
+  if (!data || data.length === 0) return { error: "Anúncio não encontrado." };
+  return {
+    mlItemId: data[0].ml_item_id as string,
+    variationIds: data.map((d) => d.ml_variation_id as string).filter(Boolean),
+  };
+}
+
+/** Publica um GRUPO de variações (cor/acabamento) do mesmo produto como UM
+ *  único anúncio com variações, em várias contas do ML de uma vez. */
+export async function publicarGrupoMLVariasContas(
+  portalToken: string,
+  mlContaIds: string[],
+  produtoIds: string[],
+  precoRevenda: number
+): Promise<ActionResult<{ resultados: PublicarVariasContasResultado[] }>> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  if (mlContaIds.length === 0) return { ok: false, error: "Escolha pelo menos uma conta do Mercado Livre." };
+  if (produtoIds.length < 2) return { ok: false, error: "Selecione as variações do produto." };
+  const dropDb = await createDropshippingAdminClient();
+  const gr = await buscarGrupoElegivel(dropDb, produtoIds, ctx.clienteId);
+  if ("error" in gr) return { ok: false, error: gr.error };
+  if (!Number.isFinite(precoRevenda) || precoRevenda < gr.precoMinimo)
+    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(gr.precoMinimo)}.` };
+
+  const resultados: PublicarVariasContasResultado[] = [];
+  for (const mlContaId of mlContaIds) {
+    const donoErro = await checarDonoDaContaMl(ctx.db, ctx.clienteId, mlContaId);
+    if (donoErro) {
+      resultados.push({ mlContaId, ok: false, error: donoErro });
+      continue;
+    }
+    const res = await publicarAnuncioMLDropComVariacoes(ctx.clienteId, mlContaId, gr.grupo, precoRevenda, ctx.metodosEnvio);
+    resultados.push({
+      mlContaId,
+      ok: res.ok,
+      error: res.ok ? undefined : res.error,
+      permalink: res.ok ? res.permalink : undefined,
+    });
+  }
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true, resultados };
+}
+
+async function mudarStatusGrupoAnuncio(
+  portalToken: string,
+  mlContaId: string,
+  produtoIds: string[],
+  status: "active" | "paused"
+): Promise<ActionResult> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const dropDb = await createDropshippingAdminClient();
+  const anuncio = await buscarAnuncioGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
+  if ("error" in anuncio) return { ok: false, error: anuncio.error };
+  const res = await atualizarAnuncioMLDropComVariacoes(mlContaId, anuncio.mlItemId, { status, mlVariationIds: anuncio.variationIds });
+  if (!res.ok) return { ok: false, error: res.error };
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true };
+}
+
+export async function pausarGrupoML(portalToken: string, mlContaId: string, produtoIds: string[]): Promise<ActionResult> {
+  return mudarStatusGrupoAnuncio(portalToken, mlContaId, produtoIds, "paused");
+}
+
+export async function reativarGrupoML(portalToken: string, mlContaId: string, produtoIds: string[]): Promise<ActionResult> {
+  return mudarStatusGrupoAnuncio(portalToken, mlContaId, produtoIds, "active");
+}
+
+export async function atualizarPrecoGrupoML(
+  portalToken: string,
+  mlContaId: string,
+  produtoIds: string[],
+  novoPreco: number
+): Promise<ActionResult> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const dropDb = await createDropshippingAdminClient();
+  const gr = await buscarGrupoElegivel(dropDb, produtoIds, ctx.clienteId);
+  if ("error" in gr) return { ok: false, error: gr.error };
+  if (!Number.isFinite(novoPreco) || novoPreco < gr.precoMinimo)
+    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(gr.precoMinimo)}.` };
+  const anuncio = await buscarAnuncioGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
+  if ("error" in anuncio) return { ok: false, error: anuncio.error };
+  const res = await atualizarAnuncioMLDropComVariacoes(mlContaId, anuncio.mlItemId, { price: novoPreco, mlVariationIds: anuncio.variationIds });
+  if (!res.ok) return { ok: false, error: res.error };
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true };
 }
 
 export async function publicarProdutoML(

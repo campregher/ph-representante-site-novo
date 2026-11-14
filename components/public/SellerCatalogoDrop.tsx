@@ -7,10 +7,14 @@ import { toast } from "sonner";
 import { ChevronRight, ExternalLink, Pause, Play, Upload } from "lucide-react";
 import {
   publicarProdutoMLVariasContas,
+  publicarGrupoMLVariasContas,
   publicarEmMassaML,
   pausarAnuncioML,
   reativarAnuncioML,
   atualizarPrecoAnuncioML,
+  pausarGrupoML,
+  reativarGrupoML,
+  atualizarPrecoGrupoML,
 } from "@/lib/sistema/actions/seller-ml-catalogo";
 import {
   salvarCustomizacaoProdutoSeller,
@@ -99,8 +103,10 @@ export default function SellerCatalogoDrop({
     return mlContas.filter((c) => !usadas.has(c.id));
   };
 
-  // Produtos com o mesmo título são variações (cor/acabamento) do mesmo
-  // anúncio — agrupa pra não listar várias linhas repetidas por produto.
+  // Produtos com o mesmo título são variações (cor/acabamento) do MESMO
+  // anúncio no ML — agrupa pra publicar como 1 anúncio com variações (não
+  // N anúncios simples separados, que era o bug) e pra não listar várias
+  // linhas repetidas por produto.
   const grupos = useMemo(() => {
     const porNome = new Map<string, CatalogoDropItemView[]>();
     for (const p of itens) {
@@ -110,10 +116,20 @@ export default function SellerCatalogoDrop({
     return [...porNome.values()];
   }, [itens]);
 
+  // Produtos agrupados (variações) só publicam pelo controle do grupo —
+  // não entram na seleção avulsa "publicar vários produtos numa conta".
+  const idsEmGrupo = useMemo(() => {
+    const ids = new Set<string>();
+    for (const variantes of grupos) {
+      if (variantes.length > 1) for (const p of variantes) ids.add(p.id);
+    }
+    return ids;
+  }, [grupos]);
+
   const publicaveis = useMemo(
-    () => itens.filter((p) => p.mlCategoriaDefinida && contasDisponiveis(p).length > 0),
+    () => itens.filter((p) => p.mlCategoriaDefinida && contasDisponiveis(p).length > 0 && !idsEmGrupo.has(p.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [itens, mlContas]
+    [itens, mlContas, idsEmGrupo]
   );
 
   function toggleSelecionado(id: string) {
@@ -121,18 +137,6 @@ export default function SellerCatalogoDrop({
       const next = new Set(s);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleVariosSelecionados(ids: string[]) {
-    setSelecionados((s) => {
-      const todosJaSelecionados = ids.every((id) => s.has(id));
-      const next = new Set(s);
-      for (const id of ids) {
-        if (todosJaSelecionados) next.delete(id);
-        else next.add(id);
-      }
       return next;
     });
   }
@@ -172,6 +176,97 @@ export default function SellerCatalogoDrop({
       const falhas = res.resultados.filter((r) => !r.ok);
       if (falhas.length === 0) toast.success(`Publicado em ${res.resultados.length} conta(s).`);
       else toast.error(`${res.resultados.length - falhas.length} publicado(s), ${falhas.length} falhou(aram): ${falhas[0].error}`);
+      router.refresh();
+    });
+  }
+
+  function contasDisponiveisGrupo(variantes: CatalogoDropItemView[]) {
+    const usadas = new Set(variantes.flatMap((p) => p.anuncios.map((a) => a.mlContaId)));
+    return mlContas.filter((c) => !usadas.has(c.id));
+  }
+
+  function contasParaPublicarGrupo(variantes: CatalogoDropItemView[]): string[] {
+    const disponiveis = contasDisponiveisGrupo(variantes);
+    if (disponiveis.length <= 1) return disponiveis.map((c) => c.id);
+    return [...(contasEscolhidas[variantes[0].id] ?? [])];
+  }
+
+  function publicarGrupo(variantes: CatalogoDropItemView[]) {
+    const chave = variantes[0].id;
+    const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
+    const v = Number((precos[chave] ?? "").replace(",", "."));
+    if (!Number.isFinite(v) || v < precoMinimoGrupo) {
+      toast.error(`Preço mínimo pra esse produto é ${formatBRL(precoMinimoGrupo)}.`);
+      return;
+    }
+    const contas = contasParaPublicarGrupo(variantes);
+    if (contas.length === 0) {
+      toast.error("Marque em quais contas do Mercado Livre publicar.");
+      return;
+    }
+    start(async () => {
+      const res = await publicarGrupoMLVariasContas(
+        token,
+        contas,
+        variantes.map((x) => x.id),
+        v
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const falhas = res.resultados.filter((r) => !r.ok);
+      if (falhas.length === 0)
+        toast.success(`Publicado em ${res.resultados.length} conta(s), ${variantes.length} variações no mesmo anúncio.`);
+      else toast.error(`${res.resultados.length - falhas.length} publicado(s), ${falhas.length} falhou(aram): ${falhas[0].error}`);
+      router.refresh();
+    });
+  }
+
+  function pausarGrupo(variantes: CatalogoDropItemView[], mlContaId: string) {
+    start(async () => {
+      const res = await pausarGrupoML(token, mlContaId, variantes.map((v) => v.id));
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Anúncio pausado.");
+      router.refresh();
+    });
+  }
+
+  function reativarGrupo(variantes: CatalogoDropItemView[], mlContaId: string) {
+    start(async () => {
+      const res = await reativarGrupoML(token, mlContaId, variantes.map((v) => v.id));
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Anúncio reativado.");
+      router.refresh();
+    });
+  }
+
+  function atualizarPrecoGrupo(variantes: CatalogoDropItemView[], mlContaId: string) {
+    const chave = variantes[0].id;
+    const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
+    const v = Number((precos[chave] ?? "").replace(",", "."));
+    if (!Number.isFinite(v) || v < precoMinimoGrupo) {
+      toast.error(`Preço mínimo pra esse produto é ${formatBRL(precoMinimoGrupo)}.`);
+      return;
+    }
+    start(async () => {
+      const res = await atualizarPrecoGrupoML(
+        token,
+        mlContaId,
+        variantes.map((x) => x.id),
+        v
+      );
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Preço atualizado.");
       router.refresh();
     });
   }
@@ -284,9 +379,12 @@ export default function SellerCatalogoDrop({
     });
   }
 
+  /** `indentado` = variação dentro de um grupo: publicar/pausar/preço são
+   *  controlados no cabeçalho do grupo (1 anúncio com variações), não aqui —
+   *  essa linha só mostra os dados da variação e "ver cadastro". */
   function linhaItem(p: CatalogoDropItemView, indentado: boolean) {
     const disponiveis = contasDisponiveis(p);
-    const podeSelecionar = p.mlCategoriaDefinida && disponiveis.length > 0;
+    const podeSelecionar = !indentado && p.mlCategoriaDefinida && disponiveis.length > 0;
     return (
       <div key={p.id} className={indentado ? "space-y-2 border-t border-neutral-50 py-2 pl-8" : "space-y-2 py-3"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -327,9 +425,16 @@ export default function SellerCatalogoDrop({
                 </p>
               )}
               <p className="text-xs text-neutral-400 hover:text-neutral-600">
-                {indentado ? `${p.variacao || `Variação ${p.sku.split("-").pop()}`} · ` : ""}SKU {p.sku}
-                {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín.{" "}
-                {formatBRL(p.precoMinimo)}
+                {indentado ? (
+                  <>
+                    {p.variacao || `Variação ${p.sku.split("-").pop()}`} · SKU {p.sku} · {p.estoque_atual} em estoque
+                  </>
+                ) : (
+                  <>
+                    SKU {p.sku}
+                    {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín. {formatBRL(p.precoMinimo)}
+                  </>
+                )}
                 {indentado && p.personalizado && <Badge tone="blue" className="ml-1.5 align-middle">personalizado</Badge>}
               </p>
               {!p.mlCategoriaDefinida && (
@@ -338,39 +443,41 @@ export default function SellerCatalogoDrop({
             </button>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <div className="flex items-center gap-2">
-              <input
-                value={precos[p.id] ?? ""}
-                onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
-                inputMode="decimal"
-                className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
-              />
-              {disponiveis.length > 0 && p.mlCategoriaDefinida && (
-                <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
-                  <Upload size={13} /> Publicar
-                </Button>
+          {!indentado && (
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex items-center gap-2">
+                <input
+                  value={precos[p.id] ?? ""}
+                  onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
+                  inputMode="decimal"
+                  className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+                />
+                {disponiveis.length > 0 && p.mlCategoriaDefinida && (
+                  <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
+                    <Upload size={13} /> Publicar
+                  </Button>
+                )}
+              </div>
+              {disponiveis.length > 1 && p.mlCategoriaDefinida && (
+                <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                  {disponiveis.map((c) => (
+                    <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
+                      <input
+                        type="checkbox"
+                        checked={(contasEscolhidas[p.id] ?? new Set()).has(c.id)}
+                        onChange={() => toggleConta(p.id, c.id)}
+                        className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
+                      />
+                      {c.nickname ?? "Conta ML"}
+                    </label>
+                  ))}
+                </div>
               )}
             </div>
-            {disponiveis.length > 1 && p.mlCategoriaDefinida && (
-              <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                {disponiveis.map((c) => (
-                  <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
-                    <input
-                      type="checkbox"
-                      checked={(contasEscolhidas[p.id] ?? new Set()).has(c.id)}
-                      onChange={() => toggleConta(p.id, c.id)}
-                      className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
-                    />
-                    {c.nickname ?? "Conta ML"}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {p.anuncios.length > 0 && (
+        {!indentado && p.anuncios.length > 0 && (
           <div className="ml-6 space-y-1.5">
             {p.anuncios.map((a) => (
               <div
@@ -459,41 +566,117 @@ export default function SellerCatalogoDrop({
           const base = variantes[0];
           const chave = base.id;
           const aberto = produtosAbertos.has(chave);
-          const idsSelecionaveis = variantes.filter((p) => p.mlCategoriaDefinida && contasDisponiveis(p).length > 0).map((p) => p.id);
-          const grupoSelecionado = idsSelecionaveis.length > 0 && idsSelecionaveis.every((id) => selecionados.has(id));
           const estoqueTotal = variantes.reduce((s, p) => s + p.estoque_atual, 0);
+          const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
+          const disponiveisGrupo = contasDisponiveisGrupo(variantes);
+          const anunciosGrupo = base.anuncios; // escritos juntos no mesmo ml_item_id — representativo do grupo inteiro
           return (
             <Fragment key={chave}>
-              <div
-                className="flex cursor-pointer flex-wrap items-center justify-between gap-3 py-3"
-                onClick={() => toggleProdutoAberto(chave)}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  {idsSelecionaveis.length > 0 && (
-                    <input
-                      type="checkbox"
-                      checked={grupoSelecionado}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => toggleVariosSelecionados(idsSelecionaveis)}
-                      disabled={!mlConectado}
-                      className="h-4 w-4 rounded border-neutral-300 text-brand"
-                    />
-                  )}
-                  <ChevronRight size={14} className={`shrink-0 text-neutral-400 transition-transform ${aberto ? "rotate-90" : ""}`} />
-                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100">
-                    {base.imagem_url ? (
-                      <Image src={base.imagem_url} alt={base.nome} fill className="object-contain" unoptimized />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
+              <div className="space-y-2 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleProdutoAberto(chave)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <ChevronRight size={14} className={`shrink-0 text-neutral-400 transition-transform ${aberto ? "rotate-90" : ""}`} />
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100">
+                      {base.imagem_url ? (
+                        <Image src={base.imagem_url} alt={base.nome} fill className="object-contain" unoptimized />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-neutral-900">{base.nome}</p>
+                      <p className="text-xs text-neutral-400">
+                        {variantes.length} variações (1 anúncio) · {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
+                      </p>
+                      {!base.mlCategoriaDefinida && (
+                        <p className="text-xs text-yellow-600">Categoria do ML ainda não configurada — fale com a PH.</p>
+                      )}
+                    </div>
+                  </button>
+
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={precos[chave] ?? ""}
+                        onChange={(e) => setPrecos((s) => ({ ...s, [chave]: e.target.value }))}
+                        inputMode="decimal"
+                        className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+                      />
+                      {disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
+                        <Button size="sm" onClick={() => publicarGrupo(variantes)} loading={pending} disabled={!mlConectado}>
+                          <Upload size={13} /> Publicar c/ variações
+                        </Button>
+                      )}
+                    </div>
+                    {disponiveisGrupo.length > 1 && base.mlCategoriaDefinida && (
+                      <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                        {disponiveisGrupo.map((c) => (
+                          <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
+                            <input
+                              type="checkbox"
+                              checked={(contasEscolhidas[chave] ?? new Set()).has(c.id)}
+                              onChange={() => toggleConta(chave, c.id)}
+                              className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
+                            />
+                            {c.nickname ?? "Conta ML"}
+                          </label>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-neutral-900">{base.nome}</p>
-                    <p className="text-xs text-neutral-400">
-                      {variantes.length} variações · {estoqueTotal} em estoque · mín. {formatBRL(base.precoMinimo)}
-                    </p>
-                  </div>
                 </div>
+
+                {anunciosGrupo.length > 0 && (
+                  <div className="ml-6 space-y-1.5">
+                    {anunciosGrupo.map((a) => (
+                      <div
+                        key={a.mlContaId}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-1.5"
+                      >
+                        <span className="text-xs font-medium text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
+                        <div className="flex items-center gap-2">
+                          {a.status === "paused" ? (
+                            <>
+                              <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-500">
+                                Pausado
+                              </span>
+                              <Button size="sm" variant="outline" onClick={() => reativarGrupo(variantes, a.mlContaId)} loading={pending}>
+                                <Play size={13} /> Reativar
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
+                                Anunciado (com variações)
+                              </span>
+                              {a.permalink && (
+                                <a
+                                  href={a.permalink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-neutral-400 hover:text-brand"
+                                  title="Ver no Mercado Livre"
+                                >
+                                  <ExternalLink size={14} />
+                                </a>
+                              )}
+                              <Button size="sm" variant="outline" onClick={() => atualizarPrecoGrupo(variantes, a.mlContaId)} loading={pending}>
+                                Atualizar preço
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => pausarGrupo(variantes, a.mlContaId)} loading={pending}>
+                                <Pause size={13} /> Pausar
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {aberto && <div className="divide-y divide-neutral-50 pb-2">{variantes.map((p) => linhaItem(p, true))}</div>}
             </Fragment>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, ChevronRight } from "lucide-react";
 import type { DropProdutoRow } from "@/lib/sistema/types";
 import {
   salvarDropProduto,
@@ -128,6 +128,18 @@ export default function ProdutosView({
     }
   }
 
+  // Produtos com o mesmo nome são variações (cor/acabamento) do mesmo
+  // anúncio — a planilha do ML exige título idêntico pra todas. Agrupa pra
+  // não listar 9-10 linhas repetidas por produto.
+  function agruparPorProduto(itens: DropProdutoRow[]) {
+    const porNome = new Map<string, DropProdutoRow[]>();
+    for (const p of itens) {
+      if (!porNome.has(p.nome)) porNome.set(p.nome, []);
+      porNome.get(p.nome)!.push(p);
+    }
+    return [...porNome.values()];
+  }
+
   const grupos = useMemo(() => {
     const porFornecedor = new Map<string, DropProdutoRow[]>();
     for (const p of produtos) {
@@ -140,8 +152,18 @@ export default function ProdutosView({
       .filter((g) => g.itens.length > 0);
     const semFornecedor = porFornecedor.get(SEM_FORNECEDOR);
     if (semFornecedor?.length) grupos.push({ id: SEM_FORNECEDOR, label: "Sem fornecedor", itens: semFornecedor });
-    return grupos;
+    return grupos.map((g) => ({ ...g, produtos: agruparPorProduto(g.itens) }));
   }, [produtos, fornecedores]);
+
+  const [produtosAbertos, setProdutosAbertos] = useState<Set<string>>(new Set());
+  function toggleProdutoAberto(chave: string) {
+    setProdutosAbertos((s) => {
+      const next = new Set(s);
+      if (next.has(chave)) next.delete(chave);
+      else next.add(chave);
+      return next;
+    });
+  }
 
   function novoProdutoPara(fornecedorId?: string) {
     setF({ ...empty, fornecedor_id: fornecedorId && fornecedorId !== SEM_FORNECEDOR ? fornecedorId : "" });
@@ -213,6 +235,60 @@ export default function ProdutosView({
       toast.success("Excluído.");
       router.refresh();
     });
+  }
+
+  function linhaProduto(p: DropProdutoRow, indentado = false) {
+    return (
+      <Tr key={p.id} className={indentado ? "bg-white" : undefined}>
+        {podeEditar && (
+          <Td>
+            <input
+              type="checkbox"
+              checked={selecionados.has(p.id)}
+              onChange={() => toggleSelecionado(p.id)}
+              className="h-4 w-4 rounded border-neutral-300 text-brand"
+            />
+          </Td>
+        )}
+        <Td className={`font-mono text-xs ${indentado ? "pl-8 text-neutral-500" : ""}`}>{p.sku}</Td>
+        <Td>
+          <div className={`flex items-center gap-2 ${indentado ? "pl-6" : ""}`}>
+            {!indentado && (
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-50">
+                {p.imagem_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.imagem_url} alt={p.nome} className="h-full w-full object-contain" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[8px] text-neutral-400">sem foto</div>
+                )}
+              </div>
+            )}
+            <div className="min-w-0">
+              {!indentado && <p className="truncate font-medium text-neutral-900">{p.nome}</p>}
+              {indentado && (
+                <p className="text-xs text-neutral-400">Variação {p.sku.split("-").pop()}</p>
+              )}
+              {p.imagens.length > 1 && (
+                <p className="text-xs text-neutral-400">{p.imagens.length} fotos</p>
+              )}
+            </div>
+          </div>
+        </Td>
+        <Td className="text-xs text-neutral-500">{p.categoria_interna ?? "—"}</Td>
+        <Td className="text-right">{p.custoCnpj != null ? formatBRL(p.custoCnpj) : "—"}</Td>
+        <Td className="text-right">{p.precoSugeridoCnpj != null ? formatBRL(p.precoSugeridoCnpj) : "—"}</Td>
+        <Td className="text-right">{p.estoque_atual}</Td>
+        <Td><Badge tone={p.ativo ? "green" : "neutral"}>{p.ativo ? "Ativo" : "Inativo"}</Badge></Td>
+        {podeEditar && (
+          <Td className="text-right">
+            <div className="flex justify-end gap-1">
+              <button onClick={() => editar(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"><Pencil size={14} /></button>
+              <button onClick={() => setDel(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
+            </div>
+          </Td>
+        )}
+      </Tr>
+    );
   }
 
   return (
@@ -368,52 +444,63 @@ export default function ProdutosView({
                         </Tr>
                       </Thead>
                       <Tbody>
-                        {g.itens.map((p) => (
-                          <Tr key={p.id}>
-                            {podeEditar && (
-                              <Td>
-                                <input
-                                  type="checkbox"
-                                  checked={selecionados.has(p.id)}
-                                  onChange={() => toggleSelecionado(p.id)}
-                                  className="h-4 w-4 rounded border-neutral-300 text-brand"
-                                />
-                              </Td>
-                            )}
-                            <Td className="font-mono text-xs">{p.sku}</Td>
-                            <Td>
-                              <div className="flex items-center gap-2">
-                                <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-50">
-                                  {p.imagem_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={p.imagem_url} alt={p.nome} className="h-full w-full object-contain" />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-neutral-400">sem foto</div>
-                                  )}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="truncate font-medium text-neutral-900">{p.nome}</p>
-                                  {p.imagens.length > 1 && (
-                                    <p className="text-xs text-neutral-400">{p.imagens.length} fotos</p>
-                                  )}
-                                </div>
-                              </div>
-                            </Td>
-                            <Td className="text-xs text-neutral-500">{p.categoria_interna ?? "—"}</Td>
-                            <Td className="text-right">{p.custoCnpj != null ? formatBRL(p.custoCnpj) : "—"}</Td>
-                            <Td className="text-right">{p.precoSugeridoCnpj != null ? formatBRL(p.precoSugeridoCnpj) : "—"}</Td>
-                            <Td className="text-right">{p.estoque_atual}</Td>
-                            <Td><Badge tone={p.ativo ? "green" : "neutral"}>{p.ativo ? "Ativo" : "Inativo"}</Badge></Td>
-                            {podeEditar && (
-                              <Td className="text-right">
-                                <div className="flex justify-end gap-1">
-                                  <button onClick={() => editar(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"><Pencil size={14} /></button>
-                                  <button onClick={() => setDel(p)} className="rounded-md p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
-                                </div>
-                              </Td>
-                            )}
-                          </Tr>
-                        ))}
+                        {g.produtos.map((variantes) => {
+                          const temVariacoes = variantes.length > 1;
+                          if (!temVariacoes) return linhaProduto(variantes[0]);
+                          const base = variantes[0];
+                          const chave = `${g.id}::${base.nome}`;
+                          const aberto = produtosAbertos.has(chave);
+                          const idsVariantes = variantes.map((p) => p.id);
+                          const grupoSelecionado = idsVariantes.every((id) => selecionados.has(id));
+                          const ativas = variantes.filter((p) => p.ativo).length;
+                          const estoqueTotal = variantes.reduce((s, p) => s + p.estoque_atual, 0);
+                          return (
+                            <Fragment key={chave}>
+                              <tr
+                                className="group cursor-pointer bg-neutral-50/70 hover:bg-neutral-100"
+                                onClick={() => toggleProdutoAberto(chave)}
+                              >
+                                {podeEditar && (
+                                  <td
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="border-b border-neutral-100 px-3 py-2.5 align-middle"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={grupoSelecionado}
+                                      onChange={() => toggleGrupoInteiro(idsVariantes)}
+                                      className="h-4 w-4 rounded border-neutral-300 text-brand"
+                                    />
+                                  </td>
+                                )}
+                                <td colSpan={podeEditar ? 8 : 7} className="border-b border-neutral-100 px-3 py-2.5 align-middle">
+                                  <div className="flex items-center gap-2">
+                                    <ChevronRight
+                                      size={14}
+                                      className={`shrink-0 text-neutral-400 transition-transform ${aberto ? "rotate-90" : ""}`}
+                                    />
+                                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-50">
+                                      {base.imagem_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={base.imagem_url} alt={base.nome} className="h-full w-full object-contain" />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[8px] text-neutral-400">sem foto</div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="truncate font-medium text-neutral-900">{base.nome}</p>
+                                      <p className="text-xs text-neutral-400">
+                                        {variantes.length} variações · estoque total {estoqueTotal} · {ativas}/{variantes.length} ativas
+                                        {base.precoSugeridoCnpj != null && ` · sugerido ${formatBRL(base.precoSugeridoCnpj)}`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                              {aberto && variantes.map((p) => linhaProduto(p, true))}
+                            </Fragment>
+                          );
+                        })}
                       </Tbody>
                     </Table>
                   </TableScroll>

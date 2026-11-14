@@ -267,6 +267,21 @@ export async function atualizarPrecoGrupoML(
   return { ok: true };
 }
 
+/** Fecha o anúncio com variações no ML (definitivo — não dá pra reabrir) e
+ *  apaga o vínculo local, liberando a conta pra publicar de novo do zero. */
+export async function excluirGrupoAnuncioML(portalToken: string, mlContaId: string, produtoIds: string[]): Promise<ActionResult> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const dropDb = await createDropshippingAdminClient();
+  const anuncio = await buscarAnuncioGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
+  if ("error" in anuncio) return { ok: false, error: anuncio.error };
+  const res = await atualizarAnuncioMLDropComVariacoes(mlContaId, anuncio.mlItemId, { status: "closed", mlVariationIds: anuncio.variationIds });
+  if (!res.ok) return { ok: false, error: res.error };
+  await dropDb.from("seller_ml_anuncios").delete().eq("cliente_id", ctx.clienteId).eq("ml_conta_id", mlContaId).in("produto_id", produtoIds);
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true };
+}
+
 export async function publicarProdutoML(
   portalToken: string,
   mlContaId: string,
@@ -443,6 +458,28 @@ export async function atualizarPrecoAnuncioML(
 
   const res = await atualizarAnuncioMLDrop(mlContaId, produtoId, anuncio.ml_item_id as string, { price: novoPreco });
   if (!res.ok) return { ok: false, error: res.error };
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true };
+}
+
+/** Fecha o anúncio simples no ML (definitivo — não dá pra reabrir) e apaga o
+ *  vínculo local, liberando a conta pra publicar de novo do zero. */
+export async function excluirAnuncioML(portalToken: string, mlContaId: string, produtoId: string): Promise<ActionResult> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const dropDb = await createDropshippingAdminClient();
+  const { data: anuncio } = await dropDb
+    .from("seller_ml_anuncios")
+    .select("ml_item_id")
+    .eq("cliente_id", ctx.clienteId)
+    .eq("ml_conta_id", mlContaId)
+    .eq("produto_id", produtoId)
+    .maybeSingle();
+  if (!anuncio) return { ok: false, error: "Anúncio não encontrado." };
+
+  const res = await atualizarAnuncioMLDrop(mlContaId, produtoId, anuncio.ml_item_id as string, { status: "closed" });
+  if (!res.ok) return { ok: false, error: res.error };
+  await dropDb.from("seller_ml_anuncios").delete().eq("cliente_id", ctx.clienteId).eq("ml_conta_id", mlContaId).eq("produto_id", produtoId);
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true };
 }

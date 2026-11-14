@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { ChevronRight, ExternalLink, Pause, Play, Upload } from "lucide-react";
+import { ChevronRight, ExternalLink, Pause, Play, Trash2, Upload } from "lucide-react";
 import {
   publicarProdutoMLVariasContas,
   publicarGrupoMLVariasContas,
@@ -12,9 +12,11 @@ import {
   pausarAnuncioML,
   reativarAnuncioML,
   atualizarPrecoAnuncioML,
+  excluirAnuncioML,
   pausarGrupoML,
   reativarGrupoML,
   atualizarPrecoGrupoML,
+  excluirGrupoAnuncioML,
 } from "@/lib/sistema/actions/seller-ml-catalogo";
 import {
   salvarCustomizacaoProdutoSeller,
@@ -22,7 +24,7 @@ import {
 } from "@/lib/sistema/actions/seller-produto-customizacao";
 import { formatBRL } from "@/lib/sistema/format";
 import { Button } from "@/components/sistema/ui/Button";
-import { Modal } from "@/components/sistema/ui/Modal";
+import { Modal, ConfirmDialog } from "@/components/sistema/ui/Modal";
 import { Field, Input, Textarea } from "@/components/sistema/ui/Field";
 import { Badge } from "@/components/sistema/ui/Badge";
 
@@ -77,6 +79,7 @@ export default function SellerCatalogoDrop({
   const [produtosAbertos, setProdutosAbertos] = useState<Set<string>>(new Set());
   const [detalhe, setDetalhe] = useState<CatalogoDropItemView | null>(null);
   const [formDetalhe, setFormDetalhe] = useState({ nome: "", descricao: "", imagens: "" });
+  const [confirmExcluir, setConfirmExcluir] = useState<{ mlContaId: string; produtoIds: string[] } | null>(null);
 
   function toggleConta(itemId: string, contaId: string) {
     setContasEscolhidas((s) => {
@@ -267,6 +270,28 @@ export default function SellerCatalogoDrop({
         return;
       }
       toast.success("Preço atualizado.");
+      router.refresh();
+    });
+  }
+
+  function pedirExclusao(mlContaId: string, produtoIds: string[]) {
+    setConfirmExcluir({ mlContaId, produtoIds });
+  }
+
+  function confirmarExclusao() {
+    if (!confirmExcluir) return;
+    const { mlContaId, produtoIds } = confirmExcluir;
+    setConfirmExcluir(null);
+    start(async () => {
+      const res =
+        produtoIds.length > 1
+          ? await excluirGrupoAnuncioML(token, mlContaId, produtoIds)
+          : await excluirAnuncioML(token, mlContaId, produtoIds[0]);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Anúncio excluído do Mercado Livre.");
       router.refresh();
     });
   }
@@ -519,6 +544,9 @@ export default function SellerCatalogoDrop({
                       </Button>
                     </>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => pedirExclusao(a.mlContaId, [p.id])} loading={pending}>
+                    <Trash2 size={13} /> Excluir
+                  </Button>
                 </div>
               </div>
             ))}
@@ -672,6 +700,14 @@ export default function SellerCatalogoDrop({
                               </Button>
                             </>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => pedirExclusao(a.mlContaId, variantes.map((v) => v.id))}
+                            loading={pending}
+                          >
+                            <Trash2 size={13} /> Excluir
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -768,6 +804,17 @@ export default function SellerCatalogoDrop({
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!confirmExcluir}
+        onClose={() => setConfirmExcluir(null)}
+        onConfirm={confirmarExclusao}
+        title="Excluir anúncio?"
+        message="O anúncio é fechado no Mercado Livre (definitivo — não dá pra reabrir) e some da sua lista aqui. Você pode publicar de novo do zero depois, se quiser."
+        confirmLabel="Excluir"
+        danger
+        loading={pending}
+      />
     </div>
   );
 }

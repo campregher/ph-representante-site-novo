@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { processarVendaML } from "@/lib/sistema/ml-pedido-sync";
+import { sincronizarAnuncioMLDrop } from "@/lib/sistema/dropshipping-ml-catalogo";
 
 export const runtime = "nodejs";
 
 /**
- * Webhook de notificações do Mercado Livre (topic "orders_v2", "shipments", etc).
+ * Webhook de notificações do Mercado Livre (topic "orders_v2", "items", etc).
  * ML exige resposta 2xx rápida — sempre retorna 200, mesmo em erro interno
  * (senão ele fica reenviando). Topic "orders_v2": resource vem no formato
  * "/orders/{id}" — repassa pro processamento de venda (D6), que é idempotente
- * (webhook reenvia a mesma notificação várias vezes).
+ * (webhook reenvia a mesma notificação várias vezes). Topic "items": resource
+ * vem como "/items/{id}" — mantém dropshipping.seller_ml_anuncios sincronizado
+ * com o status/preço real no ML (pausar/reativar/fechar/mudar preço direto no
+ * painel do ML, fora do nosso portal). Precisa o tópico "items" habilitado nas
+ * notificações do app no painel de desenvolvedores do ML.
  */
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -30,6 +35,17 @@ export async function POST(request: Request) {
         if (!res.ok) console.error("[drop/ml/webhook] processarVendaML:", res.motivo);
       } catch (e) {
         console.error("[drop/ml/webhook] processarVendaML falhou:", e);
+      }
+    }
+  }
+
+  if (body.topic === "items" && body.resource) {
+    const itemId = body.resource.split("/").pop();
+    if (itemId) {
+      try {
+        await sincronizarAnuncioMLDrop(itemId);
+      } catch (e) {
+        console.error("[drop/ml/webhook] sincronizarAnuncioMLDrop falhou:", e);
       }
     }
   }

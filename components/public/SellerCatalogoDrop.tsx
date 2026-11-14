@@ -67,7 +67,13 @@ export interface MlContaView {
 }
 
 const CARD = "rounded-xl border border-neutral-200 bg-white p-4 transition-colors hover:border-neutral-300";
-const PRECO_INPUT_CLASS = "w-28 text-sm";
+// o componente <Input> já vem com "w-full" na classe base — só um utilitário
+// de mesma especificidade não sobrescreve isso de forma confiável (o que
+// realmente vence depende da ordem interna do CSS gerado pelo Tailwind, não
+// da ordem das classes no atributo). "!w-28" força a largura fixa de
+// verdade; sem isso, o input de preço virava w-full e quebrava o card
+// inteiro em telas estreitas (confirmado ao vivo em 375px).
+const PRECO_INPUT_CLASS = "!w-28 shrink-0 text-sm";
 
 /** "Você recebe" igual à Central de Vendedores do Mercado Livre — comissão
  *  sempre calcula (preço + categoria). Frete só entra na conta quando o
@@ -735,8 +741,13 @@ export default function SellerCatalogoDrop({
     }
     return (
       <div key={p.id} className={CARD}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
+        {/* flex-col -> flex-row só a partir de sm: em telas estreitas, deixar
+            isso só com flex-wrap fazia o lado do preço "caber" espremendo o
+            título a quase zero de largura em vez de quebrar linha de
+            verdade (min-w-0 deixa o flex encolher até 0, então o navegador
+            nunca precisa quebrar) — confirmado ao vivo em 375px. */}
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:justify-between">
+          <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto">
             {podeSelecionar && (
               <input
                 type="checkbox"
@@ -783,7 +794,7 @@ export default function SellerCatalogoDrop({
             </button>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex w-full shrink-0 flex-col items-end gap-1.5 sm:w-auto">
             <div className="flex items-center gap-2">
               <Input
                 value={precos[p.id] ?? ""}
@@ -906,8 +917,8 @@ export default function SellerCatalogoDrop({
           const anunciosGrupo = base.anuncios; // escritos juntos no mesmo ml_item_id — representativo do grupo inteiro
           return (
             <div key={chave} className={CARD}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-1 items-start gap-3">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:justify-between">
+                <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:flex-1">
                   <input
                     type="checkbox"
                     checked={selecionados.has(chave)}
@@ -948,7 +959,7 @@ export default function SellerCatalogoDrop({
                 </button>
                 </div>
 
-                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <div className="flex w-full shrink-0 flex-col items-end gap-1.5 sm:w-auto">
                   <div className="flex items-center gap-2">
                     <Input
                       value={precos[chave] ?? ""}

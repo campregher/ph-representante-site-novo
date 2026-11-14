@@ -203,7 +203,10 @@ export default function SellerCadastroForm() {
             <CardBody>
               <FormGrid>
                 <Field label="CNPJ" required error={errors.cnpj?.message} className="sm:col-span-2">
-                  <div className="flex gap-2">
+                  {/* empilha no mobile — lado a lado, o botão "Puxar da Receita"
+                      (texto longo) espremia o campo de CNPJ a ~74px de largura,
+                      cortando o placeholder (confirmado ao vivo em 375px). */}
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Input {...register("cnpj")} inputMode="numeric" placeholder="00.000.000/0000-00" className="flex-1 min-w-0" />
                     <div className="shrink-0">
                       <CnpjLookup cnpj={cnpjValue} onData={fillFromCnpj} endpoint="/api/drop/cnpj" />

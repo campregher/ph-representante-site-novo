@@ -89,8 +89,8 @@ export default function AuthCard({
     return (
       <div data-sistema className="flex min-h-screen bg-neutral-100 text-neutral-900">
         <PainelVisual semCnpjCta={semCnpjCta} />
-        <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-10">
-          <div className={`w-full ${maxWidthClassName}`}>
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center p-4 sm:p-10">
+          <div className={`w-full min-w-0 ${maxWidthClassName}`}>
             <Link
               href="/"
               className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-brand"
@@ -114,7 +114,7 @@ export default function AuthCard({
       data-sistema
       className="flex min-h-screen items-center justify-center bg-neutral-100 p-4 text-neutral-900"
     >
-      <div className={`w-full ${maxWidthClassName}`}>
+      <div className={`w-full min-w-0 ${maxWidthClassName}`}>
         <Link
           href="/"
           className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 hover:text-brand"

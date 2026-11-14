@@ -11,7 +11,7 @@ import { WHATSAPP_URL, EMAIL, COMPANY_CITY } from "@/lib/constants";
 const navLinks = [
   { label: "Início",        href: "#inicio" },
   { label: "Sobre",         href: "#sobre" },
-  { label: "Modelos",       href: "#modelos", dropdown: [{ label: "Atacado", href: "#atacado" }, { label: "Dropshipping", href: "#dropshipping" }, { label: "Onde comprar", href: "/onde-comprar" }] },
+  { label: "Modelos",       href: "#modelos", dropdown: [{ label: "Atacado", href: "#atacado" }, { label: "Dropshipping", href: "#dropshipping" }] },
   { label: "Representadas", href: "#representadas" },
   { label: "Serviços",      href: "#servicos" },
   { label: "Contato",       href: "#contato" },

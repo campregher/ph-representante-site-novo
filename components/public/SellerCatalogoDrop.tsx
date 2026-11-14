@@ -29,6 +29,7 @@ export interface CatalogoDropItemView {
   sku: string;
   nome: string;
   imagem_url: string | null;
+  imagens: string[];
   categoria: string | null;
   estoque_atual: number;
   precoMinimo: number;
@@ -60,6 +61,16 @@ export default function SellerCatalogoDrop({
   );
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [contaLote, setContaLote] = useState(mlContas[0]?.id ?? "");
+  const [galeriaAberta, setGaleriaAberta] = useState<Set<string>>(new Set());
+
+  function toggleGaleria(id: string) {
+    setGaleriaAberta((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const mlConectado = mlContas.length > 0;
 
@@ -231,13 +242,23 @@ export default function SellerCatalogoDrop({
                       className="mt-1 h-4 w-4 rounded border-neutral-300 text-brand"
                     />
                   )}
-                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100">
+                  <button
+                    type="button"
+                    onClick={() => p.imagens.length > 1 && toggleGaleria(p.id)}
+                    className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100"
+                    title={p.imagens.length > 1 ? "Ver todas as fotos" : undefined}
+                  >
                     {p.imagem_url ? (
                       <Image src={p.imagem_url} alt={p.nome} fill className="object-contain" unoptimized />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
                     )}
-                  </div>
+                    {p.imagens.length > 1 && (
+                      <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-1 text-[9px] font-medium text-white">
+                        +{p.imagens.length - 1}
+                      </span>
+                    )}
+                  </button>
                   <div className="min-w-0">
                     <p className="truncate font-medium text-neutral-900">{p.nome}</p>
                     <p className="text-xs text-neutral-400">
@@ -280,6 +301,16 @@ export default function SellerCatalogoDrop({
                   )}
                 </div>
               </div>
+
+              {galeriaAberta.has(p.id) && p.imagens.length > 1 && (
+                <div className="ml-6 flex flex-wrap gap-2">
+                  {p.imagens.map((url, i) => (
+                    <div key={i} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                      <Image src={url} alt={`${p.nome} - foto ${i + 1}`} fill className="object-contain" unoptimized />
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {p.anuncios.length > 0 && (
                 <div className="ml-6 space-y-1.5">

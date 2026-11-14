@@ -381,7 +381,24 @@ export default function ProdutosView({
                               </Td>
                             )}
                             <Td className="font-mono text-xs">{p.sku}</Td>
-                            <Td className="font-medium text-neutral-900">{p.nome}</Td>
+                            <Td>
+                              <div className="flex items-center gap-2">
+                                <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-50">
+                                  {p.imagem_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={p.imagem_url} alt={p.nome} className="h-full w-full object-contain" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-neutral-400">sem foto</div>
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-neutral-900">{p.nome}</p>
+                                  {p.imagens.length > 1 && (
+                                    <p className="text-xs text-neutral-400">{p.imagens.length} fotos</p>
+                                  )}
+                                </div>
+                              </div>
+                            </Td>
                             <Td className="text-xs text-neutral-500">{p.categoria_interna ?? "—"}</Td>
                             <Td className="text-right">{p.custoCnpj != null ? formatBRL(p.custoCnpj) : "—"}</Td>
                             <Td className="text-right">{p.precoSugeridoCnpj != null ? formatBRL(p.precoSugeridoCnpj) : "—"}</Td>
@@ -442,6 +459,24 @@ export default function ProdutosView({
               rows={3}
               placeholder={"https://exemplo.com/foto1.jpg\nhttps://exemplo.com/foto2.jpg"}
             />
+            {f.imagens.trim() && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {f.imagens
+                  .split("\n")
+                  .map((u) => u.trim())
+                  .filter(Boolean)
+                  .map((url, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`Foto ${i + 1}`}
+                      className={`h-16 w-16 rounded-md border object-contain ${i === 0 ? "border-brand" : "border-neutral-200"}`}
+                      title={i === 0 ? "Capa" : `Foto ${i + 1}`}
+                    />
+                  ))}
+              </div>
+            )}
           </Field>
 
           <div className="rounded-lg border border-neutral-200 p-3">

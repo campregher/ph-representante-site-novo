@@ -73,7 +73,21 @@ const CARD = "rounded-xl border border-neutral-200 bg-white p-4 transition-color
 // da ordem das classes no atributo). "!w-28" força a largura fixa de
 // verdade; sem isso, o input de preço virava w-full e quebrava o card
 // inteiro em telas estreitas (confirmado ao vivo em 375px).
-const PRECO_INPUT_CLASS = "!w-28 shrink-0 text-sm";
+const PRECO_INPUT_CLASS = "!w-28 shrink-0 pl-8 text-sm";
+
+/** Campo de preço com rótulo e prefixo "R$" — antes era só um número solto
+ *  (ex.: "149.9"), sem contexto nenhum na tela. */
+function PrecoInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Preço de venda</span>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400">R$</span>
+        <Input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" className={PRECO_INPUT_CLASS} />
+      </div>
+    </div>
+  );
+}
 
 /** "Você recebe" igual à Central de Vendedores do Mercado Livre — comissão
  *  sempre calcula (preço + categoria). Frete só entra na conta quando o
@@ -666,44 +680,46 @@ export default function SellerCatalogoDrop({
     labelAnunciado = "Anunciado"
   ) {
     return (
-      <div key={a.mlContaId} className="space-y-1.5 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
+      <div key={a.mlContaId} className="space-y-2 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-semibold text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {a.status === "paused" ? (
-              <Badge tone="neutral">Pausado</Badge>
-            ) : (
-              <>
-                <Badge tone="green">{labelAnunciado}</Badge>
-                {a.permalink && (
-                  <a
-                    href={a.permalink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-neutral-400 hover:text-brand"
-                    title="Ver no Mercado Livre"
-                  >
-                    <ExternalLink size={14} />
-                  </a>
-                )}
-              </>
-            )}
-            <Button size="sm" variant="outline" onClick={onAtualizarPreco} loading={pending}>
-              Atualizar preço
+          {a.status === "paused" ? (
+            <Badge tone="neutral">Pausado</Badge>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Badge tone="green">{labelAnunciado}</Badge>
+              {a.permalink && (
+                <a
+                  href={a.permalink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-neutral-400 hover:text-brand"
+                  title="Ver no Mercado Livre"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+        {/* grid 2 colunas no mobile pra alinhar os botões certinho; flex-wrap
+            inline a partir de sm:, onde cabe tudo numa linha só. */}
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+          <Button size="sm" variant="outline" onClick={onAtualizarPreco} loading={pending} className="w-full sm:w-auto">
+            Atualizar preço
+          </Button>
+          {a.status === "paused" ? (
+            <Button size="sm" variant="outline" onClick={onReativar} loading={pending} className="w-full sm:w-auto">
+              <Play size={13} /> Reativar
             </Button>
-            {a.status === "paused" ? (
-              <Button size="sm" variant="outline" onClick={onReativar} loading={pending}>
-                <Play size={13} /> Reativar
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" onClick={onPausar} loading={pending}>
-                <Pause size={13} /> Pausar
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={onExcluir} loading={pending}>
-              <Trash2 size={13} /> Excluir
+          ) : (
+            <Button size="sm" variant="outline" onClick={onPausar} loading={pending} className="w-full sm:w-auto">
+              <Pause size={13} /> Pausar
             </Button>
-          </div>
+          )}
+          <Button size="sm" variant="outline" onClick={onExcluir} loading={pending} className="col-span-2 w-full sm:col-span-1 sm:w-auto">
+            <Trash2 size={13} /> Excluir
+          </Button>
         </div>
         <RecebimentoLinha
           token={token}
@@ -760,7 +776,7 @@ export default function SellerCatalogoDrop({
             <button
               type="button"
               onClick={() => abrirDetalhe(p)}
-              className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-neutral-100"
+              className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-100"
               title="Ver cadastro completo"
             >
               {p.imagem_url ? (
@@ -775,7 +791,7 @@ export default function SellerCatalogoDrop({
               )}
             </button>
             <button type="button" onClick={() => abrirDetalhe(p)} className="min-w-0 text-left">
-              <p className="truncate text-sm font-semibold text-neutral-900 hover:text-brand">
+              <p className="line-clamp-2 text-sm font-semibold text-neutral-900 hover:text-brand">
                 {p.nome}
                 {p.personalizado && (
                   <Badge tone="blue" className="ml-1.5 align-middle">
@@ -795,13 +811,8 @@ export default function SellerCatalogoDrop({
           </div>
 
           <div className="flex w-full shrink-0 flex-col items-end gap-1.5 sm:w-auto">
-            <div className="flex items-center gap-2">
-              <Input
-                value={precos[p.id] ?? ""}
-                onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
-                inputMode="decimal"
-                className={PRECO_INPUT_CLASS}
-              />
+            <div className="flex items-end gap-2">
+              <PrecoInput value={precos[p.id] ?? ""} onChange={(v) => setPrecos((s) => ({ ...s, [p.id]: v }))} />
               {disponiveis.length > 0 && p.mlCategoriaDefinida && (
                 <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
                   <Upload size={13} /> Publicar
@@ -936,7 +947,7 @@ export default function SellerCatalogoDrop({
                       size={16}
                       className={`mt-4 shrink-0 text-neutral-400 transition-transform ${aberto ? "rotate-90" : ""}`}
                     />
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
                     {base.imagem_url ? (
                       <Image src={base.imagem_url} alt={base.nome} fill className="object-contain" unoptimized />
                     ) : (
@@ -944,7 +955,7 @@ export default function SellerCatalogoDrop({
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-900">{base.nome}</p>
+                    <p className="line-clamp-2 text-sm font-semibold text-neutral-900">{base.nome}</p>
                     <p className="mt-0.5 text-xs text-neutral-400">
                       {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
                     </p>
@@ -960,13 +971,8 @@ export default function SellerCatalogoDrop({
                 </div>
 
                 <div className="flex w-full shrink-0 flex-col items-end gap-1.5 sm:w-auto">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={precos[chave] ?? ""}
-                      onChange={(e) => setPrecos((s) => ({ ...s, [chave]: e.target.value }))}
-                      inputMode="decimal"
-                      className={PRECO_INPUT_CLASS}
-                    />
+                  <div className="flex items-end gap-2">
+                    <PrecoInput value={precos[chave] ?? ""} onChange={(v) => setPrecos((s) => ({ ...s, [chave]: v }))} />
                     {disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
                       <Button size="sm" onClick={() => publicarGrupo(variantes)} loading={pending} disabled={!mlConectado}>
                         <Upload size={13} /> Publicar variações

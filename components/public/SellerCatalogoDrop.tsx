@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { ChevronRight, ExternalLink, Pause, Play, Settings2, Trash2, Upload, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronRight, ExternalLink, Pause, Play, Settings2, Trash2, Upload, Wallet } from "lucide-react";
 import {
   publicarProdutoMLVariasContas,
   publicarGrupoMLVariasContas,
@@ -86,12 +86,16 @@ function RecebimentoLinha({
   mlContaId,
   produtoId,
   preco,
+  custoReferencia,
   metodoEnvioOverride,
 }: {
   token: string;
   mlContaId: string;
   produtoId: string;
   preco: number;
+  /** Custo real de fábrica, quando conhecido — dá pra sinalizar prejuízo
+   *  (recebe líquido, já descontada comissão/frete, menor que o custo). */
+  custoReferencia?: number | null;
   metodoEnvioOverride?: string;
 }) {
   const [estado, setEstado] = useState<
@@ -116,14 +120,33 @@ function RecebimentoLinha({
     : estado.frete != null
       ? `frete grátis ${formatBRL(estado.frete)}`
       : "frete grátis calculado após publicar";
+  const margem = custoReferencia != null ? estado.recebe - custoReferencia : null;
+  const prejuizo = margem != null && margem < 0;
   return (
-    <div className="flex items-start gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 text-xs text-green-800">
-      <Wallet size={13} className="mt-0.5 shrink-0 text-green-600" />
+    <div
+      className={`flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-xs ${
+        prejuizo ? "bg-red-50 text-red-800" : "bg-green-50 text-green-800"
+      }`}
+    >
+      {prejuizo ? (
+        <AlertTriangle size={13} className="mt-0.5 shrink-0 text-red-600" />
+      ) : (
+        <Wallet size={13} className="mt-0.5 shrink-0 text-green-600" />
+      )}
       <span>
-        Você recebe <strong className="text-green-900">{formatBRL(estado.recebe)}</strong>{" "}
-        <span className="text-green-700/80">
+        Você recebe{" "}
+        <strong className={prejuizo ? "text-red-900" : "text-green-900"}>{formatBRL(estado.recebe)}</strong>{" "}
+        <span className={prejuizo ? "text-red-700/80" : "text-green-700/80"}>
           (comissão {formatBRL(estado.comissao)} · {detalheFrete})
         </span>
+        {margem != null && (
+          <>
+            {" "}
+            <strong className={prejuizo ? "text-red-900" : "text-green-900"}>
+              {prejuizo ? `· Prejuízo de ${formatBRL(Math.abs(margem))}` : `· Margem de ${formatBRL(margem)}`}
+            </strong>
+          </>
+        )}
       </span>
     </div>
   );
@@ -623,10 +646,13 @@ export default function SellerCatalogoDrop({
   }
 
   /** Linha de status de um anúncio já publicado (status, ações, recebimento),
-   *  reaproveitada tanto pro produto avulso quanto pro cabeçalho do grupo. */
+   *  reaproveitada tanto pro produto avulso quanto pro cabeçalho do grupo.
+   *  "Atualizar preço" fica disponível ativo OU pausado — editar o preço
+   *  não devia depender de reativar primeiro. */
   function linhaAnuncio(
     a: AnuncioView,
     produtoId: string,
+    custoReferencia: number | null,
     onPausar: () => void,
     onReativar: () => void,
     onAtualizarPreco: () => void,
@@ -639,12 +665,7 @@ export default function SellerCatalogoDrop({
           <span className="text-xs font-semibold text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
           <div className="flex flex-wrap items-center gap-1.5">
             {a.status === "paused" ? (
-              <>
-                <Badge tone="neutral">Pausado</Badge>
-                <Button size="sm" variant="outline" onClick={onReativar} loading={pending}>
-                  <Play size={13} /> Reativar
-                </Button>
-              </>
+              <Badge tone="neutral">Pausado</Badge>
             ) : (
               <>
                 <Badge tone="green">{labelAnunciado}</Badge>
@@ -659,20 +680,32 @@ export default function SellerCatalogoDrop({
                     <ExternalLink size={14} />
                   </a>
                 )}
-                <Button size="sm" variant="outline" onClick={onAtualizarPreco} loading={pending}>
-                  Atualizar preço
-                </Button>
-                <Button size="sm" variant="outline" onClick={onPausar} loading={pending}>
-                  <Pause size={13} /> Pausar
-                </Button>
               </>
+            )}
+            <Button size="sm" variant="outline" onClick={onAtualizarPreco} loading={pending}>
+              Atualizar preço
+            </Button>
+            {a.status === "paused" ? (
+              <Button size="sm" variant="outline" onClick={onReativar} loading={pending}>
+                <Play size={13} /> Reativar
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={onPausar} loading={pending}>
+                <Pause size={13} /> Pausar
+              </Button>
             )}
             <Button size="sm" variant="outline" onClick={onExcluir} loading={pending}>
               <Trash2 size={13} /> Excluir
             </Button>
           </div>
         </div>
-        <RecebimentoLinha token={token} mlContaId={a.mlContaId} produtoId={produtoId} preco={a.precoRevenda} />
+        <RecebimentoLinha
+          token={token}
+          mlContaId={a.mlContaId}
+          produtoId={produtoId}
+          preco={a.precoRevenda}
+          custoReferencia={custoReferencia}
+        />
       </div>
     );
   }
@@ -788,6 +821,7 @@ export default function SellerCatalogoDrop({
               linhaAnuncio(
                 a,
                 p.id,
+                p.custoReferencia,
                 () => pausar(p, a.mlContaId),
                 () => reativar(p, a.mlContaId),
                 () => atualizarPreco(p, a.mlContaId),
@@ -864,6 +898,10 @@ export default function SellerCatalogoDrop({
           const aberto = produtosAbertos.has(chave);
           const estoqueTotal = variantes.reduce((s, p) => s + p.estoque_atual, 0);
           const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
+          const custosGrupo = variantes.map((v) => v.custoReferencia).filter((c): c is number => c != null);
+          // pior caso entre as variações — não deixa passar batido uma
+          // variação mais cara que as outras.
+          const custoMaxGrupo = custosGrupo.length > 0 ? Math.max(...custosGrupo) : null;
           const disponiveisGrupo = contasDisponiveisGrupo(variantes);
           const anunciosGrupo = base.anuncios; // escritos juntos no mesmo ml_item_id — representativo do grupo inteiro
           return (
@@ -948,6 +986,7 @@ export default function SellerCatalogoDrop({
                     linhaAnuncio(
                       a,
                       base.id,
+                      custoMaxGrupo,
                       () => pausarGrupo(variantes, a.mlContaId),
                       () => reativarGrupo(variantes, a.mlContaId),
                       () => atualizarPrecoGrupo(variantes, a.mlContaId),
@@ -1004,8 +1043,8 @@ export default function SellerCatalogoDrop({
                   const margem = revenda - detalhe.custoReferencia;
                   const pct = detalhe.custoReferencia > 0 ? (margem / detalhe.custoReferencia) * 100 : 0;
                   return (
-                    <span className={margem >= 0 ? "text-green-700" : "text-red-600"}>
-                      Sua margem: <strong>{formatBRL(margem)}</strong> ({pct.toFixed(0)}%)
+                    <span className={margem >= 0 ? "text-green-700" : "text-red-600"} title="Preço - custo, sem descontar comissão/frete do Mercado Livre">
+                      Margem bruta: <strong>{formatBRL(margem)}</strong> ({pct.toFixed(0)}%)
                     </span>
                   );
                 })()}
@@ -1071,6 +1110,7 @@ export default function SellerCatalogoDrop({
                     mlContaId={mlContas[0].id}
                     produtoId={detalhe.id}
                     preco={preco}
+                    custoReferencia={detalhe.custoReferencia}
                     metodoEnvioOverride={formDetalhe.metodoEnvio}
                   />
                 );

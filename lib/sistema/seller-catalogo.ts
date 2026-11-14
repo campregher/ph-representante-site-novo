@@ -27,6 +27,14 @@ export interface CatalogoDropItem {
   anuncios: AnuncioInfo[];
   fornecedorId: string | null;
   fornecedorNome: string | null;
+  /** métodos de envio aceitos por esse produto (cadastro do admin) e, dentre
+   *  eles, o que esse seller registrou pra usar nesse anúncio (null = ainda
+   *  não cadastrou — bloqueia publicar, ver seller-ml-catalogo.ts). */
+  transporteAceito: string[];
+  metodoEnvio: string | null;
+  /** Clássico ou Premium — null = usa Premium (ver resolverListingType em
+   *  dropshipping-ml-catalogo.ts). */
+  tipoAnuncio: string | null;
 }
 
 /**
@@ -47,7 +55,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, fornecedor_id, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
       .gt("estoque_atual", 0)
@@ -62,7 +70,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     clienteId
       ? drop
           .from("seller_produto_customizacoes")
-          .select("produto_id, nome, descricao, imagens")
+          .select("produto_id, nome, descricao, imagens, metodo_envio, tipo_anuncio")
           .eq("cliente_id", clienteId)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
@@ -77,6 +85,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     variacao: string | null;
     estoque_atual: number;
     ml_category_id: string | null;
+    transporte_aceito: string[] | null;
     fornecedor_id: string | null;
     fornecedor: { nome: string } | null;
     produto_precos: { custo: number; preco_sugerido: number | null; tabela: { codigo: string } | null }[];
@@ -96,6 +105,8 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     nome: string | null;
     descricao: string | null;
     imagens: string[] | null;
+    metodo_envio: string | null;
+    tipo_anuncio: string | null;
   }[];
   const customPorProduto = new Map(customRows.map((c) => [c.produto_id, c]));
 
@@ -146,6 +157,9 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,
         fornecedorNome: r.fornecedor?.nome ?? null,
+        transporteAceito: r.transporte_aceito ?? [],
+        metodoEnvio: custom?.metodo_envio ?? null,
+        tipoAnuncio: custom?.tipo_anuncio ?? null,
       };
     })
     .filter((p) => p.precoMinimo != null);

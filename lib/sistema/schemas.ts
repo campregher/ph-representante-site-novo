@@ -281,6 +281,22 @@ export const SELLER_METODO_ENVIO_OPTIONS = [
   { value: "entrega_direta", label: "Entrega Direta" },
 ] as const;
 
+/** Mesmas opções, sem "Shopee Express" — não existe no Mercado Livre, então
+ *  não entra na escolha de método de envio pra publicar lá (ver
+ *  lib/sistema/dropshipping-ml-catalogo.ts). */
+export const ML_METODO_ENVIO_OPTIONS = SELLER_METODO_ENVIO_OPTIONS.filter((o) => o.value !== "shopee_express");
+
+/** Os dois tipos de anúncio de verdade pra revenda no Mercado Livre — ids
+ *  confirmados contra GET /sites/MLB/listing_types. Os outros tiers que a
+ *  API lista (Diamante/Ouro/Prata/Bronze/Grátis) são legados/promocionais,
+ *  não uma escolha real na hora de publicar. "gold_pro" (Premium) é o
+ *  padrão quando o seller não escolhe (ver resolverListingType em
+ *  lib/sistema/dropshipping-ml-catalogo.ts). */
+export const ML_TIPO_ANUNCIO_OPTIONS = [
+  { value: "gold_special", label: "Clássico (comissão menor)" },
+  { value: "gold_pro", label: "Premium (mais exposição)" },
+] as const;
+
 export const SELLER_VENDAS_MES_OPTIONS = [
   { value: "ate_10", label: "Até 10 vendas" },
   { value: "11_50", label: "11 a 50 vendas" },

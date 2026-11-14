@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { ChevronRight, ExternalLink, Pause, Play, Trash2, Upload } from "lucide-react";
+import { ChevronRight, ExternalLink, Pause, Play, Settings2, Trash2, Upload, Wallet } from "lucide-react";
 import {
   publicarProdutoMLVariasContas,
   publicarGrupoMLVariasContas,
@@ -17,15 +17,19 @@ import {
   reativarGrupoML,
   atualizarPrecoGrupoML,
   excluirGrupoAnuncioML,
+  consultarMetodosEnvioML,
+  consultarRecebimentoML,
 } from "@/lib/sistema/actions/seller-ml-catalogo";
 import {
   salvarCustomizacaoProdutoSeller,
   restaurarProdutoPadraoSeller,
+  aplicarConfigEnvioEmMassa,
 } from "@/lib/sistema/actions/seller-produto-customizacao";
 import { formatBRL } from "@/lib/sistema/format";
+import { ML_METODO_ENVIO_OPTIONS, ML_TIPO_ANUNCIO_OPTIONS } from "@/lib/sistema/schemas";
 import { Button } from "@/components/sistema/ui/Button";
 import { Modal, ConfirmDialog } from "@/components/sistema/ui/Modal";
-import { Field, Input, Textarea } from "@/components/sistema/ui/Field";
+import { Field, Input, Textarea, Select } from "@/components/sistema/ui/Field";
 import { Badge } from "@/components/sistema/ui/Badge";
 
 export interface AnuncioView {
@@ -52,11 +56,77 @@ export interface CatalogoDropItemView {
   personalizado: boolean;
   mlCategoriaDefinida: boolean;
   anuncios: AnuncioView[];
+  transporteAceito: string[];
+  metodoEnvio: string | null;
+  tipoAnuncio: string | null;
 }
 
 export interface MlContaView {
   id: string;
   nickname: string | null;
+}
+
+const CARD = "rounded-xl border border-neutral-200 bg-white p-4 transition-colors hover:border-neutral-300";
+const PRECO_INPUT_CLASS = "w-28 text-sm";
+
+/** "Você recebe" igual à Central de Vendedores do Mercado Livre — comissão
+ *  sempre calcula (preço + categoria). Frete só entra na conta quando o
+ *  método de envio é Mercado Envios/Flex (me2) — aí sim existe um "frete
+ *  grátis" que o ML gerencia e que o seller banca, e só dá pra saber o
+ *  valor depois que o anúncio existe de verdade no ML. Com Correios/
+ *  Entrega Direta (fora da rede do Mercado Envios) não tem frete grátis
+ *  nenhum: o seller cobra e paga o envio por fora, o ML nem participa
+ *  disso — por isso nunca aparece "calculado após publicar" nesse caso.
+ *  `metodoEnvioOverride` deixa o preview (antes de salvar "Detalhes do
+ *  produto") reagir ao que está selecionado no campo, não só ao que já
+ *  está salvo. Busca sob demanda (um componente por linha) pra não
+ *  disparar uma chamada ao ML por produto do catálogo todo. */
+function RecebimentoLinha({
+  token,
+  mlContaId,
+  produtoId,
+  preco,
+  metodoEnvioOverride,
+}: {
+  token: string;
+  mlContaId: string;
+  produtoId: string;
+  preco: number;
+  metodoEnvioOverride?: string;
+}) {
+  const [estado, setEstado] = useState<
+    "carregando" | "erro" | { comissao: number; freteAplicavel: boolean; frete: number | null; recebe: number }
+  >("carregando");
+
+  useEffect(() => {
+    let vivo = true;
+    consultarRecebimentoML(token, mlContaId, produtoId, preco, metodoEnvioOverride).then((res) => {
+      if (!vivo) return;
+      setEstado(res.ok ? { comissao: res.comissao, freteAplicavel: res.freteAplicavel, frete: res.frete, recebe: res.recebe } : "erro");
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [token, mlContaId, produtoId, preco, metodoEnvioOverride]);
+
+  if (estado === "erro") return null;
+  if (estado === "carregando") return <p className="text-xs text-neutral-400">Calculando quanto você recebe…</p>;
+  const detalheFrete = !estado.freteAplicavel
+    ? "frete por sua conta, fora do Mercado Envios"
+    : estado.frete != null
+      ? `frete grátis ${formatBRL(estado.frete)}`
+      : "frete grátis calculado após publicar";
+  return (
+    <div className="flex items-start gap-1.5 rounded-lg bg-green-50 px-2.5 py-1.5 text-xs text-green-800">
+      <Wallet size={13} className="mt-0.5 shrink-0 text-green-600" />
+      <span>
+        Você recebe <strong className="text-green-900">{formatBRL(estado.recebe)}</strong>{" "}
+        <span className="text-green-700/80">
+          (comissão {formatBRL(estado.comissao)} · {detalheFrete})
+        </span>
+      </span>
+    </div>
+  );
 }
 
 export default function SellerCatalogoDrop({
@@ -78,8 +148,22 @@ export default function SellerCatalogoDrop({
   const [contaLote, setContaLote] = useState(mlContas[0]?.id ?? "");
   const [produtosAbertos, setProdutosAbertos] = useState<Set<string>>(new Set());
   const [detalhe, setDetalhe] = useState<CatalogoDropItemView | null>(null);
-  const [formDetalhe, setFormDetalhe] = useState({ nome: "", descricao: "", imagens: "" });
+  const [formDetalhe, setFormDetalhe] = useState({ nome: "", descricao: "", imagens: "", metodoEnvio: "", tipoAnuncio: "" });
   const [confirmExcluir, setConfirmExcluir] = useState<{ mlContaId: string; produtoIds: string[] } | null>(null);
+  // null = ainda não sabe (checando) — nesse caso mostra tudo que o produto
+  // aceita (não bloqueia a escolha); depois de checar, vira a interseção do
+  // que está ATIVO em todas as contas do ML conectadas desse seller agora
+  // (ver consultarMetodosEnvioML) — a validação que de fato importa roda de
+  // novo no servidor, por conta, no momento de publicar.
+  const [metodosAtivosML, setMetodosAtivosML] = useState<string[] | null>(null);
+  const [carregandoMetodosEnvio, setCarregandoMetodosEnvio] = useState(false);
+  // Edição em massa (método de envio + tipo de anúncio) pros selecionados,
+  // antes de publicar em lote — ver abrirEdicaoLote/aplicarEdicaoLote.
+  const [loteModalAberto, setLoteModalAberto] = useState(false);
+  const [loteMetodoEnvio, setLoteMetodoEnvio] = useState("");
+  const [loteTipoAnuncio, setLoteTipoAnuncio] = useState("");
+  const [loteMetodosAtivos, setLoteMetodosAtivos] = useState<string[] | null>(null);
+  const [loteCarregando, setLoteCarregando] = useState(false);
 
   function toggleConta(itemId: string, contaId: string) {
     setContasEscolhidas((s) => {
@@ -137,6 +221,45 @@ export default function SellerCatalogoDrop({
     [itens, mlContas, idsEmGrupo]
   );
 
+  const itensSelecionados = useMemo(
+    () => publicaveis.filter((p) => selecionados.has(p.id)),
+    [publicaveis, selecionados]
+  );
+
+  /** Toda chave que tem checkbox na tela — produto avulso publicável ou
+   *  grupo de variações (chave = id da primeira variação) — pra "Selecionar
+   *  todos" marcar/desmarcar de uma vez. */
+  const chavesSelecionaveis = useMemo(() => {
+    const chaves = publicaveis.map((p) => p.id);
+    for (const variantes of grupos) if (variantes.length > 1) chaves.push(variantes[0].id);
+    return chaves;
+  }, [publicaveis, grupos]);
+
+  const todosSelecionados = chavesSelecionaveis.length > 0 && chavesSelecionaveis.every((k) => selecionados.has(k));
+
+  function alternarSelecionarTodos() {
+    setSelecionados(todosSelecionados ? new Set() : new Set(chavesSelecionaveis));
+  }
+
+  /** Pra "Editar em massa" (método de envio/tipo de anúncio) — diferente de
+   *  `itensSelecionados` (só produtos avulsos, usado pra publicar em lote),
+   *  aqui um grupo marcado (checkbox no cabeçalho do grupo, chave = id da
+   *  primeira variação) expande pra TODAS as variações dele, já que o
+   *  método de envio é cadastro por produto (ver seller-ml-catalogo.ts),
+   *  não por grupo. */
+  const itensParaEdicaoEmMassa = useMemo(() => {
+    const resultado: CatalogoDropItemView[] = [];
+    for (const chave of selecionados) {
+      const grupo = grupos.find((g) => g.length > 1 && g[0].id === chave);
+      if (grupo) resultado.push(...grupo);
+      else {
+        const item = itens.find((p) => p.id === chave);
+        if (item) resultado.push(item);
+      }
+    }
+    return resultado;
+  }, [selecionados, grupos, itens]);
+
   function toggleSelecionado(id: string) {
     setSelecionados((s) => {
       const next = new Set(s);
@@ -165,6 +288,11 @@ export default function SellerCatalogoDrop({
     const preco = precoValido(item);
     if (preco == null) {
       toast.error(`Preço mínimo pra esse produto é ${formatBRL(item.precoMinimo)}.`);
+      return;
+    }
+    if (!item.metodoEnvio) {
+      toast.error("Cadastre o método de envio desse produto antes de publicar.");
+      abrirDetalhe(item);
       return;
     }
     const contas = contasParaPublicar(item);
@@ -197,11 +325,16 @@ export default function SellerCatalogoDrop({
   }
 
   function publicarGrupo(variantes: CatalogoDropItemView[]) {
-    const chave = variantes[0].id;
+    const base = variantes[0];
     const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
-    const v = Number((precos[chave] ?? "").replace(",", "."));
+    const v = Number((precos[base.id] ?? "").replace(",", "."));
     if (!Number.isFinite(v) || v < precoMinimoGrupo) {
       toast.error(`Preço mínimo pra esse produto é ${formatBRL(precoMinimoGrupo)}.`);
+      return;
+    }
+    if (!variantes.some((p) => p.metodoEnvio)) {
+      toast.error("Cadastre o método de envio desse produto antes de publicar.");
+      abrirDetalhe(base);
       return;
     }
     const contas = contasParaPublicarGrupo(variantes);
@@ -300,16 +433,51 @@ export default function SellerCatalogoDrop({
 
   function abrirDetalhe(p: CatalogoDropItemView) {
     setDetalhe(p);
-    setFormDetalhe({ nome: p.nome, descricao: p.descricao ?? "", imagens: p.imagens.join("\n") });
+    setFormDetalhe({
+      nome: p.nome,
+      descricao: p.descricao ?? "",
+      imagens: p.imagens.join("\n"),
+      metodoEnvio: p.metodoEnvio ?? "",
+      tipoAnuncio: p.tipoAnuncio ?? "",
+    });
+    setMetodosAtivosML(null);
+    if (mlContas.length === 0) return;
+    setCarregandoMetodosEnvio(true);
+    (async () => {
+      const resultados = await Promise.all(mlContas.map((c) => consultarMetodosEnvioML(token, c.id)));
+      const ok = resultados.filter((r) => r.ok) as { ok: true; metodos: string[] }[];
+      setCarregandoMetodosEnvio(false);
+      const ativos = ok.length === 0 ? [] : ok[0].metodos.filter((m) => ok.every((r) => r.metodos.includes(m)));
+      setMetodosAtivosML(ativos);
+      // o que já tinha sido cadastrado pode ter deixado de estar ativo no ML
+      // desde então — não deixa uma opção que nem aparece mais selecionada.
+      setFormDetalhe((s) => (s.metodoEnvio && !ativos.includes(s.metodoEnvio) ? { ...s, metodoEnvio: "" } : s));
+    })();
+  }
+
+  /** Só o que o produto aceita (cadastro do admin) E — quando já sabemos —
+   *  está de fato ativo agora no Mercado Livre da conta conectada (ver
+   *  abrirDetalhe). Enquanto ainda não sabe (`null`), mostra tudo que o
+   *  produto aceita, pra não travar a tela esperando a API do ML. */
+  function metodosEnvioDisponiveis(p: CatalogoDropItemView) {
+    const doProduto = ML_METODO_ENVIO_OPTIONS.filter((o) => p.transporteAceito.includes(o.value));
+    if (metodosAtivosML == null) return doProduto;
+    return doProduto.filter((o) => metodosAtivosML.includes(o.value));
   }
 
   function salvarDetalhe() {
     if (!detalhe) return;
+    if (metodosEnvioDisponiveis(detalhe).length > 0 && !formDetalhe.metodoEnvio) {
+      toast.error("Escolha o método de envio desse produto.");
+      return;
+    }
     start(async () => {
       const res = await salvarCustomizacaoProdutoSeller(token, detalhe.id, {
         nome: formDetalhe.nome,
         descricao: formDetalhe.descricao,
         imagens: formDetalhe.imagens.split("\n").map((u) => u.trim()).filter(Boolean),
+        metodoEnvio: formDetalhe.metodoEnvio,
+        tipoAnuncio: formDetalhe.tipoAnuncio,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -335,18 +503,66 @@ export default function SellerCatalogoDrop({
     });
   }
 
+  /** Checa o que está ativo na conta de lote escolhida, pra montar as opções
+   *  do modal de edição em massa — mesma ideia do abrirDetalhe, mas pra 1
+   *  conta só (a que vai receber a publicação em lote), não a interseção de
+   *  todas. */
+  function abrirEdicaoLote() {
+    setLoteMetodoEnvio("");
+    setLoteTipoAnuncio("");
+    setLoteMetodosAtivos(null);
+    setLoteModalAberto(true);
+    if (!contaLote) return;
+    setLoteCarregando(true);
+    consultarMetodosEnvioML(token, contaLote).then((res) => {
+      setLoteCarregando(false);
+      setLoteMetodosAtivos(res.ok ? res.metodos : []);
+    });
+  }
+
+  /** Só os métodos aceitos por TODOS os produtos selecionados ao mesmo tempo
+   *  (interseção) e, quando já sabemos, ativos na conta escolhida. */
+  function metodosEnvioDisponiveisLote() {
+    const comuns = ML_METODO_ENVIO_OPTIONS.filter((o) => itensParaEdicaoEmMassa.every((p) => p.transporteAceito.includes(o.value)));
+    if (loteMetodosAtivos == null) return comuns;
+    return comuns.filter((o) => loteMetodosAtivos.includes(o.value));
+  }
+
+  function aplicarEdicaoLote() {
+    if (!loteMetodoEnvio) {
+      toast.error("Escolha o método de envio.");
+      return;
+    }
+    const ids = itensParaEdicaoEmMassa.map((p) => p.id);
+    if (ids.length === 0) return;
+    start(async () => {
+      const res = await aplicarConfigEnvioEmMassa(token, ids, { metodoEnvio: loteMetodoEnvio, tipoAnuncio: loteTipoAnuncio });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Método de envio aplicado a ${ids.length} produto(s).`);
+      setLoteModalAberto(false);
+      router.refresh();
+    });
+  }
+
   function publicarSelecionados() {
     if (!contaLote) {
       toast.error("Escolha em qual conta publicar.");
       return;
     }
-    const itensSelecionados = publicaveis.filter((p) => selecionados.has(p.id));
     if (itensSelecionados.length === 0) return;
     const payload: { produtoId: string; precoRevenda: number }[] = [];
     for (const item of itensSelecionados) {
       const preco = precoValido(item);
       if (preco == null) {
         toast.error(`${item.nome}: preço mínimo é ${formatBRL(item.precoMinimo)}.`);
+        return;
+      }
+      if (!item.metodoEnvio) {
+        toast.error(`${item.nome}: cadastre o método de envio antes de publicar.`);
+        abrirDetalhe(item);
         return;
       }
       payload.push({ produtoId: item.id, precoRevenda: preco });
@@ -406,152 +622,178 @@ export default function SellerCatalogoDrop({
     });
   }
 
+  /** Linha de status de um anúncio já publicado (status, ações, recebimento),
+   *  reaproveitada tanto pro produto avulso quanto pro cabeçalho do grupo. */
+  function linhaAnuncio(
+    a: AnuncioView,
+    produtoId: string,
+    onPausar: () => void,
+    onReativar: () => void,
+    onAtualizarPreco: () => void,
+    onExcluir: () => void,
+    labelAnunciado = "Anunciado"
+  ) {
+    return (
+      <div key={a.mlContaId} className="space-y-1.5 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {a.status === "paused" ? (
+              <>
+                <Badge tone="neutral">Pausado</Badge>
+                <Button size="sm" variant="outline" onClick={onReativar} loading={pending}>
+                  <Play size={13} /> Reativar
+                </Button>
+              </>
+            ) : (
+              <>
+                <Badge tone="green">{labelAnunciado}</Badge>
+                {a.permalink && (
+                  <a
+                    href={a.permalink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-neutral-400 hover:text-brand"
+                    title="Ver no Mercado Livre"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+                <Button size="sm" variant="outline" onClick={onAtualizarPreco} loading={pending}>
+                  Atualizar preço
+                </Button>
+                <Button size="sm" variant="outline" onClick={onPausar} loading={pending}>
+                  <Pause size={13} /> Pausar
+                </Button>
+              </>
+            )}
+            <Button size="sm" variant="outline" onClick={onExcluir} loading={pending}>
+              <Trash2 size={13} /> Excluir
+            </Button>
+          </div>
+        </div>
+        <RecebimentoLinha token={token} mlContaId={a.mlContaId} produtoId={produtoId} preco={a.precoRevenda} />
+      </div>
+    );
+  }
+
   /** `indentado` = variação dentro de um grupo: publicar/pausar/preço são
    *  controlados no cabeçalho do grupo (publica todas de uma vez), não
    *  aqui — essa linha só mostra os dados da variação e "ver cadastro". */
   function linhaItem(p: CatalogoDropItemView, indentado: boolean) {
     const disponiveis = contasDisponiveis(p);
     const podeSelecionar = !indentado && p.mlCategoriaDefinida && disponiveis.length > 0;
+    if (indentado) {
+      return (
+        <div key={p.id} className="flex items-center gap-2 border-t border-neutral-100 px-1 py-2.5 first:border-t-0">
+          <button type="button" onClick={() => abrirDetalhe(p)} className="min-w-0 flex-1 text-left">
+            <p className="text-xs text-neutral-500 hover:text-brand">
+              <span className="font-medium text-neutral-700">{p.variacao || `Variação ${p.sku.split("-").pop()}`}</span>
+              {" "}· SKU {p.sku} · {p.estoque_atual} em estoque
+              {p.personalizado && (
+                <Badge tone="blue" className="ml-1.5 align-middle">
+                  personalizado
+                </Badge>
+              )}
+            </p>
+          </button>
+        </div>
+      );
+    }
     return (
-      <div key={p.id} className={indentado ? "space-y-2 border-t border-neutral-50 py-2 pl-8" : "space-y-2 py-3"}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-2">
+      <div key={p.id} className={CARD}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
             {podeSelecionar && (
               <input
                 type="checkbox"
                 checked={selecionados.has(p.id)}
                 onChange={() => toggleSelecionado(p.id)}
                 disabled={!mlConectado}
-                className="mt-1 h-4 w-4 rounded border-neutral-300 text-brand"
+                className="mt-2 h-4 w-4 rounded border-neutral-300 text-brand"
               />
             )}
-            {!indentado && (
-              <button
-                type="button"
-                onClick={() => abrirDetalhe(p)}
-                className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100"
-                title="Ver cadastro completo"
-              >
-                {p.imagem_url ? (
-                  <Image src={p.imagem_url} alt={p.nome} fill className="object-contain" unoptimized />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
-                )}
-                {p.imagens.length > 1 && (
-                  <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-1 text-[9px] font-medium text-white">
-                    +{p.imagens.length - 1}
-                  </span>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => abrirDetalhe(p)}
+              className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-neutral-100"
+              title="Ver cadastro completo"
+            >
+              {p.imagem_url ? (
+                <Image src={p.imagem_url} alt={p.nome} fill className="object-contain" unoptimized />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
+              )}
+              {p.imagens.length > 1 && (
+                <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/70 px-1 text-[9px] font-medium text-white">
+                  +{p.imagens.length - 1}
+                </span>
+              )}
+            </button>
             <button type="button" onClick={() => abrirDetalhe(p)} className="min-w-0 text-left">
-              {!indentado && (
-                <p className="truncate font-medium text-neutral-900 hover:text-brand hover:underline">
-                  {p.nome}
-                  {p.personalizado && <Badge tone="blue" className="ml-1.5 align-middle">personalizado</Badge>}
-                </p>
-              )}
-              <p className="text-xs text-neutral-400 hover:text-neutral-600">
-                {indentado ? (
-                  <>
-                    {p.variacao || `Variação ${p.sku.split("-").pop()}`} · SKU {p.sku} · {p.estoque_atual} em estoque
-                  </>
-                ) : (
-                  <>
-                    SKU {p.sku}
-                    {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín. {formatBRL(p.precoMinimo)}
-                  </>
+              <p className="truncate text-sm font-semibold text-neutral-900 hover:text-brand">
+                {p.nome}
+                {p.personalizado && (
+                  <Badge tone="blue" className="ml-1.5 align-middle">
+                    personalizado
+                  </Badge>
                 )}
-                {indentado && p.personalizado && <Badge tone="blue" className="ml-1.5 align-middle">personalizado</Badge>}
               </p>
-              {!p.mlCategoriaDefinida && (
-                <p className="text-xs text-yellow-600">Categoria do ML ainda não configurada — fale com a PH.</p>
-              )}
+              <p className="mt-0.5 text-xs text-neutral-400">
+                SKU {p.sku}
+                {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín. {formatBRL(p.precoMinimo)}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {!p.mlCategoriaDefinida && <Badge tone="yellow">Categoria do ML pendente — fale com a PH</Badge>}
+                {p.mlCategoriaDefinida && !p.metodoEnvio && <Badge tone="yellow">Cadastre o método de envio</Badge>}
+              </div>
             </button>
           </div>
 
-          {!indentado && (
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <div className="flex items-center gap-2">
-                <input
-                  value={precos[p.id] ?? ""}
-                  onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
-                  inputMode="decimal"
-                  className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
-                />
-                {disponiveis.length > 0 && p.mlCategoriaDefinida && (
-                  <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
-                    <Upload size={13} /> Publicar
-                  </Button>
-                )}
-              </div>
-              {disponiveis.length > 1 && p.mlCategoriaDefinida && (
-                <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                  {disponiveis.map((c) => (
-                    <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
-                      <input
-                        type="checkbox"
-                        checked={(contasEscolhidas[p.id] ?? new Set()).has(c.id)}
-                        onChange={() => toggleConta(p.id, c.id)}
-                        className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
-                      />
-                      {c.nickname ?? "Conta ML"}
-                    </label>
-                  ))}
-                </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <Input
+                value={precos[p.id] ?? ""}
+                onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
+                inputMode="decimal"
+                className={PRECO_INPUT_CLASS}
+              />
+              {disponiveis.length > 0 && p.mlCategoriaDefinida && (
+                <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
+                  <Upload size={13} /> Publicar
+                </Button>
               )}
             </div>
-          )}
+            {disponiveis.length > 1 && p.mlCategoriaDefinida && (
+              <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                {disponiveis.map((c) => (
+                  <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
+                    <input
+                      type="checkbox"
+                      checked={(contasEscolhidas[p.id] ?? new Set()).has(c.id)}
+                      onChange={() => toggleConta(p.id, c.id)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
+                    />
+                    {c.nickname ?? "Conta ML"}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {!indentado && p.anuncios.length > 0 && (
-          <div className="ml-6 space-y-1.5">
-            {p.anuncios.map((a) => (
-              <div
-                key={a.mlContaId}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-1.5"
-              >
-                <span className="text-xs font-medium text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
-                <div className="flex items-center gap-2">
-                  {a.status === "paused" ? (
-                    <>
-                      <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-500">
-                        Pausado
-                      </span>
-                      <Button size="sm" variant="outline" onClick={() => reativar(p, a.mlContaId)} loading={pending}>
-                        <Play size={13} /> Reativar
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
-                        Anunciado
-                      </span>
-                      {a.permalink && (
-                        <a
-                          href={a.permalink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-neutral-400 hover:text-brand"
-                          title="Ver no Mercado Livre"
-                        >
-                          <ExternalLink size={14} />
-                        </a>
-                      )}
-                      <Button size="sm" variant="outline" onClick={() => atualizarPreco(p, a.mlContaId)} loading={pending}>
-                        Atualizar preço
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => pausar(p, a.mlContaId)} loading={pending}>
-                        <Pause size={13} /> Pausar
-                      </Button>
-                    </>
-                  )}
-                  <Button size="sm" variant="outline" onClick={() => pedirExclusao(a.mlContaId, [p.id])} loading={pending}>
-                    <Trash2 size={13} /> Excluir
-                  </Button>
-                </div>
-              </div>
-            ))}
+        {p.anuncios.length > 0 && (
+          <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
+            {p.anuncios.map((a) =>
+              linhaAnuncio(
+                a,
+                p.id,
+                () => pausar(p, a.mlContaId),
+                () => reativar(p, a.mlContaId),
+                () => atualizarPreco(p, a.mlContaId),
+                () => pedirExclusao(a.mlContaId, [p.id])
+              )
+            )}
           </div>
         )}
       </div>
@@ -559,38 +801,62 @@ export default function SellerCatalogoDrop({
   }
 
   if (itens.length === 0) {
-    return <p className="text-sm text-neutral-600">Nenhum produto disponível pra venda no momento.</p>;
+    return (
+      <div className="rounded-xl border border-dashed border-neutral-200 py-10 text-center">
+        <p className="text-sm text-neutral-500">Nenhum produto disponível pra venda no momento.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {!mlConectado && (
-        <p className="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
+        <div className="flex items-center gap-2 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-yellow-800">
           Conecte uma conta do Mercado Livre em Integração pra poder publicar anúncios.
-        </p>
-      )}
-      {selecionados.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-50 px-3 py-2">
-          <span className="text-xs text-neutral-600">{selecionados.size} selecionado(s)</span>
-          <div className="flex items-center gap-2">
-            <select
-              value={contaLote}
-              onChange={(e) => setContaLote(e.target.value)}
-              className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs"
-            >
-              {mlContas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nickname ?? "Conta ML"}
-                </option>
-              ))}
-            </select>
-            <Button size="sm" onClick={publicarSelecionados} loading={pending} disabled={!mlConectado}>
-              <Upload size={14} /> Publicar selecionados
-            </Button>
-          </div>
         </div>
       )}
-      <div className="divide-y divide-neutral-100">
+      {chavesSelecionaveis.length > 0 && (
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+            selecionados.size > 0 ? "border-brand/15 bg-brand/5" : "border-neutral-200 bg-white"
+          }`}
+        >
+          <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
+            <input
+              type="checkbox"
+              checked={todosSelecionados}
+              onChange={alternarSelecionarTodos}
+              disabled={!mlConectado}
+              className="h-4 w-4 rounded border-neutral-300 text-brand"
+            />
+            {selecionados.size > 0 ? `${selecionados.size} selecionado(s)` : `Selecionar todos (${chavesSelecionaveis.length})`}
+          </label>
+          {selecionados.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={contaLote}
+                onChange={(e) => setContaLote(e.target.value)}
+                className="rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs"
+              >
+                {mlContas.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nickname ?? "Conta ML"}
+                  </option>
+                ))}
+              </select>
+              <Button size="sm" variant="outline" onClick={abrirEdicaoLote} disabled={!mlConectado}>
+                <Settings2 size={14} /> Editar em massa
+              </Button>
+              {itensSelecionados.length > 0 && (
+                <Button size="sm" onClick={publicarSelecionados} loading={pending} disabled={!mlConectado}>
+                  <Upload size={14} /> Publicar selecionados
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="space-y-3">
         {grupos.map((variantes) => {
           if (variantes.length === 1) return linhaItem(variantes[0], false);
           const base = variantes[0];
@@ -601,123 +867,99 @@ export default function SellerCatalogoDrop({
           const disponiveisGrupo = contasDisponiveisGrupo(variantes);
           const anunciosGrupo = base.anuncios; // escritos juntos no mesmo ml_item_id — representativo do grupo inteiro
           return (
-            <Fragment key={chave}>
-              <div className="space-y-2 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+            <div key={chave} className={CARD}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selecionados.has(chave)}
+                    onChange={() => toggleSelecionado(chave)}
+                    disabled={!mlConectado}
+                    title="Marcar pra editar em massa (método de envio/tipo de anúncio)"
+                    className="mt-5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand"
+                  />
                   <button
                     type="button"
                     onClick={() => toggleProdutoAberto(chave)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left"
                   >
-                    <ChevronRight size={14} className={`shrink-0 text-neutral-400 transition-transform ${aberto ? "rotate-90" : ""}`} />
-                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100">
-                      {base.imagem_url ? (
-                        <Image src={base.imagem_url} alt={base.nome} fill className="object-contain" unoptimized />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-neutral-900">{base.nome}</p>
-                      <p className="text-xs text-neutral-400">
-                        {variantes.length} variações (agrupadas no ML) · {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
-                      </p>
-                      {!base.mlCategoriaDefinida && (
-                        <p className="text-xs text-yellow-600">Categoria do ML ainda não configurada — fale com a PH.</p>
-                      )}
-                    </div>
-                  </button>
-
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={precos[chave] ?? ""}
-                        onChange={(e) => setPrecos((s) => ({ ...s, [chave]: e.target.value }))}
-                        inputMode="decimal"
-                        className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
-                      />
-                      {disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
-                        <Button size="sm" onClick={() => publicarGrupo(variantes)} loading={pending} disabled={!mlConectado}>
-                          <Upload size={13} /> Publicar variações
-                        </Button>
-                      )}
-                    </div>
-                    {disponiveisGrupo.length > 1 && base.mlCategoriaDefinida && (
-                      <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                        {disponiveisGrupo.map((c) => (
-                          <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
-                            <input
-                              type="checkbox"
-                              checked={(contasEscolhidas[chave] ?? new Set()).has(c.id)}
-                              onChange={() => toggleConta(chave, c.id)}
-                              className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
-                            />
-                            {c.nickname ?? "Conta ML"}
-                          </label>
-                        ))}
-                      </div>
+                    <ChevronRight
+                      size={16}
+                      className={`mt-4 shrink-0 text-neutral-400 transition-transform ${aberto ? "rotate-90" : ""}`}
+                    />
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
+                    {base.imagem_url ? (
+                      <Image src={base.imagem_url} alt={base.nome} fill className="object-contain" unoptimized />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[9px] text-neutral-400">sem foto</div>
                     )}
                   </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-neutral-900">{base.nome}</p>
+                    <p className="mt-0.5 text-xs text-neutral-400">
+                      {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      <Badge tone="purple">{variantes.length} variações agrupadas no ML</Badge>
+                      {!base.mlCategoriaDefinida && <Badge tone="yellow">Categoria do ML pendente — fale com a PH</Badge>}
+                      {base.mlCategoriaDefinida && !variantes.some((p) => p.metodoEnvio) && (
+                        <Badge tone="yellow">Cadastre o método de envio</Badge>
+                      )}
+                    </div>
+                  </div>
+                </button>
                 </div>
 
-                {anunciosGrupo.length > 0 && (
-                  <div className="ml-6 space-y-1.5">
-                    {anunciosGrupo.map((a) => (
-                      <div
-                        key={a.mlContaId}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-1.5"
-                      >
-                        <span className="text-xs font-medium text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
-                        <div className="flex items-center gap-2">
-                          {a.status === "paused" ? (
-                            <>
-                              <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-500">
-                                Pausado
-                              </span>
-                              <Button size="sm" variant="outline" onClick={() => reativarGrupo(variantes, a.mlContaId)} loading={pending}>
-                                <Play size={13} /> Reativar
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
-                                Anunciado (variações agrupadas)
-                              </span>
-                              {a.permalink && (
-                                <a
-                                  href={a.permalink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-neutral-400 hover:text-brand"
-                                  title="Ver no Mercado Livre"
-                                >
-                                  <ExternalLink size={14} />
-                                </a>
-                              )}
-                              <Button size="sm" variant="outline" onClick={() => atualizarPrecoGrupo(variantes, a.mlContaId)} loading={pending}>
-                                Atualizar preço
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => pausarGrupo(variantes, a.mlContaId)} loading={pending}>
-                                <Pause size={13} /> Pausar
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => pedirExclusao(a.mlContaId, variantes.map((v) => v.id))}
-                            loading={pending}
-                          >
-                            <Trash2 size={13} /> Excluir
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={precos[chave] ?? ""}
+                      onChange={(e) => setPrecos((s) => ({ ...s, [chave]: e.target.value }))}
+                      inputMode="decimal"
+                      className={PRECO_INPUT_CLASS}
+                    />
+                    {disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
+                      <Button size="sm" onClick={() => publicarGrupo(variantes)} loading={pending} disabled={!mlConectado}>
+                        <Upload size={13} /> Publicar variações
+                      </Button>
+                    )}
                   </div>
-                )}
+                  {disponiveisGrupo.length > 1 && base.mlCategoriaDefinida && (
+                    <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                      {disponiveisGrupo.map((c) => (
+                        <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
+                          <input
+                            type="checkbox"
+                            checked={(contasEscolhidas[chave] ?? new Set()).has(c.id)}
+                            onChange={() => toggleConta(chave, c.id)}
+                            className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
+                          />
+                          {c.nickname ?? "Conta ML"}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              {aberto && <div className="divide-y divide-neutral-50 pb-2">{variantes.map((p) => linhaItem(p, true))}</div>}
-            </Fragment>
+
+              {anunciosGrupo.length > 0 && (
+                <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
+                  {anunciosGrupo.map((a) =>
+                    linhaAnuncio(
+                      a,
+                      base.id,
+                      () => pausarGrupo(variantes, a.mlContaId),
+                      () => reativarGrupo(variantes, a.mlContaId),
+                      () => atualizarPrecoGrupo(variantes, a.mlContaId),
+                      () => pedirExclusao(a.mlContaId, variantes.map((v) => v.id)),
+                      "Anunciado (variações agrupadas)"
+                    )
+                  )}
+                </div>
+              )}
+
+              {aberto && <div className="mt-2 border-t border-neutral-100 pl-9">{variantes.map((p) => linhaItem(p, true))}</div>}
+            </div>
           );
         })}
       </div>
@@ -776,6 +1018,63 @@ export default function SellerCatalogoDrop({
             <Field label="Título do anúncio">
               <Input value={formDetalhe.nome} onChange={(e) => setFormDetalhe((s) => ({ ...s, nome: e.target.value }))} />
             </Field>
+            <Field
+              label="Método de envio"
+              required={metodosEnvioDisponiveis(detalhe).length > 0}
+              hint={
+                carregandoMetodosEnvio
+                  ? "Checando o que está ativo agora na sua conta do Mercado Livre…"
+                  : metodosEnvioDisponiveis(detalhe).length === 0
+                    ? mlContas.length === 0
+                      ? "Conecte uma conta do Mercado Livre pra poder escolher o método de envio."
+                      : "Nenhum método de envio que esse produto aceita está ativo agora na(s) sua(s) conta(s) do Mercado Livre — ative em Mercado Envios/Flex no painel do ML, ou fale com a PH se o produto aceitar o método certo."
+                    : "Mostra só o que está ativo agora na sua conta do Mercado Livre e que esse produto aceita."
+              }
+            >
+              <Select
+                value={formDetalhe.metodoEnvio}
+                onChange={(e) => setFormDetalhe((s) => ({ ...s, metodoEnvio: e.target.value }))}
+                disabled={carregandoMetodosEnvio || metodosEnvioDisponiveis(detalhe).length === 0}
+              >
+                <option value="">Selecione…</option>
+                {metodosEnvioDisponiveis(detalhe).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label="Tipo de anúncio"
+              hint="Clássico tem comissão menor; Premium dá mais exposição no Mercado Livre. Sem escolher, publica como Premium."
+            >
+              <Select
+                value={formDetalhe.tipoAnuncio || "gold_pro"}
+                onChange={(e) => setFormDetalhe((s) => ({ ...s, tipoAnuncio: e.target.value }))}
+              >
+                {ML_TIPO_ANUNCIO_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {detalhe.anuncios.length === 0 &&
+              mlContas.length > 0 &&
+              !!formDetalhe.metodoEnvio &&
+              (() => {
+                const preco = Number((precos[detalhe.id] ?? "").replace(",", "."));
+                if (!Number.isFinite(preco) || preco <= 0) return null;
+                return (
+                  <RecebimentoLinha
+                    token={token}
+                    mlContaId={mlContas[0].id}
+                    produtoId={detalhe.id}
+                    preco={preco}
+                    metodoEnvioOverride={formDetalhe.metodoEnvio}
+                  />
+                );
+              })()}
             <Field label="Descrição">
               <Textarea
                 value={formDetalhe.descricao}
@@ -805,6 +1104,58 @@ export default function SellerCatalogoDrop({
             </Field>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={loteModalAberto}
+        onClose={() => setLoteModalAberto(false)}
+        title="Editar em massa"
+        footer={
+          <Button onClick={aplicarEdicaoLote} loading={pending}>
+            Aplicar a {itensParaEdicaoEmMassa.length} produto(s)
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-neutral-500">
+            Aplica o mesmo método de envio e tipo de anúncio pros <strong>{itensParaEdicaoEmMassa.length}</strong> produtos
+            dentro do que você marcou (grupo de variações conta todas elas) — assim não precisa abrir &ldquo;Detalhes&rdquo; de
+            cada um antes de publicar em lote. Cada produto continua podendo ser editado individualmente depois.
+          </p>
+          <Field
+            label="Método de envio"
+            required
+            hint={
+              loteCarregando
+                ? "Checando o que está ativo na conta escolhida…"
+                : metodosEnvioDisponiveisLote().length === 0
+                  ? "Nenhum método bate em todos os produtos selecionados ao mesmo tempo nessa conta — tente selecionar menos produtos ou trocar a conta."
+                  : "Só os métodos aceitos por todos os selecionados e ativos na conta escolhida pra publicar."
+            }
+          >
+            <Select
+              value={loteMetodoEnvio}
+              onChange={(e) => setLoteMetodoEnvio(e.target.value)}
+              disabled={loteCarregando || metodosEnvioDisponiveisLote().length === 0}
+            >
+              <option value="">Selecione…</option>
+              {metodosEnvioDisponiveisLote().map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Tipo de anúncio" hint="Sem escolher, publica todos como Premium.">
+            <Select value={loteTipoAnuncio || "gold_pro"} onChange={(e) => setLoteTipoAnuncio(e.target.value)}>
+              {ML_TIPO_ANUNCIO_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
       </Modal>
 
       <ConfirmDialog

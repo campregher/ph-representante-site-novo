@@ -166,6 +166,17 @@ export async function getValidMlToken(mlContaId: string): Promise<string> {
   return data.access_token as string;
 }
 
+/** Token válido + o ml_user_id numérico da conta — usado pra bater em endpoints
+ *  do ML que são por usuário (ex.: GET /users/{id}/shipping_preferences), que
+ *  não aceitam "me" como id nesse sub-recurso (testado ao vivo: 404). */
+export async function getMlContaInfo(mlContaId: string): Promise<{ token: string; mlUserId: string }> {
+  const token = await getValidMlToken(mlContaId);
+  const db = await createSistemaAdminClient();
+  const { data } = await db.from("cliente_ml_tokens").select("ml_user_id").eq("id", mlContaId).maybeSingle();
+  if (!data?.ml_user_id) throw new Error("Conta do Mercado Livre não conectada");
+  return { token, mlUserId: data.ml_user_id as string };
+}
+
 /** Todas as contas do ML conectadas por esse seller. */
 export async function getMlRecords(clienteId: string): Promise<MlAccountRecord[]> {
   const db = await createSistemaAdminClient();

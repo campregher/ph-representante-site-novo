@@ -6,9 +6,12 @@ import {
   publicarAnuncioMLDrop,
   atualizarAnuncioMLDrop,
   publicarGrupoMLDrop,
+  metodosEnvioAtivosML,
+  calcularRecebimentoML,
   type AnuncioProdutoDrop,
   type AnuncioGrupoDrop,
   type VariacaoProdutoDrop,
+  type RecebimentoML,
 } from "@/lib/sistema/dropshipping-ml-catalogo";
 import { formatBRL } from "@/lib/sistema/format";
 import type { ActionResult } from "@/lib/sistema/types";
@@ -21,22 +24,18 @@ type DropDb = Awaited<ReturnType<typeof createDropshippingAdminClient>>;
  *  do seller mora no schema `comercial`, mesmo pro catálogo de dropshipping. */
 async function resolveClienteLiberado(
   portalToken: string
-): Promise<{ db: SistemaDb; clienteId: string; metodosEnvio: string[] } | { error: string }> {
+): Promise<{ db: SistemaDb; clienteId: string } | { error: string }> {
   const db = await createSistemaAdminClient();
   const { data: cliente } = await db
     .from("clientes")
-    .select("id, status, email_confirmado, onboarding_metodos_envio")
+    .select("id, status, email_confirmado")
     .eq("portal_token", portalToken)
     .maybeSingle();
   if (!cliente) return { error: "Link inválido." };
   if (cliente.status === "bloqueado") return { error: "Acesso bloqueado." };
   if (!cliente.email_confirmado || cliente.status === "prospect")
     return { error: "Cadastro ainda não liberado." };
-  return {
-    db,
-    clienteId: cliente.id as string,
-    metodosEnvio: (cliente.onboarding_metodos_envio as string[] | null) ?? [],
-  };
+  return { db, clienteId: cliente.id as string };
 }
 
 /** Garante que a conta do ML informada é mesmo desse seller — nunca confia
@@ -50,6 +49,77 @@ async function checarDonoDaContaMl(db: SistemaDb, clienteId: string, mlContaId: 
     .eq("cliente_id", clienteId)
     .maybeSingle();
   return data ? null : "Conta do Mercado Livre não encontrada.";
+}
+
+/** Pra montar a lista de métodos de envio que o seller pode escolher em
+ *  "Detalhes do produto" (ver SellerCatalogoDrop.tsx) — mostra só o que
+ *  está de fato ativo agora na conta do Mercado Livre informada, não um
+ *  cadastro genérico. Checa a dona da conta antes (mesma regra de
+ *  publicar/editar — nunca confia num mlContaId vindo do client). */
+export async function consultarMetodosEnvioML(
+  portalToken: string,
+  mlContaId: string
+): Promise<ActionResult<{ metodos: string[] }>> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const donoErro = await checarDonoDaContaMl(ctx.db, ctx.clienteId, mlContaId);
+  if (donoErro) return { ok: false, error: donoErro };
+  const res = await metodosEnvioAtivosML(mlContaId);
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, metodos: res.metodos };
+}
+
+/** "Quanto você recebe" pra um produto nessa conta — comissão sempre dá pra
+ *  calcular (preço + categoria), frete grátis só quando o método de envio é
+ *  me2 (Mercado Envios/Flex) E esse produto já tem anúncio publicado NESSA
+ *  conta (precisa do ml_item_id real — ver calcularRecebimentoML).
+ *  `metodoEnvioOverride` é pro preview ANTES de salvar "Detalhes do
+ *  produto" (reage ao que o seller está escolhendo no select, não só ao que
+ *  já está salvo). Chamado sob demanda (não na lista inteira do catálogo)
+ *  pra não multiplicar chamadas ao ML por produto. */
+export async function consultarRecebimentoML(
+  portalToken: string,
+  mlContaId: string,
+  produtoId: string,
+  preco: number,
+  metodoEnvioOverride?: string
+): Promise<ActionResult<RecebimentoML>> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  const donoErro = await checarDonoDaContaMl(ctx.db, ctx.clienteId, mlContaId);
+  if (donoErro) return { ok: false, error: donoErro };
+  if (!Number.isFinite(preco) || preco <= 0) return { ok: false, error: "Preço inválido." };
+
+  const dropDb = await createDropshippingAdminClient();
+  const [{ data: produto }, { data: custom }, { data: anuncio }] = await Promise.all([
+    dropDb.from("produtos").select("ml_category_id").eq("id", produtoId).maybeSingle(),
+    dropDb
+      .from("seller_produto_customizacoes")
+      .select("tipo_anuncio, metodo_envio")
+      .eq("cliente_id", ctx.clienteId)
+      .eq("produto_id", produtoId)
+      .maybeSingle(),
+    dropDb
+      .from("seller_ml_anuncios")
+      .select("ml_item_id")
+      .eq("cliente_id", ctx.clienteId)
+      .eq("ml_conta_id", mlContaId)
+      .eq("produto_id", produtoId)
+      .maybeSingle(),
+  ]);
+  if (!produto?.ml_category_id) return { ok: false, error: "Produto sem categoria do Mercado Livre definida." };
+
+  const metodoEnvio = metodoEnvioOverride || (custom?.metodo_envio as string | null) || null;
+  const res = await calcularRecebimentoML(
+    mlContaId,
+    produto.ml_category_id as string,
+    preco,
+    (custom?.tipo_anuncio as string | null) ?? null,
+    metodoEnvio,
+    anuncio?.ml_item_id as string | undefined
+  );
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, comissao: res.comissao, freteAplicavel: res.freteAplicavel, frete: res.frete, recebe: res.recebe };
 }
 
 /** Busca o produto pronto pra publicar, já aplicando a customização de
@@ -70,7 +140,7 @@ async function buscarProdutoElegivel(
       .maybeSingle(),
     db
       .from("seller_produto_customizacoes")
-      .select("nome, descricao, imagens")
+      .select("nome, descricao, imagens, metodo_envio, tipo_anuncio")
       .eq("cliente_id", clienteId)
       .eq("produto_id", produtoId)
       .maybeSingle(),
@@ -80,6 +150,8 @@ async function buscarProdutoElegivel(
   const cnpj = precos.find((x) => x.tabela?.codigo === "cnpj");
   const precoMinimo = cnpj?.preco_sugerido ?? null;
   if (precoMinimo == null) return { error: "Produto sem preço sugerido definido." };
+  if (!custom?.metodo_envio)
+    return { error: `Cadastre o método de envio de "${p.nome}" em "Detalhes do produto" antes de anunciar.` };
   const imagensCustom = custom?.imagens as string[] | null;
   const imagens = imagensCustom?.length ? imagensCustom : ((p.imagens as string[] | null) ?? []);
   return {
@@ -93,6 +165,8 @@ async function buscarProdutoElegivel(
       imagens,
       ml_category_id: p.ml_category_id as string | null,
       transporte_aceito: (p.transporte_aceito as string[] | null) ?? [],
+      metodo_envio: custom.metodo_envio as string,
+      tipo_anuncio: custom.tipo_anuncio as string | null,
     },
     precoMinimo,
   };
@@ -115,7 +189,11 @@ async function buscarGrupoElegivel(
         "id, sku, nome, descricao, marca, imagens, variacao, ml_category_id, transporte_aceito, ativo, estoque_atual, produto_precos(preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .in("id", produtoIds),
-    db.from("seller_produto_customizacoes").select("produto_id, nome, descricao, imagens").eq("cliente_id", clienteId).in("produto_id", produtoIds),
+    db
+      .from("seller_produto_customizacoes")
+      .select("produto_id, nome, descricao, imagens, metodo_envio, tipo_anuncio")
+      .eq("cliente_id", clienteId)
+      .in("produto_id", produtoIds),
   ]);
   if (!rows || rows.length !== produtoIds.length) return { error: "Alguma variação desse produto não foi encontrada." };
   const indisponivel = rows.find((p) => !p.ativo || Number(p.estoque_atual) <= 0);
@@ -148,6 +226,16 @@ async function buscarGrupoElegivel(
 
   const base = rows[0];
   const baseCustom = customPorProduto.get(base.id as string);
+  // o método de envio é UM só pra todo o grupo (é um anúncio só, agrupado
+  // pelo ML) — o seller pode ter cadastrado em qualquer uma das variações
+  // (abre o "Detalhes" de qualquer uma), então aceita o primeiro que achar,
+  // em vez de depender da ordem/variação específica que caiu em `rows[0]`.
+  const metodoEnvio = [...customPorProduto.values()].map((c) => c.metodo_envio).find((m): m is string => !!m);
+  if (!metodoEnvio)
+    return { error: `Cadastre o método de envio de "${base.nome}" em "Detalhes do produto" (em qualquer uma das variações) antes de anunciar.` };
+  // mesma lógica do método de envio: tipo de anúncio é UM só pro grupo
+  // inteiro — aceita o que achar em qualquer variação.
+  const tipoAnuncio = [...customPorProduto.values()].map((c) => c.tipo_anuncio).find((t): t is string => !!t) ?? null;
   return {
     grupo: {
       nome: baseCustom?.nome || (base.nome as string),
@@ -155,6 +243,8 @@ async function buscarGrupoElegivel(
       marca: base.marca as string | null,
       ml_category_id: base.ml_category_id as string | null,
       transporte_aceito: (base.transporte_aceito as string[] | null) ?? [],
+      metodo_envio: metodoEnvio,
+      tipo_anuncio: tipoAnuncio,
       variantes,
     },
     precoMinimo,
@@ -215,7 +305,7 @@ export async function publicarGrupoMLVariasContas(
       resultados.push({ mlContaId, ok: false, error: donoErro });
       continue;
     }
-    const res = await publicarGrupoMLDrop(ctx.clienteId, mlContaId, gr.grupo, precoRevenda, ctx.metodosEnvio);
+    const res = await publicarGrupoMLDrop(ctx.clienteId, mlContaId, gr.grupo, precoRevenda);
     if (!res.ok) {
       resultados.push({ mlContaId, ok: false, error: res.error });
       continue;
@@ -335,7 +425,7 @@ export async function publicarProdutoML(
   if (!Number.isFinite(precoRevenda) || precoRevenda < pr.precoMinimo)
     return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(pr.precoMinimo)}.` };
 
-  const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda, ctx.metodosEnvio);
+  const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda);
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true, permalink: res.permalink };
@@ -371,7 +461,7 @@ export async function publicarProdutoMLVariasContas(
       resultados.push({ mlContaId, ok: false, error: donoErro });
       continue;
     }
-    const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda, ctx.metodosEnvio);
+    const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda);
     resultados.push({
       mlContaId,
       ok: res.ok,
@@ -421,7 +511,7 @@ export async function publicarEmMassaML(
       });
       continue;
     }
-    const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, item.precoRevenda, ctx.metodosEnvio);
+    const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, item.precoRevenda);
     resultados.push({ produtoId: item.produtoId, ok: res.ok, error: res.ok ? undefined : res.error });
   }
 

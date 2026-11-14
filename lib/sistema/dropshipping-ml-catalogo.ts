@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createDropshippingAdminClient } from "@/lib/supabase/server";
-import { getValidMlToken } from "@/lib/sistema/ml-auth";
+import { getValidMlToken, getMlContaInfo } from "@/lib/sistema/ml-auth";
 
 /**
  * Publicação de anúncios no Mercado Livre para o catálogo de dropshipping
@@ -13,6 +13,19 @@ import { getValidMlToken } from "@/lib/sistema/ml-auth";
 
 const ML_BASE = "https://api.mercadolibre.com";
 
+/** Os dois tipos de anúncio que o seller pode escolher pra uma revenda (ver
+ *  ML_TIPO_ANUNCIO_OPTIONS em lib/sistema/schemas.ts) — "Clássico" tem
+ *  comissão menor, "Premium" tem mais exposição. Os outros ids que a API
+ *  retorna (Diamante/Ouro/Prata/Bronze/Grátis) são tiers legados/promocionais
+ *  do próprio ML, não uma escolha real pra publicar um anúncio novo.
+ *  "gold_pro" é o padrão — mesmo comportamento de antes pra quem não mexer
+ *  nesse campo. */
+const LISTING_TYPE_PADRAO = "gold_pro";
+const LISTING_TYPES_VALIDOS = new Set(["gold_special", "gold_pro"]);
+function resolverListingType(tipoAnuncio: string | null): string {
+  return tipoAnuncio && LISTING_TYPES_VALIDOS.has(tipoAnuncio) ? tipoAnuncio : LISTING_TYPE_PADRAO;
+}
+
 export interface AnuncioProdutoDrop {
   id: string;
   sku: string;
@@ -23,64 +36,182 @@ export interface AnuncioProdutoDrop {
   imagens: string[];
   ml_category_id: string | null;
   transporte_aceito: string[];
+  metodo_envio: string | null;
+  tipo_anuncio: string | null;
 }
 
 type MlResult<T> = ({ ok: true } & T) | { ok: false; error: string };
 
-/**
- * Mapeia o(s) transporte(s) que o produto aceita (definidos no admin) pro
- * objeto `shipping` que a API do Mercado Livre espera na criação do item —
- * mas só considera um método se o SELLER também disse (no questionário de
- * onboarding) que usa esse método; se o seller não respondeu/não declarou
- * nenhum, cai de volta pra lista do produto sozinha (não bloqueia quem ainda
- * não preencheu o questionário). "shopee_express" não existe no ML — só
- * serve pro catálogo da Shopee — e por isso nunca entra nesse mapa.
- * Prioridade quando mais de um método bate: Mercado Envios (mode "me2", sem
- * logistic_type — deixa a conta do seller decidir qual sub-tipo ela tem
- * habilitado) > Flex (me2 + logistic_type "self_service", só funciona se a
- * conta do seller tiver Flex habilitado pelo ML) > Correios/Entrega Direta
- * (mode "custom" — seller cuida do envio fora da rede do Mercado Envios).
- *
- * IMPORTANTE: essa parte ainda não foi testada contra uma conta real do ML
- * conectada — os nomes dos campos (mode/logistic_type/self_service/custom)
- * seguem a documentação pública da API de Items + Shipping do Mercado Livre,
- * mas elegibilidade de Flex/me2 depende de habilitação por conta e categoria
- * que só a resposta real da API confirma. Teste com uma publicação real
- * antes de confiar nisso em produção.
- */
-function resolverShippingML(
-  transporteAceito: string[],
-  sellerMetodosEnvio: string[]
-): { shipping: Record<string, unknown> } | { error: string } {
-  const disponiveis =
-    sellerMetodosEnvio.length > 0
-      ? transporteAceito.filter((t) => sellerMetodosEnvio.includes(t))
-      : transporteAceito;
-
-  if (disponiveis.includes("mercado_envios")) {
-    return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false } };
-  }
-  if (disponiveis.includes("flex")) {
-    return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false, logistic_type: "self_service" } };
-  }
-  if (disponiveis.includes("correios") || disponiveis.includes("entrega_direta")) {
-    return { shipping: { mode: "custom" } };
-  }
-  if (transporteAceito.length === 0) {
-    return { error: "Produto sem transporte aceito configurado (fale com a PH)." };
-  }
-  if (disponiveis.length === 0) {
-    return {
-      error:
-        "Nenhum dos métodos de envio que você usa (configurados no seu cadastro) bate com o transporte aceito por esse produto.",
-    };
-  }
-  return { error: "Nenhum dos transportes aceitos por esse produto funciona no Mercado Livre (ex.: Shopee Express é só pra Shopee)." };
-}
-
 function mlErro(data: unknown, fallback: string): string {
   const d = data as { cause?: { message?: string }[]; message?: string };
   return d.cause?.[0]?.message ?? d.message ?? fallback;
+}
+
+const LABEL_METODO_ENVIO: Record<string, string> = {
+  correios: "Correios",
+  mercado_envios: "Mercado Envios",
+  flex: "Flex",
+  entrega_direta: "Entrega Direta",
+};
+
+/**
+ * Consulta no Mercado Livre quais métodos de envio estão de fato ATIVOS
+ * agora nessa conta conectada (não só o que o produto aceita, cadastrado
+ * pelo admin) — GET /users/{user_id}/shipping_preferences. Testado ao vivo
+ * contra uma conta real conectada: `logistics` vem como uma lista de
+ * {mode, types: [{type, status}]} — "me2"/"drop_off" = Mercado Envios,
+ * "me2"/"self_service" = Flex, "custom"/"custom" = envio fora da rede do
+ * Mercado Envios (nosso "correios" e "entrega_direta" caem nesse mesmo modo
+ * do lado do ML, que não distingue os dois — por isso os dois ficam
+ * disponíveis juntos quando "custom" está ativo).
+ */
+export async function metodosEnvioAtivosML(mlContaId: string): Promise<MlResult<{ metodos: string[] }>> {
+  let token: string;
+  let mlUserId: string;
+  try {
+    ({ token, mlUserId } = await getMlContaInfo(mlContaId));
+  } catch {
+    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
+  }
+
+  const res = await fetch(`${ML_BASE}/users/${mlUserId}/shipping_preferences`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao consultar métodos de envio no Mercado Livre.") };
+
+  const logistics = (data.logistics ?? []) as { mode: string; types: { type: string; status: string }[] }[];
+  const ativo = (mode: string, type: string) =>
+    logistics.some((l) => l.mode === mode && l.types.some((t) => t.type === type && t.status === "active"));
+
+  const metodos: string[] = [];
+  if (ativo("me2", "drop_off")) metodos.push("mercado_envios");
+  if (ativo("me2", "self_service")) metodos.push("flex");
+  if (ativo("custom", "custom")) metodos.push("correios", "entrega_direta");
+
+  return { ok: true, metodos };
+}
+
+export interface RecebimentoML {
+  comissao: number;
+  /** true só quando o modo de envio é me2 (Mercado Envios/Flex) — só aí
+   *  existe o "frete grátis que o seller banca" que o ML gerencia e
+   *  consegue calcular. Pra item JÁ PUBLICADO, confirma isso com o modo de
+   *  envio REAL do item na API do ML (`GET /items/{id}` → `shipping.mode`),
+   *  não com o que está só cadastrado localmente — o cadastro local pode
+   *  estar errado ou ter ficado desatualizado se algo mudou direto no
+   *  painel do ML. Pra item ainda não publicado (sem item_id), não tem
+   *  modo real pra checar — usa o método escolhido como estimativa. */
+  freteAplicavel: boolean;
+  /** null = ainda não dá pra saber (freteAplicavel true mas item ainda não
+   *  publicado) OU não se aplica (freteAplicavel false). */
+  frete: number | null;
+  recebe: number;
+}
+
+/**
+ * "Quanto você recebe" igual à Central de Vendedores do próprio Mercado
+ * Livre — testado ao vivo contra os números reais de um anúncio publicado
+ * (bateram certinho): comissão = `sale_fee_amount` de
+ * GET /sites/MLB/listing_prices (só precisa preço+categoria+tipo de
+ * anúncio, dá pra calcular mesmo ANTES de publicar); frete grátis que o
+ * seller banca = `list_cost` de
+ * GET /users/{seller_id}/shipping_options/free?item_id=X — só busca esse
+ * valor quando o modo de envio é me2 (Mercado Envios/Flex). Pra item já
+ * publicado, confirma o modo de envio consultando o item de verdade na API
+ * (`GET /items/{id}`) em vez de confiar só no método cadastrado localmente.
+ */
+export async function calcularRecebimentoML(
+  mlContaId: string,
+  categoryId: string,
+  preco: number,
+  tipoAnuncio: string | null,
+  metodoEnvio: string | null,
+  mlItemId?: string
+): Promise<MlResult<RecebimentoML>> {
+  let token: string;
+  let mlUserId: string;
+  try {
+    ({ token, mlUserId } = await getMlContaInfo(mlContaId));
+  } catch {
+    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
+  }
+
+  const resComissao = await fetch(
+    `${ML_BASE}/sites/MLB/listing_prices?price=${preco}&category_id=${categoryId}&listing_type_id=${resolverListingType(tipoAnuncio)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const dataComissao = await resComissao.json();
+  if (!resComissao.ok) return { ok: false, error: mlErro(dataComissao, "Erro ao calcular a comissão no Mercado Livre.") };
+  const comissao = Number(dataComissao.sale_fee_amount ?? 0);
+
+  let freteAplicavel: boolean;
+  let frete: number | null = null;
+  if (mlItemId) {
+    const resItem = await fetch(`${ML_BASE}/items/${mlItemId}?attributes=shipping`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const dataItem = await resItem.json();
+    freteAplicavel = resItem.ok && dataItem.shipping?.mode === "me2";
+    if (freteAplicavel) {
+      const resFrete = await fetch(`${ML_BASE}/users/${mlUserId}/shipping_options/free?item_id=${mlItemId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resFrete.ok) {
+        const dataFrete = await resFrete.json();
+        const custo = Number(dataFrete.coverage?.all_country?.list_cost);
+        if (Number.isFinite(custo)) frete = custo;
+      }
+    }
+  } else {
+    freteAplicavel = metodoEnvio === "mercado_envios" || metodoEnvio === "flex";
+  }
+
+  return { ok: true, comissao, freteAplicavel, frete, recebe: preco - comissao - (frete ?? 0) };
+}
+
+/**
+ * Mapeia o método de envio que o SELLER cadastrou pra esse produto (em
+ * "Detalhes do produto", antes de anunciar — ver
+ * lib/sistema/actions/seller-ml-catalogo.ts) pro objeto `shipping` que a API
+ * do Mercado Livre espera na criação do item — mas só aceita um método que
+ * esteja de fato ATIVO agora na conta que vai publicar (ver
+ * `metodosEnvioAtivosML`), não só cadastrado. "shopee_express" não existe
+ * no ML — só serve pro catálogo da Shopee — e por isso nunca é aceito aqui.
+ */
+async function resolverShippingML(
+  mlContaId: string,
+  transporteAceito: string[],
+  metodoEnvio: string | null
+): Promise<{ shipping: Record<string, unknown> } | { error: string }> {
+  if (transporteAceito.length === 0) {
+    return { error: "Produto sem transporte aceito configurado (fale com a PH)." };
+  }
+  if (!metodoEnvio) {
+    return { error: "Cadastre o método de envio desse produto em \"Detalhes do produto\" antes de anunciar." };
+  }
+  if (!transporteAceito.includes(metodoEnvio)) {
+    return { error: "O método de envio cadastrado pra esse produto não é mais aceito por ele — revise em \"Detalhes do produto\"." };
+  }
+  if (!(metodoEnvio in LABEL_METODO_ENVIO)) {
+    return { error: "Esse método de envio não funciona no Mercado Livre (ex.: Shopee Express é só pra Shopee) — escolha outro em \"Detalhes do produto\"." };
+  }
+
+  const ativosRes = await metodosEnvioAtivosML(mlContaId);
+  if (!ativosRes.ok) return { error: ativosRes.error };
+  if (!ativosRes.metodos.includes(metodoEnvio)) {
+    return {
+      error: `"${LABEL_METODO_ENVIO[metodoEnvio]}" não está ativo nessa conta do Mercado Livre agora — ative-o no painel do ML ou escolha outro método em "Detalhes do produto".`,
+    };
+  }
+
+  if (metodoEnvio === "mercado_envios") {
+    return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false } };
+  }
+  if (metodoEnvio === "flex") {
+    return { shipping: { mode: "me2", local_pick_up: false, free_shipping: false, logistic_type: "self_service" } };
+  }
+  return { shipping: { mode: "custom" } };
 }
 
 interface CategoriaAttr {
@@ -122,13 +253,12 @@ export async function publicarAnuncioMLDrop(
   clienteId: string,
   mlContaId: string,
   produto: AnuncioProdutoDrop,
-  precoRevenda: number,
-  sellerMetodosEnvio: string[] = []
+  precoRevenda: number
 ): Promise<MlResult<{ mlItemId: string; permalink: string }>> {
   if (!produto.ml_category_id)
     return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
 
-  const shippingRes = resolverShippingML(produto.transporte_aceito, sellerMetodosEnvio);
+  const shippingRes = await resolverShippingML(mlContaId, produto.transporte_aceito, produto.metodo_envio);
   if ("error" in shippingRes) return { ok: false, error: shippingRes.error };
 
   let token: string;
@@ -164,7 +294,7 @@ export async function publicarAnuncioMLDrop(
     available_quantity: 1,
     buying_mode: "buy_it_now",
     condition: "new",
-    listing_type_id: "gold_pro",
+    listing_type_id: resolverListingType(produto.tipo_anuncio),
     pictures,
     attributes,
     shipping: shippingRes.shipping,
@@ -218,6 +348,8 @@ export interface AnuncioGrupoDrop {
   marca: string | null;
   ml_category_id: string | null;
   transporte_aceito: string[];
+  metodo_envio: string | null;
+  tipo_anuncio: string | null;
   variantes: VariacaoProdutoDrop[];
 }
 
@@ -260,14 +392,13 @@ export async function publicarGrupoMLDrop(
   clienteId: string,
   mlContaId: string,
   grupo: AnuncioGrupoDrop,
-  precoRevenda: number,
-  sellerMetodosEnvio: string[] = []
+  precoRevenda: number
 ): Promise<MlResult<{ resultados: PublicarVarianteResultado[] }>> {
   if (!grupo.ml_category_id)
     return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
   if (grupo.variantes.length < 2) return { ok: false, error: "Esse produto não tem variações pra agrupar." };
 
-  const shippingRes = resolverShippingML(grupo.transporte_aceito, sellerMetodosEnvio);
+  const shippingRes = await resolverShippingML(mlContaId, grupo.transporte_aceito, grupo.metodo_envio);
   if ("error" in shippingRes) return { ok: false, error: shippingRes.error };
 
   let token: string;
@@ -306,7 +437,7 @@ export async function publicarGrupoMLDrop(
       available_quantity: 1,
       buying_mode: "buy_it_now",
       condition: "new",
-      listing_type_id: "gold_pro",
+      listing_type_id: resolverListingType(grupo.tipo_anuncio),
       pictures: v.imagens.map((url) => ({ source: url })),
       attributes,
       shipping: shippingRes.shipping,

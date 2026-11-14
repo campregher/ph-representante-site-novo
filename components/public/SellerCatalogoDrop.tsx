@@ -6,14 +6,21 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { ChevronRight, ExternalLink, Pause, Play, Upload } from "lucide-react";
 import {
-  publicarProdutoML,
+  publicarProdutoMLVariasContas,
   publicarEmMassaML,
   pausarAnuncioML,
   reativarAnuncioML,
   atualizarPrecoAnuncioML,
 } from "@/lib/sistema/actions/seller-ml-catalogo";
+import {
+  salvarCustomizacaoProdutoSeller,
+  restaurarProdutoPadraoSeller,
+} from "@/lib/sistema/actions/seller-produto-customizacao";
 import { formatBRL } from "@/lib/sistema/format";
 import { Button } from "@/components/sistema/ui/Button";
+import { Modal } from "@/components/sistema/ui/Modal";
+import { Field, Input, Textarea } from "@/components/sistema/ui/Field";
+import { Badge } from "@/components/sistema/ui/Badge";
 
 export interface AnuncioView {
   mlContaId: string;
@@ -28,12 +35,15 @@ export interface CatalogoDropItemView {
   id: string;
   sku: string;
   nome: string;
+  descricao: string | null;
   imagem_url: string | null;
   imagens: string[];
   variacao: string | null;
   categoria: string | null;
   estoque_atual: number;
   precoMinimo: number;
+  custoReferencia: number | null;
+  personalizado: boolean;
   mlCategoriaDefinida: boolean;
   anuncios: AnuncioView[];
 }
@@ -57,20 +67,19 @@ export default function SellerCatalogoDrop({
   const [precos, setPrecos] = useState<Record<string, string>>(() =>
     Object.fromEntries(itens.map((p) => [p.id, String(p.anuncios[0]?.precoRevenda ?? p.precoMinimo)]))
   );
-  const [contaAlvo, setContaAlvo] = useState<Record<string, string>>(() =>
-    Object.fromEntries(itens.map((p) => [p.id, mlContas[0]?.id ?? ""]))
-  );
+  const [contasEscolhidas, setContasEscolhidas] = useState<Record<string, Set<string>>>({});
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [contaLote, setContaLote] = useState(mlContas[0]?.id ?? "");
-  const [galeriaAberta, setGaleriaAberta] = useState<Set<string>>(new Set());
   const [produtosAbertos, setProdutosAbertos] = useState<Set<string>>(new Set());
+  const [detalhe, setDetalhe] = useState<CatalogoDropItemView | null>(null);
+  const [formDetalhe, setFormDetalhe] = useState({ nome: "", descricao: "", imagens: "" });
 
-  function toggleGaleria(id: string) {
-    setGaleriaAberta((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  function toggleConta(itemId: string, contaId: string) {
+    setContasEscolhidas((s) => {
+      const atual = new Set(s[itemId] ?? []);
+      if (atual.has(contaId)) atual.delete(contaId);
+      else atual.add(contaId);
+      return { ...s, [itemId]: atual };
     });
   }
 
@@ -134,24 +143,72 @@ export default function SellerCatalogoDrop({
     return v;
   }
 
+  /** Quando só existe 1 conta disponível pra esse produto, publica nela direto
+   *  sem exigir que o seller marque checkbox nenhum — só pede escolha quando
+   *  há de fato mais de uma conta pra decidir entre. */
+  function contasParaPublicar(item: CatalogoDropItemView): string[] {
+    const disponiveis = contasDisponiveis(item);
+    if (disponiveis.length <= 1) return disponiveis.map((c) => c.id);
+    return [...(contasEscolhidas[item.id] ?? [])];
+  }
+
   function publicar(item: CatalogoDropItemView) {
     const preco = precoValido(item);
     if (preco == null) {
       toast.error(`Preço mínimo pra esse produto é ${formatBRL(item.precoMinimo)}.`);
       return;
     }
-    const conta = contaAlvo[item.id];
-    if (!conta) {
-      toast.error("Escolha em qual conta publicar.");
+    const contas = contasParaPublicar(item);
+    if (contas.length === 0) {
+      toast.error("Marque em quais contas do Mercado Livre publicar.");
       return;
     }
     start(async () => {
-      const res = await publicarProdutoML(token, conta, item.id, preco);
+      const res = await publicarProdutoMLVariasContas(token, contas, item.id, preco);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success("Anúncio publicado no Mercado Livre.");
+      const falhas = res.resultados.filter((r) => !r.ok);
+      if (falhas.length === 0) toast.success(`Publicado em ${res.resultados.length} conta(s).`);
+      else toast.error(`${res.resultados.length - falhas.length} publicado(s), ${falhas.length} falhou(aram): ${falhas[0].error}`);
+      router.refresh();
+    });
+  }
+
+  function abrirDetalhe(p: CatalogoDropItemView) {
+    setDetalhe(p);
+    setFormDetalhe({ nome: p.nome, descricao: p.descricao ?? "", imagens: p.imagens.join("\n") });
+  }
+
+  function salvarDetalhe() {
+    if (!detalhe) return;
+    start(async () => {
+      const res = await salvarCustomizacaoProdutoSeller(token, detalhe.id, {
+        nome: formDetalhe.nome,
+        descricao: formDetalhe.descricao,
+        imagens: formDetalhe.imagens.split("\n").map((u) => u.trim()).filter(Boolean),
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Produto atualizado pro seu anúncio.");
+      setDetalhe(null);
+      router.refresh();
+    });
+  }
+
+  function restaurarPadrao() {
+    if (!detalhe) return;
+    start(async () => {
+      const res = await restaurarProdutoPadraoSeller(token, detalhe.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Restaurado pro cadastro padrão da PH.");
+      setDetalhe(null);
       router.refresh();
     });
   }
@@ -246,9 +303,9 @@ export default function SellerCatalogoDrop({
             {!indentado && (
               <button
                 type="button"
-                onClick={() => p.imagens.length > 1 && toggleGaleria(p.id)}
+                onClick={() => abrirDetalhe(p)}
                 className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-100"
-                title={p.imagens.length > 1 ? "Ver todas as fotos" : undefined}
+                title="Ver cadastro completo"
               >
                 {p.imagem_url ? (
                   <Image src={p.imagem_url} alt={p.nome} fill className="object-contain" unoptimized />
@@ -262,58 +319,56 @@ export default function SellerCatalogoDrop({
                 )}
               </button>
             )}
-            <div className="min-w-0">
-              {!indentado && <p className="truncate font-medium text-neutral-900">{p.nome}</p>}
-              <p className="text-xs text-neutral-400">
+            <button type="button" onClick={() => abrirDetalhe(p)} className="min-w-0 text-left">
+              {!indentado && (
+                <p className="truncate font-medium text-neutral-900 hover:text-brand hover:underline">
+                  {p.nome}
+                  {p.personalizado && <Badge tone="blue" className="ml-1.5 align-middle">personalizado</Badge>}
+                </p>
+              )}
+              <p className="text-xs text-neutral-400 hover:text-neutral-600">
                 {indentado ? `${p.variacao || `Variação ${p.sku.split("-").pop()}`} · ` : ""}SKU {p.sku}
                 {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín.{" "}
                 {formatBRL(p.precoMinimo)}
+                {indentado && p.personalizado && <Badge tone="blue" className="ml-1.5 align-middle">personalizado</Badge>}
               </p>
               {!p.mlCategoriaDefinida && (
                 <p className="text-xs text-yellow-600">Categoria do ML ainda não configurada — fale com a PH.</p>
               )}
-            </div>
+            </button>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <input
-              value={precos[p.id] ?? ""}
-              onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
-              inputMode="decimal"
-              className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
-            />
-            {disponiveis.length > 0 && p.mlCategoriaDefinida && (
-              <>
-                {disponiveis.length > 1 && (
-                  <select
-                    value={contaAlvo[p.id] ?? ""}
-                    onChange={(e) => setContaAlvo((s) => ({ ...s, [p.id]: e.target.value }))}
-                    className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs"
-                  >
-                    {disponiveis.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nickname ?? "Conta ML"}
-                      </option>
-                    ))}
-                  </select>
-                )}
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                value={precos[p.id] ?? ""}
+                onChange={(e) => setPrecos((s) => ({ ...s, [p.id]: e.target.value }))}
+                inputMode="decimal"
+                className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+              />
+              {disponiveis.length > 0 && p.mlCategoriaDefinida && (
                 <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
                   <Upload size={13} /> Publicar
                 </Button>
-              </>
+              )}
+            </div>
+            {disponiveis.length > 1 && p.mlCategoriaDefinida && (
+              <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
+                {disponiveis.map((c) => (
+                  <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
+                    <input
+                      type="checkbox"
+                      checked={(contasEscolhidas[p.id] ?? new Set()).has(c.id)}
+                      onChange={() => toggleConta(p.id, c.id)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300 text-brand"
+                    />
+                    {c.nickname ?? "Conta ML"}
+                  </label>
+                ))}
+              </div>
             )}
           </div>
         </div>
-
-        {galeriaAberta.has(p.id) && p.imagens.length > 1 && (
-          <div className="ml-6 flex flex-wrap gap-2">
-            {p.imagens.map((url, i) => (
-              <div key={i} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
-                <Image src={url} alt={`${p.nome} - foto ${i + 1}`} fill className="object-contain" unoptimized />
-              </div>
-            ))}
-          </div>
-        )}
 
         {p.anuncios.length > 0 && (
           <div className="ml-6 space-y-1.5">
@@ -445,6 +500,91 @@ export default function SellerCatalogoDrop({
           );
         })}
       </div>
+
+      <Modal
+        open={!!detalhe}
+        onClose={() => setDetalhe(null)}
+        title="Detalhes do produto"
+        size="lg"
+        footer={
+          <>
+            {detalhe?.personalizado && (
+              <Button variant="outline" onClick={restaurarPadrao} loading={pending} className="mr-auto">
+                Restaurar padrão da PH
+              </Button>
+            )}
+            <Button onClick={salvarDetalhe} loading={pending}>
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        {detalhe && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-50 px-3 py-2.5 text-sm">
+              <span className="text-neutral-500">
+                SKU {detalhe.sku}
+                {detalhe.variacao ? ` · ${detalhe.variacao}` : ""} · {detalhe.estoque_atual} em estoque
+              </span>
+              <div className="flex items-center gap-4">
+                {detalhe.custoReferencia != null && (
+                  <span className="text-neutral-500">
+                    Custo real: <strong className="text-neutral-800">{formatBRL(detalhe.custoReferencia)}</strong>
+                  </span>
+                )}
+                <span className="text-neutral-500">
+                  Sugerido (mín.): <strong className="text-neutral-800">{formatBRL(detalhe.precoMinimo)}</strong>
+                </span>
+                {detalhe.custoReferencia != null && (() => {
+                  const revenda = Number((precos[detalhe.id] ?? "").replace(",", "."));
+                  if (!Number.isFinite(revenda)) return null;
+                  const margem = revenda - detalhe.custoReferencia;
+                  const pct = detalhe.custoReferencia > 0 ? (margem / detalhe.custoReferencia) * 100 : 0;
+                  return (
+                    <span className={margem >= 0 ? "text-green-700" : "text-red-600"}>
+                      Sua margem: <strong>{formatBRL(margem)}</strong> ({pct.toFixed(0)}%)
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+            <p className="text-xs text-neutral-400">
+              Editar aqui muda só como <strong>o seu</strong> anúncio aparece — o cadastro da PH (usado pelos outros
+              sellers que revendem esse produto) não é alterado.
+            </p>
+            <Field label="Título do anúncio">
+              <Input value={formDetalhe.nome} onChange={(e) => setFormDetalhe((s) => ({ ...s, nome: e.target.value }))} />
+            </Field>
+            <Field label="Descrição">
+              <Textarea
+                value={formDetalhe.descricao}
+                onChange={(e) => setFormDetalhe((s) => ({ ...s, descricao: e.target.value }))}
+                rows={4}
+              />
+            </Field>
+            <Field label="Fotos" hint="Uma URL por linha — a primeira vira a capa.">
+              <Textarea
+                value={formDetalhe.imagens}
+                onChange={(e) => setFormDetalhe((s) => ({ ...s, imagens: e.target.value }))}
+                rows={3}
+              />
+              {formDetalhe.imagens.trim() && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {formDetalhe.imagens
+                    .split("\n")
+                    .map((u) => u.trim())
+                    .filter(Boolean)
+                    .map((url, i) => (
+                      <div key={i} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-neutral-200 bg-neutral-100">
+                        <Image src={url} alt={`Foto ${i + 1}`} fill className="object-contain" unoptimized />
+                      </div>
+                    ))}
+                </div>
+              )}
+            </Field>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -96,7 +96,10 @@ export async function consultarStatusNF(mlContaId: string, orderId: string): Pro
   const data = await res.json();
   const status = String(data.status ?? "").toLowerCase();
   if (status !== "authorized") return { pronto: false, motivo: `NF com status "${status || "desconhecido"}"` };
-  const danfeUrl = data.danfe_location as string | undefined;
+  // danfe_location vem dentro de "attributes", não na raiz do objeto — confirmado
+  // ao vivo contra uma NF real autorizada (sem isso, toda NF autorizada caía
+  // silenciosamente em "sem danfe_location", nunca marcando o pedido como pronto).
+  const danfeUrl = data.attributes?.danfe_location as string | undefined;
   if (!danfeUrl) return { pronto: false, motivo: "NF autorizada mas sem danfe_location" };
   return { pronto: true, danfeUrl };
 }

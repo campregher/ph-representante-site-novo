@@ -108,11 +108,16 @@ async function pausarAnunciosPorEstoqueZeradoDrop(produtoId: string) {
 export async function processarVendaDropshipping(mlUserId: string, orderId: string): Promise<{ ok: boolean; motivo?: string }> {
   const sistema = await createSistemaAdminClient();
 
-  const { data: tokenRow } = await sistema
+  // o mesmo ml_user_id pode aparecer em mais de uma linha (reconexões antigas,
+  // troca de cliente_id dono da conta) — pega a conexão mais recente, não
+  // dá pra usar .maybeSingle() direto aqui.
+  const { data: tokenRows } = await sistema
     .from("cliente_ml_tokens")
     .select("id, cliente_id")
     .eq("ml_user_id", mlUserId)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const tokenRow = tokenRows?.[0];
   if (!tokenRow) return { ok: false, motivo: "seller não encontrado pra esse ml_user_id" };
   const mlContaId = tokenRow.id as string;
   const clienteId = tokenRow.cliente_id as string;

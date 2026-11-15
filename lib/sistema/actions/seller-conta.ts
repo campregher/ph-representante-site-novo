@@ -8,6 +8,7 @@ import type { ActionResult } from "@/lib/sistema/types";
 export interface MeuCadastroInput {
   razao_social: string;
   nome_fantasia: string;
+  inscricao_estadual: string;
   telefone: string;
   whatsapp: string;
   cep: string;
@@ -32,6 +33,7 @@ export async function atualizarMeuCadastro(raw: MeuCadastroInput): Promise<Actio
     .update({
       razao_social: raw.razao_social || null,
       nome_fantasia: raw.nome_fantasia || null,
+      inscricao_estadual: raw.inscricao_estadual || null,
       telefone: raw.telefone || null,
       whatsapp: raw.whatsapp || null,
       cep: raw.cep || null,

@@ -252,6 +252,12 @@ export const sellerCadastroSchema = z
     message: "Informe o CNPJ",
     path: ["cnpj"],
   })
+  .refine((d) => !!d.inscricao_estadual, {
+    // o Mercado Livre exige IE atualizada pra ativar o Faturador (emissão de
+    // NF-e via API) — "ISENTO" (ver checkbox no form) também conta como preenchido.
+    message: "Informe a Inscrição Estadual (ou marque \"Isento\")",
+    path: ["inscricao_estadual"],
+  })
   .refine((d) => d.senha === d.confirmar_senha, {
     message: "As senhas não conferem",
     path: ["confirmar_senha"],

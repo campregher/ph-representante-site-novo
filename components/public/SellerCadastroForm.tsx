@@ -213,7 +213,7 @@ export default function SellerCadastroForm() {
                     </div>
                   </div>
                 </Field>
-                <Field label="Inscrição estadual" error={errors.inscricao_estadual?.message}>
+                <Field label="Inscrição estadual" required error={errors.inscricao_estadual?.message}>
                   <Input {...register("inscricao_estadual")} disabled={isento} placeholder={isento ? "ISENTO" : undefined} />
                   <Checkbox
                     label="Isento de Inscrição Estadual"

@@ -8,13 +8,16 @@ export default async function DropDashboardCadastroPage() {
   const db = await createSistemaAdminClient();
   const { data } = await db
     .from("clientes")
-    .select("razao_social, nome_fantasia, telefone, whatsapp, cep, logradouro, numero, complemento, bairro, cidade, estado")
+    .select(
+      "razao_social, nome_fantasia, inscricao_estadual, telefone, whatsapp, cep, logradouro, numero, complemento, bairro, cidade, estado"
+    )
     .eq("id", seller.id)
     .single();
 
   const initial: MeuCadastroInput = {
     razao_social: (data?.razao_social as string) ?? "",
     nome_fantasia: (data?.nome_fantasia as string) ?? "",
+    inscricao_estadual: (data?.inscricao_estadual as string) ?? "",
     telefone: (data?.telefone as string) ?? "",
     whatsapp: (data?.whatsapp as string) ?? "",
     cep: (data?.cep as string) ?? "",

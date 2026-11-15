@@ -43,6 +43,9 @@ export default function CadastroSellerForm({ initial }: { initial: MeuCadastroIn
             <Field label="Nome fantasia">
               <Input value={values.nome_fantasia} onChange={(e) => set("nome_fantasia", e.target.value)} />
             </Field>
+            <Field label="Inscrição estadual" hint="Exigida pelo Mercado Livre pra ativar o Faturador (emissão de NF-e via API). Use ISENTO se for o caso.">
+              <Input value={values.inscricao_estadual} onChange={(e) => set("inscricao_estadual", e.target.value)} />
+            </Field>
           </FormGrid>
         </CardBody>
       </Card>

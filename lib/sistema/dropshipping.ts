@@ -1,5 +1,63 @@
-import { createDropshippingClient } from "@/lib/supabase/server";
+import { createDropshippingClient, createSistemaAdminClient } from "@/lib/supabase/server";
 import type { DropFornecedor, DropProdutoRow, DropTabelaCodigo } from "@/lib/sistema/types";
+
+export interface DropPedidoAdmin {
+  id: string;
+  numero: number;
+  status: "aguardando_nf" | "pronto" | "enviado" | "cancelado";
+  createdAt: string;
+  valorTotal: number;
+  sellerNome: string;
+  entregaCidade: string | null;
+  entregaUf: string | null;
+  itens: { sku: string; nome: string; quantidade: number }[];
+}
+
+const PEDIDO_ADMIN_COLS =
+  "id, numero, status, created_at, cliente_id, valor_total, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot)";
+
+/** Visão do admin sobre os pedidos de dropshipping de todos os sellers —
+ *  só acompanhamento, nenhuma ação (quem resolve é o próprio seller com o
+ *  fornecedor dele). */
+export async function listDropPedidos(): Promise<DropPedidoAdmin[]> {
+  const drop = await createDropshippingClient();
+  const { data } = await drop.from("pedidos").select(PEDIDO_ADMIN_COLS).order("created_at", { ascending: false }).limit(200);
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    numero: number;
+    status: DropPedidoAdmin["status"];
+    created_at: string;
+    cliente_id: string;
+    valor_total: number;
+    entrega_cidade: string | null;
+    entrega_uf: string | null;
+    pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null }[];
+  }[];
+  if (rows.length === 0) return [];
+
+  const clienteIds = [...new Set(rows.map((r) => r.cliente_id))];
+  const sistema = await createSistemaAdminClient();
+  const { data: clientes } = await sistema.from("clientes").select("id, razao_social, nome_fantasia").in("id", clienteIds);
+  const nomePorCliente = new Map(
+    (clientes ?? []).map((c) => [c.id as string, (c.nome_fantasia as string | null) ?? (c.razao_social as string) ?? "—"])
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    numero: r.numero,
+    status: r.status,
+    createdAt: r.created_at,
+    valorTotal: Number(r.valor_total),
+    sellerNome: nomePorCliente.get(r.cliente_id) ?? "—",
+    entregaCidade: r.entrega_cidade,
+    entregaUf: r.entrega_uf,
+    itens: r.pedido_itens.map((it) => ({
+      sku: it.sku_snapshot ?? "—",
+      nome: it.descricao_snapshot ?? "—",
+      quantidade: it.quantidade,
+    })),
+  }));
+}
 
 export async function listDropFornecedores(soAtivos = false): Promise<DropFornecedor[]> {
   const db = await createDropshippingClient();

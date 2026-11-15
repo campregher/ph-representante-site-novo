@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronRight, ExternalLink, Pause, Play, Settings2, Trash2, Upload, Wallet } from "lucide-react";
+import { AlertTriangle, Boxes, ChevronRight, ExternalLink, Pause, Play, Settings2, Store, Tag, Trash2, Upload, Wallet } from "lucide-react";
 import {
   publicarProdutoMLVariasContas,
   publicarGrupoMLVariasContas,
@@ -680,13 +680,19 @@ export default function SellerCatalogoDrop({
     labelAnunciado = "Anunciado"
   ) {
     return (
-      <div key={a.mlContaId} className="space-y-2 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div
+        key={a.mlContaId}
+        className="space-y-2 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5 lg:flex lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2 lg:space-y-0"
+      >
+        <div className="flex items-center gap-1.5 lg:w-40 lg:shrink-0">
+          <Store size={12} className="shrink-0 text-neutral-400" />
           <span className="text-xs font-semibold text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
           {a.status === "paused" ? (
             <Badge tone="neutral">Pausado</Badge>
           ) : (
-            <div className="flex items-center gap-1.5">
+            <>
               <Badge tone="green">{labelAnunciado}</Badge>
               {a.permalink && (
                 <a
@@ -699,12 +705,24 @@ export default function SellerCatalogoDrop({
                   <ExternalLink size={14} />
                 </a>
               )}
-            </div>
+            </>
           )}
         </div>
+        {/* na tela larga, o "quanto você recebe" vira o centro da linha
+            (lg:flex-1) e os botões vão pro fim — em vez de empilhado, do
+            jeito que já funcionava bem no mobile (mantido intacto). */}
+        <div className="lg:order-3 lg:min-w-[220px] lg:flex-1">
+          <RecebimentoLinha
+            token={token}
+            mlContaId={a.mlContaId}
+            produtoId={produtoId}
+            preco={a.precoRevenda}
+            custoReferencia={custoReferencia}
+          />
+        </div>
         {/* grid 2 colunas no mobile pra alinhar os botões certinho; flex-wrap
-            inline a partir de sm:, onde cabe tudo numa linha só. */}
-        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+            inline a partir de sm:, lado a lado com o resto a partir de lg:. */}
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap lg:order-4 lg:w-auto lg:shrink-0">
           <Button size="sm" variant="outline" onClick={onAtualizarPreco} loading={pending} className="w-full sm:w-auto">
             Atualizar preço
           </Button>
@@ -721,13 +739,6 @@ export default function SellerCatalogoDrop({
             <Trash2 size={13} /> Excluir
           </Button>
         </div>
-        <RecebimentoLinha
-          token={token}
-          mlContaId={a.mlContaId}
-          produtoId={produtoId}
-          preco={a.precoRevenda}
-          custoReferencia={custoReferencia}
-        />
       </div>
     );
   }
@@ -801,8 +812,16 @@ export default function SellerCatalogoDrop({
               </p>
               <p className="mt-0.5 text-xs text-neutral-400">
                 SKU {p.sku}
-                {p.categoria ? ` · ${p.categoria}` : ""} · {p.estoque_atual} em estoque · mín. {formatBRL(p.precoMinimo)}
+                {p.categoria ? ` · ${p.categoria}` : ""}
               </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+                <span className="flex items-center gap-1">
+                  <Boxes size={12} className="text-neutral-400" /> {p.estoque_atual} em estoque
+                </span>
+                <span className="flex items-center gap-1">
+                  <Tag size={12} className="text-neutral-400" /> mín. {formatBRL(p.precoMinimo)}
+                </span>
+              </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {!p.mlCategoriaDefinida && <Badge tone="yellow">Categoria do ML pendente — fale com a PH</Badge>}
                 {p.mlCategoriaDefinida && !p.metodoEnvio && <Badge tone="yellow">Cadastre o método de envio</Badge>}
@@ -956,9 +975,14 @@ export default function SellerCatalogoDrop({
                   </div>
                   <div className="min-w-0">
                     <p className="line-clamp-2 text-sm font-semibold text-neutral-900">{base.nome}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">
-                      {estoqueTotal} em estoque · mín. {formatBRL(precoMinimoGrupo)}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+                      <span className="flex items-center gap-1">
+                        <Boxes size={12} className="text-neutral-400" /> {estoqueTotal} em estoque
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Tag size={12} className="text-neutral-400" /> mín. {formatBRL(precoMinimoGrupo)}
+                      </span>
+                    </div>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       <Badge tone="purple">{variantes.length} variações agrupadas no ML</Badge>
                       {!base.mlCategoriaDefinida && <Badge tone="yellow">Categoria do ML pendente — fale com a PH</Badge>}

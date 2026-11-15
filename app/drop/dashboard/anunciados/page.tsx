@@ -21,7 +21,7 @@ export default async function DropDashboardAnunciadosPage() {
   const anunciados = catalogo.filter((p) => p.anuncios.length > 0);
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="max-w-5xl space-y-4">
       <div>
         <h1 className="text-lg font-bold text-neutral-900">Anunciados</h1>
         <p className="text-sm text-neutral-500">Seus produtos já publicados no Mercado Livre.</p>

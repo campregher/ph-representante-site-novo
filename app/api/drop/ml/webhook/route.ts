@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { processarVendaML } from "@/lib/sistema/ml-pedido-sync";
+import { processarVendaDropshipping } from "@/lib/sistema/dropshipping-pedido-sync";
 import { sincronizarAnuncioMLDrop } from "@/lib/sistema/dropshipping-ml-catalogo";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
  * Webhook de notificações do Mercado Livre (topic "orders_v2", "items", etc).
  * ML exige resposta 2xx rápida — sempre retorna 200, mesmo em erro interno
  * (senão ele fica reenviando). Topic "orders_v2": resource vem no formato
- * "/orders/{id}" — repassa pro processamento de venda (D6), que é idempotente
+ * "/orders/{id}" — repassa pro processamento de venda de dropshipping, que é idempotente
  * (webhook reenvia a mesma notificação várias vezes). Topic "items": resource
  * vem como "/items/{id}" — mantém dropshipping.seller_ml_anuncios sincronizado
  * com o status/preço real no ML (pausar/reativar/fechar/mudar preço direto no
@@ -31,10 +31,10 @@ export async function POST(request: Request) {
       // aguarda de verdade (não fire-and-forget) — em serverless a função pode
       // ser encerrada assim que a resposta for enviada, matando uma promise pendente
       try {
-        const res = await processarVendaML(String(body.user_id), orderId);
-        if (!res.ok) console.error("[drop/ml/webhook] processarVendaML:", res.motivo);
+        const res = await processarVendaDropshipping(String(body.user_id), orderId);
+        if (!res.ok) console.error("[drop/ml/webhook] processarVendaDropshipping:", res.motivo);
       } catch (e) {
-        console.error("[drop/ml/webhook] processarVendaML falhou:", e);
+        console.error("[drop/ml/webhook] processarVendaDropshipping falhou:", e);
       }
     }
   }

@@ -29,7 +29,7 @@ export default async function DropDashboardFornecedorProdutosPage({
   const nomeFornecedor = itens[0]?.fornecedorNome ?? "Fornecedor";
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="max-w-5xl space-y-4">
       <Link href="/drop/dashboard/produtos" className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-brand">
         <ArrowLeft size={14} /> Voltar aos fornecedores
       </Link>

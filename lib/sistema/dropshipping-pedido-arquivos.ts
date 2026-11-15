@@ -112,10 +112,16 @@ export async function baixarEtiquetaPdf(mlContaId: string, shippingId: number): 
   return Buffer.from(await res.arrayBuffer());
 }
 
-/** Baixa o PDF do DANFE a partir da URL retornada por `consultarStatusNF`. */
+/** Baixa o PDF do DANFE a partir da URL retornada por `consultarStatusNF`.
+ *  `danfe_location` vem como caminho relativo (ex.: "/users/123/invoices/...")
+ *  — sem prefixar com ML_BASE, o fetch falha (URL inválida) e a exceção
+ *  cancela o processamento do pedido em silêncio (só loga, ver chamadores),
+ *  deixando o pedido preso em "aguardando_nf" mesmo com a NF já autorizada.
+ *  Confirmado ao vivo contra uma NF real. */
 export async function baixarDanfePdf(mlContaId: string, danfeUrl: string): Promise<Buffer | null> {
   const { token } = await getMlContaInfo(mlContaId);
-  const res = await fetch(danfeUrl, { headers: { Authorization: `Bearer ${token}` } });
+  const url = danfeUrl.startsWith("http") ? danfeUrl : `${ML_BASE}${danfeUrl}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return null;
   return Buffer.from(await res.arrayBuffer());
 }

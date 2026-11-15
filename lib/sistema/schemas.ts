@@ -310,12 +310,17 @@ export const SELLER_VENDAS_MES_OPTIONS = [
   { value: "mais_200", label: "Mais de 200 vendas" },
 ] as const;
 
+export const REGRA_NF_TEXTO =
+  'O Mercado Livre tem um emissor fiscal nativo, o "Faturador". Com ele ativo no painel do ML (CNPJ + Inscrição Estadual atualizada + certificado digital A1), a nota fiscal da sua venda pode ser emitida automaticamente. Se você não ativar, não tem problema — nada trava: você recebe a venda normalmente e, assim que declarar a nota fiscal manualmente no Mercado Livre e a etiqueta ficar disponível, o pedido aparece em "Pedidos" pra você baixar e enviar ao fornecedor.';
+
 export const sellerOnboardingSchema = z
   .object({
     jaVendeMarketplace: z.boolean(),
     tempoVendendo: z.enum(["menos_6m", "seis_12m", "um_2anos", "mais_2anos"]).optional(),
     metodosEnvio: z.array(z.string()).optional(),
     vendasMes: z.enum(["ate_10", "11_50", "51_200", "mais_200"]).optional(),
+    // regra de emissão de NF (Faturador do ML vs. fluxo manual) — ver OnboardingFlow.tsx
+    regraNfAceita: z.literal(true, { message: "Confirme que leu como funciona a nota fiscal da venda" }),
   })
   .superRefine((d, ctx) => {
     if (!d.jaVendeMarketplace) return;

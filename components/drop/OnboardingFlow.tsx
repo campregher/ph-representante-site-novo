@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Truck, Megaphone, Package, MessageCircle, CheckCircle2, ArrowRight, Rocket } from "lucide-react";
+import { Truck, Megaphone, Package, MessageCircle, FileText, CheckCircle2, ArrowRight, Rocket } from "lucide-react";
 import { salvarOnboardingSeller } from "@/lib/sistema/actions/seller-onboarding";
 import {
   SELLER_TEMPO_VENDENDO_OPTIONS,
@@ -11,8 +11,9 @@ import {
   SELLER_VENDAS_MES_OPTIONS,
 } from "@/lib/sistema/schemas";
 import { Button } from "@/components/sistema/ui/Button";
-import { Field, Select } from "@/components/sistema/ui/Field";
+import { Field, Select, Checkbox } from "@/components/sistema/ui/Field";
 import { WHATSAPP_URL } from "@/lib/constants";
+import { REGRA_NF_TEXTO } from "@/lib/sistema/schemas";
 
 function Chip({
   active,
@@ -69,6 +70,7 @@ export default function OnboardingFlow({
   const [tempoVendendo, setTempoVendendo] = useState("");
   const [metodosEnvio, setMetodosEnvio] = useState<string[]>([]);
   const [vendasMes, setVendasMes] = useState("");
+  const [regraNfAceita, setRegraNfAceita] = useState(false);
 
   function toggleMetodoEnvio(valor: string) {
     setMetodosEnvio((s) => (s.includes(valor) ? s.filter((i) => i !== valor) : [...s, valor]));
@@ -85,12 +87,14 @@ export default function OnboardingFlow({
   }
 
   function concluir() {
+    if (!regraNfAceita) return toast.error("Confirme que leu como funciona a nota fiscal da venda.");
     start(async () => {
       const res = await salvarOnboardingSeller(portalToken, {
         jaVendeMarketplace: !!jaVende,
         tempoVendendo: jaVende ? tempoVendendo : undefined,
         metodosEnvio: jaVende ? metodosEnvio : undefined,
         vendasMes: jaVende ? vendasMes : undefined,
+        regraNfAceita: true,
       });
       if (!res.ok) { toast.error(res.error); return; }
       toast.success("Tudo pronto! Bem-vindo ao portal.");
@@ -131,6 +135,16 @@ export default function OnboardingFlow({
           ))}
 
           <div className="flex gap-3 rounded-xl border border-neutral-200 p-4 transition-shadow hover:shadow-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+              <FileText size={18} />
+            </div>
+            <div>
+              <p className="font-semibold text-neutral-900">Nota fiscal da venda</p>
+              <p className="text-sm text-neutral-500">{REGRA_NF_TEXTO}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-3 rounded-xl border border-neutral-200 p-4 transition-shadow hover:shadow-sm">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
               <MessageCircle size={18} />
             </div>
@@ -144,7 +158,15 @@ export default function OnboardingFlow({
           </div>
         </div>
 
-        <Button onClick={concluir} loading={pending} className="w-full">
+        <div className="rounded-xl border border-neutral-200 p-3">
+          <Checkbox
+            label="Li e entendi como funciona a emissão da nota fiscal da venda"
+            checked={regraNfAceita}
+            onChange={(e) => setRegraNfAceita(e.target.checked)}
+          />
+        </div>
+
+        <Button onClick={concluir} loading={pending} disabled={!regraNfAceita} className="w-full">
           <CheckCircle2 size={16} /> Entendi, vamos começar
         </Button>
       </div>

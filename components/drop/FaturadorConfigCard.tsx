@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { salvarFaturadorAtivo } from "@/lib/sistema/actions/seller-faturador";
+import { REGRA_NF_TEXTO } from "@/lib/sistema/schemas";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Checkbox } from "@/components/sistema/ui/Field";
 import { Badge } from "@/components/sistema/ui/Badge";
@@ -30,6 +31,7 @@ export default function FaturadorConfigCard({ initial }: { initial: boolean }) {
         description="Emissor fiscal nativo do ML — com ele ativo, a nota fiscal da venda pode ser emitida direto por lá."
       />
       <CardBody className="space-y-3">
+        <p className="text-sm text-neutral-600">{REGRA_NF_TEXTO}</p>
         <div className="space-y-1.5 text-sm text-neutral-600">
           <p>Pra ativar, no painel do Mercado Livre (fora daqui) você precisa ter:</p>
           <ul className="list-disc space-y-0.5 pl-5">

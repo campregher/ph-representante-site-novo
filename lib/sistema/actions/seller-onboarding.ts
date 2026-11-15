@@ -39,6 +39,7 @@ export async function salvarOnboardingSeller(portalToken: string, raw: unknown):
       onboarding_metodos_envio: v.jaVendeMarketplace ? v.metodosEnvio : null,
       onboarding_vendas_mes: v.jaVendeMarketplace ? v.vendasMes : null,
       onboarding_completo: true,
+      regra_nf_aceita_em: new Date().toISOString(),
     })
     .eq("id", ctx.clienteId);
   if (error) return { ok: false, error: error.message };

@@ -1,5 +1,10 @@
 import { createDropshippingAdminClient } from "@/lib/supabase/server";
-import { processarPedidoAguardandoNF, precisaChecar } from "@/lib/sistema/dropshipping-pedido-arquivos";
+import {
+  processarPedidoAguardandoNF,
+  precisaChecar,
+  buscarMensagensPedido,
+  type MensagemPedido,
+} from "@/lib/sistema/dropshipping-pedido-arquivos";
 
 export interface PedidoDropItem {
   sku: string;
@@ -85,4 +90,125 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
     entregaCidade: p.entrega_cidade,
     entregaUf: p.entrega_uf,
   }));
+}
+
+export interface PedidoDropDetalheItem extends PedidoDropItem {
+  precoVenda: number;
+  comissaoMl: number;
+  custoUnitario: number;
+}
+
+export interface PedidoDropDetalhe {
+  id: string;
+  numero: number;
+  status: PedidoDrop["status"];
+  createdAt: string;
+  canal: string;
+  pedidoExterno: string | null;
+  itens: PedidoDropDetalheItem[];
+  valorTotal: number;
+  frete: number | null;
+  comissaoTotal: number;
+  custoTotal: number;
+  entrega: {
+    nome: string | null;
+    telefone: string | null;
+    cep: string | null;
+    logradouro: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    uf: string | null;
+  };
+  arquivos: { etiquetaPronta: boolean; danfePronta: boolean; planilhaPronta: boolean };
+  mensagens: MensagemPedido[];
+}
+
+const PEDIDO_DETALHE_COLS =
+  "id, numero, status, created_at, cliente_id, canal, pedido_externo, ml_conta_id, valor_total, ml_frete, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_complemento, entrega_bairro, entrega_cidade, entrega_uf, etiqueta_path, danfe_path, planilha_path, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit, custo_unitario, ml_preco_venda, ml_comissao)";
+
+/** Detalhe completo de UM pedido do seller — só o dono (`clienteId`) pode
+ *  ver. Venda, recebimento estimado, entrega e mensagens do comprador. */
+export async function getPedidoDropSeller(clienteId: string, id: string): Promise<PedidoDropDetalhe | null> {
+  const db = await createDropshippingAdminClient();
+  const { data } = await db.from("pedidos").select(PEDIDO_DETALHE_COLS).eq("id", id).maybeSingle();
+  if (!data || data.cliente_id !== clienteId) return null;
+
+  const r = data as unknown as {
+    id: string;
+    numero: number;
+    status: PedidoDrop["status"];
+    created_at: string;
+    canal: string;
+    pedido_externo: string | null;
+    ml_conta_id: string | null;
+    valor_total: number;
+    ml_frete: number | null;
+    entrega_nome: string | null;
+    entrega_telefone: string | null;
+    entrega_cep: string | null;
+    entrega_logradouro: string | null;
+    entrega_numero: string | null;
+    entrega_complemento: string | null;
+    entrega_bairro: string | null;
+    entrega_cidade: string | null;
+    entrega_uf: string | null;
+    etiqueta_path: string | null;
+    danfe_path: string | null;
+    planilha_path: string | null;
+    pedido_itens: {
+      quantidade: number;
+      sku_snapshot: string | null;
+      descricao_snapshot: string | null;
+      unidades_por_kit: number;
+      custo_unitario: number;
+      ml_preco_venda: number;
+      ml_comissao: number;
+    }[];
+  };
+
+  const mensagens =
+    r.ml_conta_id && r.pedido_externo ? await buscarMensagensPedido(r.ml_conta_id, r.pedido_externo) : [];
+
+  const itens = r.pedido_itens.map((it) => ({
+    sku: it.sku_snapshot ?? "—",
+    nome: it.descricao_snapshot ?? "—",
+    quantidade: it.quantidade,
+    caixas: it.quantidade * (it.unidades_por_kit || 1),
+    precoVenda: Number(it.ml_preco_venda),
+    comissaoMl: Number(it.ml_comissao),
+    custoUnitario: Number(it.custo_unitario),
+  }));
+
+  return {
+    id: r.id,
+    numero: r.numero,
+    status: r.status,
+    createdAt: r.created_at,
+    canal: r.canal,
+    pedidoExterno: r.pedido_externo,
+    itens,
+    valorTotal: Number(r.valor_total),
+    frete: r.ml_frete != null ? Number(r.ml_frete) : null,
+    comissaoTotal: itens.reduce((s, it) => s + it.comissaoMl, 0),
+    custoTotal: itens.reduce((s, it) => s + it.custoUnitario * it.quantidade, 0),
+    entrega: {
+      nome: r.entrega_nome,
+      telefone: r.entrega_telefone,
+      cep: r.entrega_cep,
+      logradouro: r.entrega_logradouro,
+      numero: r.entrega_numero,
+      complemento: r.entrega_complemento,
+      bairro: r.entrega_bairro,
+      cidade: r.entrega_cidade,
+      uf: r.entrega_uf,
+    },
+    arquivos: {
+      etiquetaPronta: !!r.etiqueta_path,
+      danfePronta: !!r.danfe_path,
+      planilhaPronta: !!r.planilha_path,
+    },
+    mensagens,
+  };
 }

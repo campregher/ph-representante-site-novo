@@ -3,6 +3,7 @@ import { listDropPedidos } from "@/lib/sistema/dropshipping";
 import { formatBRL, formatDateTime } from "@/lib/sistema/format";
 import { PageHeader } from "@/components/sistema/ui/State";
 import { Badge } from "@/components/sistema/ui/Badge";
+import RowLink from "@/components/sistema/RowLink";
 import { TableScroll, Table, Thead, Th, Tbody, Tr, Td } from "@/components/sistema/ui/Table";
 
 const STATUS_LABEL = {
@@ -45,7 +46,7 @@ export default async function DropPedidosPage() {
                 const status = STATUS_LABEL[p.status];
                 const totalCaixas = p.itens.reduce((s, it) => s + it.caixas, 0);
                 return (
-                  <Tr key={p.id}>
+                  <RowLink key={p.id} href={`/sistema/dropshipping/pedidos/${p.id}`} className="hover:bg-neutral-50">
                     <Td className="font-semibold text-neutral-900">#{p.numero}</Td>
                     <Td>{p.sellerNome}</Td>
                     <Td>{p.itens.map((it) => `${it.quantidade}x ${it.nome}`).join(", ")}</Td>
@@ -56,7 +57,7 @@ export default async function DropPedidosPage() {
                       <Badge tone={status.tone}>{status.label}</Badge>
                     </Td>
                     <Td className="whitespace-nowrap text-neutral-400">{formatDateTime(p.createdAt)}</Td>
-                  </Tr>
+                  </RowLink>
                 );
               })}
             </Tbody>

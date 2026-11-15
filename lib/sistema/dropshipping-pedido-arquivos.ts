@@ -31,6 +31,59 @@ export interface StatusEtiquetaNF {
   danfeUrl?: string;
 }
 
+export interface MensagemPedido {
+  id: string;
+  autor: "comprador" | "voce";
+  texto: string;
+  data: string | null;
+}
+
+/**
+ * Mensagens pós-venda trocadas com o comprador (chat do Mercado Livre).
+ * Endpoint confirmado ao vivo (não pela doc pública, que devolveu 403 ao
+ * carregar): GET /messages/packs/{pack_id}/sellers/{seller_id}?tag=post_sale
+ * — testado contra pedidos reais, mas nenhum tinha mensagem na hora do teste,
+ * então o formato exato de cada mensagem (campos de texto/data/remetente)
+ * não foi confirmado — por isso os vários fallbacks de campo abaixo. Nunca
+ * derruba a página: qualquer falha vira lista vazia.
+ */
+export async function buscarMensagensPedido(mlContaId: string, orderId: string): Promise<MensagemPedido[]> {
+  try {
+    const { token, mlUserId } = await getMlContaInfo(mlContaId);
+    const headers = { Authorization: `Bearer ${token}` };
+    const orderRes = await fetch(`${ML_BASE}/orders/${orderId}`, { headers });
+    if (!orderRes.ok) return [];
+    const order = await orderRes.json();
+    const packId = order.pack_id ?? order.id;
+    const res = await fetch(
+      `${ML_BASE}/messages/packs/${packId}/sellers/${mlUserId}?tag=post_sale&mark_as_read=false`,
+      { headers }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const mensagens = (data.messages ?? []) as Array<Record<string, unknown>>;
+    return mensagens
+      .map((m, i) => {
+        const fromId = (m.from as { user_id?: number | string } | undefined)?.user_id;
+        const textoRaw = m.text as { plain?: string } | string | undefined;
+        const texto = typeof textoRaw === "string" ? textoRaw : textoRaw?.plain ?? (typeof m.message === "string" ? m.message : "");
+        const data =
+          (m.message_date as { created?: string } | undefined)?.created ??
+          (typeof m.date_created === "string" ? m.date_created : null);
+        return {
+          id: String(m.id ?? i),
+          autor: (fromId != null && String(fromId) === mlUserId ? "voce" : "comprador") as "comprador" | "voce",
+          texto: texto ?? "",
+          data: data ?? null,
+        };
+      })
+      .filter((m) => m.texto);
+  } catch (e) {
+    console.error("[dropshipping-pedido-arquivos] buscarMensagensPedido:", e);
+    return [];
+  }
+}
+
 /** Consulta se a NF do consumidor final já foi autorizada pelo ML (o que
  *  libera a etiqueta pra impressão). */
 export async function consultarStatusNF(mlContaId: string, orderId: string): Promise<StatusEtiquetaNF> {
@@ -240,13 +293,10 @@ export type ArquivoPedidoResultado =
   | { ok: true; buffer: Buffer; contentType: string; filename: string }
   | { ok: false; status: 404 | 403; error: string };
 
-/** Baixa um dos 3 arquivos do pacote de um pedido, SÓ se ele pertencer ao
- *  seller informado e já estiver "pronto" — usado pelas 3 rotas de download
- *  em `app/api/drop/pedidos/[id]/*`. */
-export async function baixarArquivoPedidoSeller(
-  clienteId: string,
+async function buscarArquivoPedido(
   pedidoId: string,
-  tipo: ArquivoPedidoTipo
+  tipo: ArquivoPedidoTipo,
+  clienteId: string | null
 ): Promise<ArquivoPedidoResultado> {
   const db = await createDropshippingAdminClient();
   const info = ARQUIVO_INFO[tipo];
@@ -256,7 +306,9 @@ export async function baixarArquivoPedidoSeller(
     .eq("id", pedidoId)
     .maybeSingle();
 
-  if (!pedido || pedido.cliente_id !== clienteId) return { ok: false, status: 404, error: "Pedido não encontrado." };
+  if (!pedido || (clienteId && pedido.cliente_id !== clienteId)) {
+    return { ok: false, status: 404, error: "Pedido não encontrado." };
+  }
   const path = (pedido as unknown as Record<string, string | null>)[info.coluna];
   if (pedido.status !== "pronto" || !path) return { ok: false, status: 403, error: "Arquivo ainda não está pronto." };
 
@@ -265,4 +317,24 @@ export async function baixarArquivoPedidoSeller(
 
   const buffer = Buffer.from(await arquivo.arrayBuffer());
   return { ok: true, buffer, contentType: info.contentType, filename: `pedido-${pedido.numero}-${tipo}.${info.ext}` };
+}
+
+/** Baixa um dos 3 arquivos do pacote de um pedido, SÓ se ele pertencer ao
+ *  seller informado e já estiver "pronto" — usado pelas 3 rotas de download
+ *  em `app/api/drop/pedidos/[id]/*`. */
+export async function baixarArquivoPedidoSeller(
+  clienteId: string,
+  pedidoId: string,
+  tipo: ArquivoPedidoTipo
+): Promise<ArquivoPedidoResultado> {
+  return buscarArquivoPedido(pedidoId, tipo, clienteId);
+}
+
+/** Mesma coisa, mas pro admin — ele pode ver o pedido de qualquer seller,
+ *  então não checa dono (a rota já exige `requireSistemaProfile()`). */
+export async function baixarArquivoPedidoAdmin(
+  pedidoId: string,
+  tipo: ArquivoPedidoTipo
+): Promise<ArquivoPedidoResultado> {
+  return buscarArquivoPedido(pedidoId, tipo, null);
 }

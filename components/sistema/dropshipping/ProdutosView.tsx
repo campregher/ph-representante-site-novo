@@ -30,7 +30,7 @@ const empty = {
   sku: "", nome: "", descricao: "", imagens: "", marca: "", fornecedor_id: "",
   ml_category_id: "", ml_category_nome: "", categoria_interna: "", variacao: "",
   transporte_aceito: [] as string[],
-  estoque_atual: "0", estoque_minimo: "0", ativo: true,
+  estoque_atual: "0", estoque_minimo: "0", unidades_por_kit: "1", ativo: true,
   custoCnpj: "", precoSugeridoCnpj: "",
 };
 
@@ -200,6 +200,7 @@ export default function ProdutosView({
       ml_category_id: x.ml_category_id ?? "", ml_category_nome: x.ml_category_nome ?? "",
       categoria_interna: x.categoria_interna ?? "", variacao: x.variacao ?? "", transporte_aceito: x.transporte_aceito ?? [],
       estoque_atual: String(x.estoque_atual), estoque_minimo: String(x.estoque_minimo),
+      unidades_por_kit: String(x.unidades_por_kit ?? 1),
       ativo: x.ativo,
       custoCnpj: x.custoCnpj != null ? String(x.custoCnpj) : "",
       precoSugeridoCnpj: x.precoSugeridoCnpj != null ? String(x.precoSugeridoCnpj) : "",
@@ -216,6 +217,7 @@ export default function ProdutosView({
         imagens: f.imagens.split("\n").map((u) => u.trim()).filter(Boolean),
         estoque_atual: Number(f.estoque_atual) || 0,
         estoque_minimo: Number(f.estoque_minimo) || 0,
+        unidades_por_kit: Number(f.unidades_por_kit) || 1,
         custoCnpj: f.custoCnpj ? Number(f.custoCnpj) : null,
         precoSugeridoCnpj: f.precoSugeridoCnpj ? Number(f.precoSugeridoCnpj) : null,
       });
@@ -540,6 +542,9 @@ export default function ProdutosView({
             </Field>
             <Field label="Estoque atual"><Input value={f.estoque_atual} onChange={(e) => set("estoque_atual", e.target.value)} inputMode="numeric" /></Field>
             <Field label="Estoque mínimo"><Input value={f.estoque_minimo} onChange={(e) => set("estoque_minimo", e.target.value)} inputMode="numeric" /></Field>
+            <Field label="Unidades por kit" hint="Ex.: anúncio 'Kit 3 Caixas' = 3. Define quanto enviar de verdade por venda.">
+              <Input value={f.unidades_por_kit} onChange={(e) => set("unidades_por_kit", e.target.value)} inputMode="numeric" />
+            </Field>
           </FormGrid>
           <Field label="Descrição"><Textarea value={f.descricao} onChange={(e) => set("descricao", e.target.value)} rows={2} /></Field>
           <Field label="Fotos" hint="Uma URL por linha — a primeira vira a capa mostrada pro seller e enviada ao Mercado Livre.">

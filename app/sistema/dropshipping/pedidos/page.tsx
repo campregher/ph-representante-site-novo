@@ -33,6 +33,7 @@ export default async function DropPedidosPage() {
                 <Th>Nº</Th>
                 <Th>Seller</Th>
                 <Th>Itens</Th>
+                <Th>Caixas a enviar</Th>
                 <Th>Entrega</Th>
                 <Th>Valor</Th>
                 <Th>Status</Th>
@@ -42,11 +43,13 @@ export default async function DropPedidosPage() {
             <Tbody>
               {pedidos.map((p) => {
                 const status = STATUS_LABEL[p.status];
+                const totalCaixas = p.itens.reduce((s, it) => s + it.caixas, 0);
                 return (
                   <Tr key={p.id}>
                     <Td className="font-semibold text-neutral-900">#{p.numero}</Td>
                     <Td>{p.sellerNome}</Td>
                     <Td>{p.itens.map((it) => `${it.quantidade}x ${it.nome}`).join(", ")}</Td>
+                    <Td className="font-semibold text-neutral-900">{totalCaixas}</Td>
                     <Td>{p.entregaCidade ? `${p.entregaCidade}/${p.entregaUf ?? ""}` : "—"}</Td>
                     <Td>{formatBRL(p.valorTotal)}</Td>
                     <Td>

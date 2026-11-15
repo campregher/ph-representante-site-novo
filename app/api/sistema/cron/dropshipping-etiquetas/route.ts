@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PEDIDOS_COLS =
-  "id, numero, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot)";
+  "id, numero, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
 
 /**
  * Cron diário (ver vercel.json — Vercel Hobby só libera 1x/dia) — rede de

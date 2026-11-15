@@ -71,6 +71,7 @@ export interface ItemPlanilha {
   sku: string;
   nome: string;
   quantidade: number;
+  caixas: number;
 }
 
 export interface PedidoPlanilhaInput {
@@ -100,13 +101,14 @@ export async function gerarPlanilhaPedido(pedido: PedidoPlanilhaInput): Promise<
     .filter(Boolean)
     .join(", ");
 
-  const columns = ["SKU", "Produto", "Quantidade", "Destinatário", "Telefone", "CEP", "Endereço"];
+  const columns = ["SKU", "Produto", "Qtd. vendida", "Qtd. a enviar (caixas)", "Destinatário", "Telefone", "CEP", "Endereço"];
   const aoa = [
     columns,
     ...pedido.itens.map((it) => [
       it.sku,
       it.nome,
       it.quantidade,
+      it.caixas,
       pedido.entregaNome ?? "",
       pedido.entregaTelefone ?? "",
       pedido.entregaCep ?? "",
@@ -114,7 +116,7 @@ export async function gerarPlanilhaPedido(pedido: PedidoPlanilhaInput): Promise<
     ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 10 }, { wch: 24 }, { wch: 16 }, { wch: 12 }, { wch: 40 }];
+  ws["!cols"] = [{ wch: 16 }, { wch: 32 }, { wch: 12 }, { wch: 20 }, { wch: 24 }, { wch: 16 }, { wch: 12 }, { wch: 40 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Pedido ${pedido.numero}`.slice(0, 31));
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
@@ -135,7 +137,7 @@ interface PedidoAguardandoNF {
   entrega_bairro: string | null;
   entrega_cidade: string | null;
   entrega_uf: string | null;
-  pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null }[];
+  pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null; unidades_por_kit: number }[];
 }
 
 export function precisaChecar(pedido: Pick<PedidoAguardandoNF, "ultima_checagem_em">): boolean {
@@ -177,6 +179,7 @@ export async function processarPedidoAguardandoNF(
       sku: it.sku_snapshot ?? "—",
       nome: it.descricao_snapshot ?? "—",
       quantidade: it.quantidade,
+      caixas: it.quantidade * (it.unidades_por_kit || 1),
     })),
     entregaNome: pedido.entrega_nome,
     entregaTelefone: pedido.entrega_telefone,

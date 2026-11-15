@@ -412,6 +412,7 @@ export interface DropProduto {
   transporte_aceito: string[];
   estoque_atual: number;
   estoque_minimo: number;
+  unidades_por_kit: number;
   ativo: boolean;
   created_at: string;
   updated_at: string;

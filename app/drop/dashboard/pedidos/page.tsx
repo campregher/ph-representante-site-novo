@@ -49,6 +49,7 @@ export default async function DropDashboardPedidosPage() {
             <div className="divide-y divide-neutral-100">
               {pedidos.map((p) => {
                 const status = STATUS_LABEL[p.status];
+                const totalCaixas = p.itens.reduce((s, it) => s + it.caixas, 0);
                 return (
                   <div key={p.id} className="py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -60,6 +61,7 @@ export default async function DropDashboardPedidosPage() {
                     <p className="mt-0.5 text-xs text-neutral-400">
                       {formatDateTime(p.createdAt)}
                       {p.entregaCidade ? ` · entrega em ${p.entregaCidade}/${p.entregaUf ?? ""}` : ""}
+                      {totalCaixas !== p.itens.reduce((s, it) => s + it.quantidade, 0) ? ` · enviar ${totalCaixas} caixa(s)` : ""}
                     </p>
                     {p.status === "pronto" && (
                       <div className="mt-2 flex flex-wrap gap-2">

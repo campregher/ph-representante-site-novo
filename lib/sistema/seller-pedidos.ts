@@ -5,6 +5,7 @@ export interface PedidoDropItem {
   sku: string;
   nome: string;
   quantidade: number;
+  caixas: number;
 }
 
 export interface PedidoDrop {
@@ -18,7 +19,7 @@ export interface PedidoDrop {
 }
 
 const PEDIDOS_COLS =
-  "id, numero, status, created_at, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot)";
+  "id, numero, status, created_at, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
 
 /**
  * Pedidos de dropshipping do seller, mais recentes primeiro. Pra cada pedido
@@ -54,7 +55,7 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
     entrega_bairro: string | null;
     entrega_cidade: string | null;
     entrega_uf: string | null;
-    pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null }[];
+    pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null; unidades_por_kit: number }[];
   }[];
 
   await Promise.all(
@@ -79,6 +80,7 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
       sku: it.sku_snapshot ?? "—",
       nome: it.descricao_snapshot ?? "—",
       quantidade: it.quantidade,
+      caixas: it.quantidade * (it.unidades_por_kit || 1),
     })),
     entregaCidade: p.entrega_cidade,
     entregaUf: p.entrega_uf,

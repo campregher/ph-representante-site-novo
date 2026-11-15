@@ -126,6 +126,7 @@ export async function salvarDropProduto(id: string | null, raw: unknown): Promis
     fornecedor_id: v.fornecedor_id || null,
     estoque_atual: Math.round(Number(v.estoque_atual ?? 0)),
     estoque_minimo: Math.round(Number(v.estoque_minimo ?? 0)),
+    unidades_por_kit: Math.max(1, Math.round(Number(v.unidades_por_kit ?? 1))),
     ativo: v.ativo,
   };
 

@@ -570,6 +570,9 @@ export const dropProdutoSchema = z.object({
   fornecedor_id: optionalText,
   estoque_atual: optionalNumber,
   estoque_minimo: optionalNumber,
+  // unidades físicas por anúncio — ex.: "Kit 3 Caixas" = 3. Padrão 1 (a
+  // maioria dos produtos não é vendida em kit).
+  unidades_por_kit: optionalNumber,
   ativo: z.boolean().default(true),
   // custo real de fábrica — seller CNPJ paga o fornecedor direto
   custoCnpj: optionalNumber,

@@ -10,11 +10,11 @@ export interface DropPedidoAdmin {
   sellerNome: string;
   entregaCidade: string | null;
   entregaUf: string | null;
-  itens: { sku: string; nome: string; quantidade: number }[];
+  itens: { sku: string; nome: string; quantidade: number; caixas: number }[];
 }
 
 const PEDIDO_ADMIN_COLS =
-  "id, numero, status, created_at, cliente_id, valor_total, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot)";
+  "id, numero, status, created_at, cliente_id, valor_total, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
 
 /** Visão do admin sobre os pedidos de dropshipping de todos os sellers —
  *  só acompanhamento, nenhuma ação (quem resolve é o próprio seller com o
@@ -31,7 +31,7 @@ export async function listDropPedidos(): Promise<DropPedidoAdmin[]> {
     valor_total: number;
     entrega_cidade: string | null;
     entrega_uf: string | null;
-    pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null }[];
+    pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null; unidades_por_kit: number }[];
   }[];
   if (rows.length === 0) return [];
 
@@ -55,6 +55,7 @@ export async function listDropPedidos(): Promise<DropPedidoAdmin[]> {
       sku: it.sku_snapshot ?? "—",
       nome: it.descricao_snapshot ?? "—",
       quantidade: it.quantidade,
+      caixas: it.quantidade * (it.unidades_por_kit || 1),
     })),
   }));
 }
@@ -73,7 +74,7 @@ export async function dropFornecedorOptions(): Promise<{ id: string; label: stri
 }
 
 const PRODUTO_COLS =
-  "id, fornecedor_id, sku, nome, descricao, imagem_url, imagens, ml_category_id, ml_category_nome, marca, categoria_interna, variacao, transporte_aceito, estoque_atual, estoque_minimo, ativo, created_at, updated_at, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))";
+  "id, fornecedor_id, sku, nome, descricao, imagem_url, imagens, ml_category_id, ml_category_nome, marca, categoria_interna, variacao, transporte_aceito, estoque_atual, estoque_minimo, unidades_por_kit, ativo, created_at, updated_at, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))";
 
 type ProdutoPrecoRow = {
   id: string;
@@ -91,6 +92,7 @@ type ProdutoPrecoRow = {
   transporte_aceito: string[] | null;
   estoque_atual: number;
   estoque_minimo: number;
+  unidades_por_kit: number;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -116,6 +118,7 @@ function resolvePrecos(row: ProdutoPrecoRow): DropProdutoRow {
     transporte_aceito: row.transporte_aceito ?? [],
     estoque_atual: row.estoque_atual,
     estoque_minimo: row.estoque_minimo,
+    unidades_por_kit: row.unidades_por_kit,
     ativo: row.ativo,
     created_at: row.created_at,
     updated_at: row.updated_at,

@@ -168,7 +168,7 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
   const produtoIds = [...new Set(itensValidos.map((it) => produtoPorItem.get(it.item.id)!))];
   const { data: produtos } = await drop
     .from("produtos")
-    .select("id, sku, nome, estoque_atual, produto_precos(custo, tabela:tabelas_preco(codigo))")
+    .select("id, sku, nome, estoque_atual, unidades_por_kit, produto_precos(custo, tabela:tabelas_preco(codigo))")
     .in("id", produtoIds);
   const produtoMap = new Map(
     (produtos ?? []).map((p) => {
@@ -219,6 +219,7 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
       custo_unitario: p?.custoCnpj ?? 0,
       ml_preco_venda: it.unit_price,
       ml_comissao: it.sale_fee,
+      unidades_por_kit: p?.unidades_por_kit ?? 1,
     };
   });
   const { error: eItens } = await drop.from("pedido_itens").insert(itensRows);

@@ -20,9 +20,17 @@ const PEDIDO_ADMIN_COLS =
 /** Visão do admin sobre os pedidos de dropshipping de todos os sellers —
  *  só acompanhamento, nenhuma ação (quem resolve é o próprio seller com o
  *  fornecedor dele). */
+/** Só mostra pedidos com etiqueta já liberada ("pronto"/"enviado") — o admin
+ *  acompanha o que já está pronto pra seguir, não a fila de quem ainda está
+ *  esperando o seller declarar a NF no Mercado Livre. */
 export async function listDropPedidos(): Promise<DropPedidoAdmin[]> {
   const drop = await createDropshippingClient();
-  const { data } = await drop.from("pedidos").select(PEDIDO_ADMIN_COLS).order("created_at", { ascending: false }).limit(200);
+  const { data } = await drop
+    .from("pedidos")
+    .select(PEDIDO_ADMIN_COLS)
+    .in("status", ["pronto", "enviado"])
+    .order("created_at", { ascending: false })
+    .limit(200);
   const rows = (data ?? []) as unknown as {
     id: string;
     numero: number;

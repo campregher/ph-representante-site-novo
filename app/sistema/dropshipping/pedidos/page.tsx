@@ -21,11 +21,11 @@ export default async function DropPedidosPage() {
     <div>
       <PageHeader
         title="Pedidos"
-        description="Vendas de dropshipping no Mercado Livre, só acompanhamento — o seller resolve a etiqueta/NF com o fornecedor dele direto."
+        description="Vendas de dropshipping no Mercado Livre com etiqueta já liberada — só acompanhamento, o seller resolve a etiqueta/NF com o fornecedor dele direto. Pedidos aguardando o seller declarar a NF no Mercado Livre não aparecem aqui."
       />
 
       {pedidos.length === 0 ? (
-        <p className="text-sm text-neutral-500">Nenhum pedido registrado ainda.</p>
+        <p className="text-sm text-neutral-500">Nenhum pedido com etiqueta liberada ainda.</p>
       ) : (
         <TableScroll>
           <Table>

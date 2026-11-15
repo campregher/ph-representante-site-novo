@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // permite testar o dev server pelo celular na mesma rede local (ver IP com `ipconfig`)
+  allowedDevOrigins: ["192.168.15.5"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },

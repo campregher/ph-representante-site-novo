@@ -21,10 +21,14 @@ export interface PedidoDrop {
   itens: PedidoDropItem[];
   entregaCidade: string | null;
   entregaUf: string | null;
+  /** null quando o pedido mistura itens de mais de um fornecedor (raro) —
+   *  nesse caso ele não entra em nenhum grupo de envio combinado. */
+  fornecedorId: string | null;
+  fornecedorNome: string | null;
 }
 
 const PEDIDOS_COLS =
-  "id, numero, status, created_at, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
+  "id, numero, status, created_at, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit, produto:produtos(fornecedor_id, fornecedor:fornecedores(nome)))";
 
 /**
  * Pedidos de dropshipping do seller, mais recentes primeiro. Pra cada pedido
@@ -60,7 +64,13 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
     entrega_bairro: string | null;
     entrega_cidade: string | null;
     entrega_uf: string | null;
-    pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null; unidades_por_kit: number }[];
+    pedido_itens: {
+      quantidade: number;
+      sku_snapshot: string | null;
+      descricao_snapshot: string | null;
+      unidades_por_kit: number;
+      produto: { fornecedor_id: string | null; fornecedor: { nome: string } | null } | null;
+    }[];
   }[];
 
   await Promise.all(
@@ -76,20 +86,29 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
       })
   );
 
-  return rows.map((p) => ({
-    id: p.id,
-    numero: p.numero,
-    status: p.status,
-    createdAt: p.created_at,
-    itens: p.pedido_itens.map((it) => ({
-      sku: it.sku_snapshot ?? "—",
-      nome: it.descricao_snapshot ?? "—",
-      quantidade: it.quantidade,
-      caixas: it.quantidade * (it.unidades_por_kit || 1),
-    })),
-    entregaCidade: p.entrega_cidade,
-    entregaUf: p.entrega_uf,
-  }));
+  return rows.map((p) => {
+    const fornecedorIds = new Set(p.pedido_itens.map((it) => it.produto?.fornecedor_id).filter((v): v is string => !!v));
+    const fornecedorId = fornecedorIds.size === 1 ? [...fornecedorIds][0] : null;
+    const fornecedorNome = fornecedorId
+      ? p.pedido_itens.find((it) => it.produto?.fornecedor_id === fornecedorId)?.produto?.fornecedor?.nome ?? null
+      : null;
+    return {
+      id: p.id,
+      numero: p.numero,
+      status: p.status,
+      createdAt: p.created_at,
+      itens: p.pedido_itens.map((it) => ({
+        sku: it.sku_snapshot ?? "—",
+        nome: it.descricao_snapshot ?? "—",
+        quantidade: it.quantidade,
+        caixas: it.quantidade * (it.unidades_por_kit || 1),
+      })),
+      entregaCidade: p.entrega_cidade,
+      entregaUf: p.entrega_uf,
+      fornecedorId,
+      fornecedorNome,
+    };
+  });
 }
 
 export interface PedidoDropDetalheItem extends PedidoDropItem {

@@ -117,6 +117,10 @@ export default function SellerCadastroForm() {
         setError("cnpj", { type: "manual", message: "Informe o CNPJ" });
         return;
       }
+      if (!v.inscricao_estadual?.trim()) {
+        setError("inscricao_estadual", { type: "manual", message: 'Informe a Inscrição Estadual (ou marque "Isento")' });
+        return;
+      }
       if (!v.razao_social?.trim() && !v.nome_fantasia?.trim()) {
         setError("razao_social", { type: "manual", message: "Informe a razão social ou o nome" });
         return;

@@ -55,8 +55,31 @@ async function buscarEnvio(token: string, shippingId: number): Promise<EnderecoE
     if (!res.ok) return null;
     const data = await res.json();
     const addr = data.receiver_address ?? {};
+    // shipping_option.cost (no GET /shipments/{id}) é o que o COMPRADOR paga —
+    // geralmente 0, porque o ME2 cobra o frete real do SELLER com desconto
+    // mandatório de 50% em outro endpoint: GET /shipments/{id}/costs,
+    // campo costs.senders[].cost. Confirmado ao vivo contra 2 vendas reais:
+    // pedido ML #2000019528183310 (frete grátis pro comprador) —
+    // shipping_option.cost=0, costs.senders[0].cost=116.6 (o que de fato saiu
+    // da liquidação do seller); pedido com frete cobrado do comprador —
+    // shipping_option.cost=64.99 (preço que o comprador viu), mas
+    // costs.senders[0].cost=58.3 (o valor líquido debitado do seller é
+    // diferente mesmo quando o comprador paga frete).
+    let freteSeller: number | null = null;
+    try {
+      const resCosts = await fetch(`${ML_BASE}/shipments/${shippingId}/costs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resCosts.ok) {
+        const costs = await resCosts.json();
+        const senders = (costs.senders ?? []) as Array<{ cost?: number }>;
+        if (senders.length > 0) freteSeller = senders.reduce((s, sd) => s + Number(sd.cost ?? 0), 0);
+      }
+    } catch {
+      /* segue com null, fallback abaixo */
+    }
     return {
-      frete: data.shipping_option?.cost != null ? Number(data.shipping_option.cost) : null,
+      frete: freteSeller ?? (data.shipping_option?.cost != null ? Number(data.shipping_option.cost) : null),
       entrega_nome: addr.receiver_name ?? null,
       entrega_telefone: addr.receiver_phone ?? null,
       entrega_cep: addr.zip_code ?? null,

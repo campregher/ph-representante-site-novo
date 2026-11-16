@@ -5,11 +5,10 @@ import { PEDIDOS_BUCKET } from "@/lib/sistema/dropshipping-pedido-arquivos";
 /**
  * Pacote combinado: junta vários pedidos "pronto" (do MESMO fornecedor, na
  * prática — a tela só oferece isso agrupado por fornecedor) num único PDF
- * intercalado (etiqueta do pedido 1 → NF do pedido 1 → etiqueta do pedido 2
- * → NF do pedido 2 → ...) — mesma sequência que o "Imprimir arquivos de
- * envio" do próprio Mercado Livre usa quando se seleciona vários pedidos —
- * e uma planilha única, pra o seller mandar de uma vez só no grupo de
- * WhatsApp do fornecedor em vez de um arquivo por pedido.
+ * de etiquetas (sem a nota fiscal — essa o fornecedor não precisa, cada
+ * `etiqueta_path` já sai com as páginas certas: 2 pro Mercado Envios normal,
+ * 1 se for Flex) e uma planilha única, pra o seller mandar de uma vez só no
+ * grupo de WhatsApp do fornecedor em vez de um arquivo por pedido.
  */
 
 interface PedidoCombinadoRow {
@@ -38,16 +37,12 @@ interface PedidoCombinadoRow {
 const PACOTE_COLS =
   "id, numero, status, cliente_id, etiqueta_path, danfe_path, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
 
-/** Intercala etiqueta → NF → etiqueta → NF, na ordem dos pares informados —
- *  não agrupa todas as etiquetas de um lado e todas as NFs do outro. */
-async function mergePdfsIntercalado(pares: { etiqueta: Buffer; danfe: Buffer }[]): Promise<Buffer> {
+async function mergePdfs(buffers: Buffer[]): Promise<Buffer> {
   const out = await PDFDocument.create();
-  for (const par of pares) {
-    for (const buf of [par.etiqueta, par.danfe]) {
-      const src = await PDFDocument.load(buf);
-      const pages = await out.copyPages(src, src.getPageIndices());
-      pages.forEach((p) => out.addPage(p));
-    }
+  for (const buf of buffers) {
+    const src = await PDFDocument.load(buf);
+    const pages = await out.copyPages(src, src.getPageIndices());
+    pages.forEach((p) => out.addPage(p));
   }
   return Buffer.from(await out.save());
 }
@@ -109,7 +104,7 @@ export interface PedidoCombinadoInfo {
 export type PacoteCombinado =
   | {
       ok: true;
-      etiquetasComNotas: Buffer;
+      etiquetas: Buffer;
       planilha: Buffer;
       incluidos: PedidoCombinadoInfo[];
       ignorados: PedidoCombinadoInfo[];
@@ -137,28 +132,19 @@ export async function gerarPacoteCombinado(clienteId: string, pedidoIds: string[
     return { ok: false, erro: "Nenhum dos pedidos selecionados está pronto (com etiqueta e nota fiscal geradas)." };
   }
 
-  const [etiquetaDownloads, danfeDownloads] = await Promise.all([
-    Promise.all(validos.map((p) => db.storage.from(PEDIDOS_BUCKET).download(p.etiqueta_path!))),
-    Promise.all(validos.map((p) => db.storage.from(PEDIDOS_BUCKET).download(p.danfe_path!))),
-  ]);
+  const etiquetaDownloads = await Promise.all(validos.map((p) => db.storage.from(PEDIDOS_BUCKET).download(p.etiqueta_path!)));
   const falhaEtiqueta = etiquetaDownloads.find((d) => d.error || !d.data);
-  const falhaDanfe = danfeDownloads.find((d) => d.error || !d.data);
-  if (falhaEtiqueta || falhaDanfe) {
-    return { ok: false, erro: "Falha ao baixar etiqueta ou nota fiscal de um dos pedidos no storage." };
+  if (falhaEtiqueta) {
+    return { ok: false, erro: "Falha ao baixar a etiqueta de um dos pedidos no storage." };
   }
 
   const etiquetaBuffers = await Promise.all(etiquetaDownloads.map(async (d) => Buffer.from(await d.data!.arrayBuffer())));
-  const danfeBuffers = await Promise.all(danfeDownloads.map(async (d) => Buffer.from(await d.data!.arrayBuffer())));
-  const pares = etiquetaBuffers.map((etiqueta, i) => ({ etiqueta, danfe: danfeBuffers[i] }));
 
-  const [etiquetasComNotas, planilha] = await Promise.all([
-    mergePdfsIntercalado(pares),
-    gerarPlanilhaCombinada(validos),
-  ]);
+  const [etiquetas, planilha] = await Promise.all([mergePdfs(etiquetaBuffers), gerarPlanilhaCombinada(validos)]);
 
   return {
     ok: true,
-    etiquetasComNotas,
+    etiquetas,
     planilha,
     incluidos: validos.map((p) => ({ id: p.id, numero: p.numero })),
     ignorados,

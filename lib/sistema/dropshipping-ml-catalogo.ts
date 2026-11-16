@@ -179,7 +179,7 @@ export async function calcularRecebimentoML(
  * `metodosEnvioAtivosML`), não só cadastrado. "shopee_express" não existe
  * no ML — só serve pro catálogo da Shopee — e por isso nunca é aceito aqui.
  */
-async function resolverShippingML(
+export async function resolverShippingML(
   mlContaId: string,
   transporteAceito: string[],
   metodoEnvio: string | null
@@ -484,12 +484,13 @@ export async function publicarGrupoMLDrop(
   return { ok: true, resultados };
 }
 
-/** Atualiza preço e/ou status (pausar/reativar) de um anúncio do catálogo de dropshipping já publicado. */
+/** Atualiza preço, status (pausar/reativar) e/ou método de envio de um
+ *  anúncio do catálogo de dropshipping já publicado. */
 export async function atualizarAnuncioMLDrop(
   mlContaId: string,
   produtoId: string,
   mlItemId: string,
-  patch: { price?: number; status?: "active" | "paused" | "closed" }
+  patch: { price?: number; status?: "active" | "paused" | "closed"; shipping?: Record<string, unknown> }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   let token: string;
   try {
@@ -518,6 +519,21 @@ export async function atualizarAnuncioMLDrop(
       .eq("produto_id", produtoId);
   }
   return { ok: true };
+}
+
+/** Troca o método de envio de um anúncio JÁ PUBLICADO — reaproveita a mesma
+ *  resolução usada na publicação (`resolverShippingML`), então só aceita um
+ *  método que o produto aceite E que esteja ativo agora nessa conta do ML. */
+export async function atualizarMetodoEnvioAnuncioML(
+  mlContaId: string,
+  produtoId: string,
+  mlItemId: string,
+  transporteAceito: string[],
+  metodoEnvio: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const shippingRes = await resolverShippingML(mlContaId, transporteAceito, metodoEnvio);
+  if ("error" in shippingRes) return { ok: false, error: shippingRes.error };
+  return atualizarAnuncioMLDrop(mlContaId, produtoId, mlItemId, { shipping: shippingRes.shipping });
 }
 
 /**

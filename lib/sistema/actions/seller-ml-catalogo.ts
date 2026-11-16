@@ -5,6 +5,7 @@ import { createSistemaAdminClient, createDropshippingAdminClient } from "@/lib/s
 import {
   publicarAnuncioMLDrop,
   atualizarAnuncioMLDrop,
+  atualizarMetodoEnvioAnuncioML,
   publicarGrupoMLDrop,
   metodosEnvioAtivosML,
   calcularRecebimentoML,
@@ -587,6 +588,185 @@ export async function atualizarPrecoAnuncioML(
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath(`/drop/portal/${portalToken}`);
   return { ok: true };
+}
+
+/** Só o ml_item_id do anúncio já publicado — sem gate de estoque/ativo
+ *  (pausar/reativar/trocar envio não deveriam depender disso, diferente de
+ *  publicar/mudar preço, que usam `buscarProdutoElegivel`). */
+async function buscarMlItemId(
+  dropDb: DropDb,
+  clienteId: string,
+  mlContaId: string,
+  produtoId: string
+): Promise<string | { error: string }> {
+  const { data } = await dropDb
+    .from("seller_ml_anuncios")
+    .select("ml_item_id")
+    .eq("cliente_id", clienteId)
+    .eq("ml_conta_id", mlContaId)
+    .eq("produto_id", produtoId)
+    .maybeSingle();
+  if (!data) return { error: "Anúncio não encontrado." };
+  return data.ml_item_id as string;
+}
+
+export interface SelecaoAnuncioPublicado {
+  mlContaId: string;
+  produtoId: string;
+}
+
+export interface AcaoEmMassaAnuncioResultado extends SelecaoAnuncioPublicado {
+  ok: boolean;
+  error?: string;
+}
+
+/** Checa a dona de cada conta do ML envolvida numa ação em massa antes de
+ *  tocar em qualquer anúncio — uma única vez por conta distinta, não por
+ *  anúncio selecionado. */
+async function checarDonosEmMassa(
+  db: SistemaDb,
+  clienteId: string,
+  selecoes: SelecaoAnuncioPublicado[]
+): Promise<string | null> {
+  const contas = [...new Set(selecoes.map((s) => s.mlContaId))];
+  for (const mlContaId of contas) {
+    const erro = await checarDonoDaContaMl(db, clienteId, mlContaId);
+    if (erro) return erro;
+  }
+  return null;
+}
+
+/** Ativa ou pausa em massa vários anúncios JÁ PUBLICADOS de uma vez — cada
+ *  um pode estar numa conta/produto diferente (ver checkbox por anúncio em
+ *  SellerCatalogoDrop.tsx), diferente do "Editar em massa" que é só pré-
+ *  publicação. */
+async function mudarStatusEmMassaAnunciosML(
+  portalToken: string,
+  selecoes: SelecaoAnuncioPublicado[],
+  status: "active" | "paused"
+): Promise<ActionResult<{ resultados: AcaoEmMassaAnuncioResultado[] }>> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  if (selecoes.length === 0) return { ok: false, error: "Nenhum anúncio selecionado." };
+  const donoErro = await checarDonosEmMassa(ctx.db, ctx.clienteId, selecoes);
+  if (donoErro) return { ok: false, error: donoErro };
+
+  const dropDb = await createDropshippingAdminClient();
+  const resultados: AcaoEmMassaAnuncioResultado[] = [];
+  for (const s of selecoes) {
+    const mlItemId = await buscarMlItemId(dropDb, ctx.clienteId, s.mlContaId, s.produtoId);
+    if (typeof mlItemId !== "string") {
+      resultados.push({ ...s, ok: false, error: mlItemId.error });
+      continue;
+    }
+    const res = await atualizarAnuncioMLDrop(s.mlContaId, s.produtoId, mlItemId, { status });
+    resultados.push({ ...s, ok: res.ok, error: res.ok ? undefined : res.error });
+  }
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true, resultados };
+}
+
+export async function ativarEmMassaML(
+  portalToken: string,
+  selecoes: SelecaoAnuncioPublicado[]
+): Promise<ActionResult<{ resultados: AcaoEmMassaAnuncioResultado[] }>> {
+  return mudarStatusEmMassaAnunciosML(portalToken, selecoes, "active");
+}
+
+export async function pausarEmMassaML(
+  portalToken: string,
+  selecoes: SelecaoAnuncioPublicado[]
+): Promise<ActionResult<{ resultados: AcaoEmMassaAnuncioResultado[] }>> {
+  return mudarStatusEmMassaAnunciosML(portalToken, selecoes, "paused");
+}
+
+/** Atualiza o preço de vários anúncios já publicados de uma vez — cada
+ *  anúncio usa o preço já digitado no card do produto dele (mesmo campo que
+ *  "Atualizar preço" individual usa), continua respeitando o preço mínimo
+ *  de cada produto. */
+export async function atualizarPrecoEmMassaAnunciosML(
+  portalToken: string,
+  selecoes: (SelecaoAnuncioPublicado & { preco: number })[]
+): Promise<ActionResult<{ resultados: AcaoEmMassaAnuncioResultado[] }>> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  if (selecoes.length === 0) return { ok: false, error: "Nenhum anúncio selecionado." };
+  const donoErro = await checarDonosEmMassa(ctx.db, ctx.clienteId, selecoes);
+  if (donoErro) return { ok: false, error: donoErro };
+
+  const dropDb = await createDropshippingAdminClient();
+  const resultados: AcaoEmMassaAnuncioResultado[] = [];
+  for (const s of selecoes) {
+    if (!Number.isFinite(s.preco) || s.preco <= 0) {
+      resultados.push({ mlContaId: s.mlContaId, produtoId: s.produtoId, ok: false, error: "Preço inválido." });
+      continue;
+    }
+    const pr = await buscarProdutoElegivel(dropDb, s.produtoId, ctx.clienteId);
+    if ("error" in pr) {
+      resultados.push({ mlContaId: s.mlContaId, produtoId: s.produtoId, ok: false, error: pr.error });
+      continue;
+    }
+    if (s.preco < pr.precoMinimo) {
+      resultados.push({
+        mlContaId: s.mlContaId,
+        produtoId: s.produtoId,
+        ok: false,
+        error: `Preço mínimo é ${formatBRL(pr.precoMinimo)}.`,
+      });
+      continue;
+    }
+    const mlItemId = await buscarMlItemId(dropDb, ctx.clienteId, s.mlContaId, s.produtoId);
+    if (typeof mlItemId !== "string") {
+      resultados.push({ mlContaId: s.mlContaId, produtoId: s.produtoId, ok: false, error: mlItemId.error });
+      continue;
+    }
+    const res = await atualizarAnuncioMLDrop(s.mlContaId, s.produtoId, mlItemId, { price: s.preco });
+    resultados.push({ mlContaId: s.mlContaId, produtoId: s.produtoId, ok: res.ok, error: res.ok ? undefined : res.error });
+  }
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true, resultados };
+}
+
+/** Troca o método de envio de vários anúncios já publicados de uma vez pro
+ *  MESMO método — e já grava em `seller_produto_customizacoes` pra ficar
+ *  consistente se o seller excluir e republicar esse anúncio depois. */
+export async function atualizarMetodoEnvioEmMassaAnunciosML(
+  portalToken: string,
+  selecoes: SelecaoAnuncioPublicado[],
+  metodoEnvio: string
+): Promise<ActionResult<{ resultados: AcaoEmMassaAnuncioResultado[] }>> {
+  const ctx = await resolveClienteLiberado(portalToken);
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+  if (selecoes.length === 0) return { ok: false, error: "Nenhum anúncio selecionado." };
+  if (!metodoEnvio.trim()) return { ok: false, error: "Escolha o método de envio." };
+  const donoErro = await checarDonosEmMassa(ctx.db, ctx.clienteId, selecoes);
+  if (donoErro) return { ok: false, error: donoErro };
+
+  const dropDb = await createDropshippingAdminClient();
+  const resultados: AcaoEmMassaAnuncioResultado[] = [];
+  const produtoIdsOk: string[] = [];
+  for (const s of selecoes) {
+    const [{ data: produto }, mlItemId] = await Promise.all([
+      dropDb.from("produtos").select("transporte_aceito").eq("id", s.produtoId).maybeSingle(),
+      buscarMlItemId(dropDb, ctx.clienteId, s.mlContaId, s.produtoId),
+    ]);
+    if (typeof mlItemId !== "string") {
+      resultados.push({ ...s, ok: false, error: mlItemId.error });
+      continue;
+    }
+    const transporteAceito = (produto?.transporte_aceito as string[] | null) ?? [];
+    const res = await atualizarMetodoEnvioAnuncioML(s.mlContaId, s.produtoId, mlItemId, transporteAceito, metodoEnvio);
+    resultados.push({ ...s, ok: res.ok, error: res.ok ? undefined : res.error });
+    if (res.ok) produtoIdsOk.push(s.produtoId);
+  }
+  if (produtoIdsOk.length > 0) {
+    await dropDb.from("seller_produto_customizacoes").upsert(
+      produtoIdsOk.map((produtoId) => ({ cliente_id: ctx.clienteId, produto_id: produtoId, metodo_envio: metodoEnvio })),
+      { onConflict: "cliente_id,produto_id" }
+    );
+  }
+  revalidatePath(`/drop/portal/${portalToken}`);
+  return { ok: true, resultados };
 }
 
 /** Fecha o anúncio simples no ML (definitivo — não dá pra reabrir) e apaga o

@@ -19,6 +19,10 @@ import {
   excluirGrupoAnuncioML,
   consultarMetodosEnvioML,
   consultarRecebimentoML,
+  ativarEmMassaML,
+  pausarEmMassaML,
+  atualizarPrecoEmMassaAnunciosML,
+  atualizarMetodoEnvioEmMassaAnunciosML,
 } from "@/lib/sistema/actions/seller-ml-catalogo";
 import {
   salvarCustomizacaoProdutoSeller,
@@ -207,6 +211,15 @@ export default function SellerCatalogoDrop({
   const [loteTipoAnuncio, setLoteTipoAnuncio] = useState("");
   const [loteMetodosAtivos, setLoteMetodosAtivos] = useState<string[] | null>(null);
   const [loteCarregando, setLoteCarregando] = useState(false);
+  // Ação em massa (ativar/pausar/preço/método de envio) sobre anúncios JÁ
+  // PUBLICADOS — diferente de `selecionados` (produtos ainda não publicados).
+  // Chave = `${mlContaId}::${produtoId}`, já que o mesmo produto pode estar
+  // publicado em mais de uma conta do ML.
+  const [anunciosSelecionados, setAnunciosSelecionados] = useState<Set<string>>(new Set());
+  const [envioLoteModalAberto, setEnvioLoteModalAberto] = useState(false);
+  const [envioLoteMetodo, setEnvioLoteMetodo] = useState("");
+  const [envioLoteMetodosAtivos, setEnvioLoteMetodosAtivos] = useState<string[] | null>(null);
+  const [envioLoteCarregando, setEnvioLoteCarregando] = useState(false);
 
   function toggleConta(itemId: string, contaId: string) {
     setContasEscolhidas((s) => {
@@ -309,6 +322,152 @@ export default function SellerCatalogoDrop({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  }
+
+  function chaveAnuncio(mlContaId: string, produtoId: string) {
+    return `${mlContaId}::${produtoId}`;
+  }
+
+  function toggleAnuncioSelecionado(chave: string) {
+    setAnunciosSelecionados((s) => {
+      const next = new Set(s);
+      if (next.has(chave)) next.delete(chave);
+      else next.add(chave);
+      return next;
+    });
+  }
+
+  /** Todo anúncio já publicado de um produto AVULSO (fora de grupo de
+   *  variações — esses continuam só com os controles do próprio grupo, ver
+   *  linhaAnuncio chamado em `anunciosGrupo`) — a lista que alimenta o
+   *  checkbox e a barra de ação em massa de anúncios publicados. */
+  const anunciosPublicadosAvulsos = useMemo(() => {
+    const lista: { chave: string; mlContaId: string; produtoId: string; item: CatalogoDropItemView }[] = [];
+    for (const p of itens) {
+      if (idsEmGrupo.has(p.id)) continue;
+      for (const a of p.anuncios) {
+        lista.push({ chave: chaveAnuncio(a.mlContaId, p.id), mlContaId: a.mlContaId, produtoId: p.id, item: p });
+      }
+    }
+    return lista;
+  }, [itens, idsEmGrupo]);
+
+  const anunciosSelecionadosList = useMemo(
+    () => anunciosPublicadosAvulsos.filter((x) => anunciosSelecionados.has(x.chave)),
+    [anunciosPublicadosAvulsos, anunciosSelecionados]
+  );
+
+  const todosAnunciosSelecionados =
+    anunciosPublicadosAvulsos.length > 0 && anunciosPublicadosAvulsos.every((x) => anunciosSelecionados.has(x.chave));
+
+  function alternarSelecionarTodosAnuncios() {
+    setAnunciosSelecionados(todosAnunciosSelecionados ? new Set() : new Set(anunciosPublicadosAvulsos.map((x) => x.chave)));
+  }
+
+  function ativarSelecionados() {
+    const selecoes = anunciosSelecionadosList.map(({ mlContaId, produtoId }) => ({ mlContaId, produtoId }));
+    start(async () => {
+      const res = await ativarEmMassaML(token, selecoes);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const falhas = res.resultados.filter((r) => !r.ok);
+      if (falhas.length === 0) toast.success(`${res.resultados.length} anúncio(s) ativado(s).`);
+      else toast.error(`${res.resultados.length - falhas.length} ativado(s), ${falhas.length} falharam: ${falhas[0].error}`);
+      setAnunciosSelecionados(new Set());
+      router.refresh();
+    });
+  }
+
+  function pausarSelecionados() {
+    const selecoes = anunciosSelecionadosList.map(({ mlContaId, produtoId }) => ({ mlContaId, produtoId }));
+    start(async () => {
+      const res = await pausarEmMassaML(token, selecoes);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const falhas = res.resultados.filter((r) => !r.ok);
+      if (falhas.length === 0) toast.success(`${res.resultados.length} anúncio(s) pausado(s).`);
+      else toast.error(`${res.resultados.length - falhas.length} pausado(s), ${falhas.length} falharam: ${falhas[0].error}`);
+      setAnunciosSelecionados(new Set());
+      router.refresh();
+    });
+  }
+
+  /** Atualiza o preço de cada anúncio selecionado pro valor já digitado no
+   *  campo "Preço de venda" do card do produto correspondente — mesmo campo
+   *  que "Atualizar preço" individual usa, não pede um preço novo à parte. */
+  function atualizarPrecoSelecionados() {
+    const selecoes: { mlContaId: string; produtoId: string; preco: number }[] = [];
+    for (const { mlContaId, produtoId, item } of anunciosSelecionadosList) {
+      const preco = precoValido(item);
+      if (preco == null) {
+        toast.error(`${item.nome}: preço mínimo é ${formatBRL(item.precoMinimo)}.`);
+        return;
+      }
+      selecoes.push({ mlContaId, produtoId, preco });
+    }
+    start(async () => {
+      const res = await atualizarPrecoEmMassaAnunciosML(token, selecoes);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const falhas = res.resultados.filter((r) => !r.ok);
+      if (falhas.length === 0) toast.success(`Preço atualizado em ${res.resultados.length} anúncio(s).`);
+      else toast.error(`${res.resultados.length - falhas.length} atualizado(s), ${falhas.length} falharam: ${falhas[0].error}`);
+      setAnunciosSelecionados(new Set());
+      router.refresh();
+    });
+  }
+
+  /** Checa o que está ativo em TODAS as contas envolvidas nos anúncios
+   *  selecionados (interseção) — diferente de `abrirEdicaoLote`, que checa
+   *  uma única conta (a de destino da publicação em lote). */
+  function abrirEdicaoEnvioLote() {
+    setEnvioLoteMetodo("");
+    setEnvioLoteMetodosAtivos(null);
+    setEnvioLoteModalAberto(true);
+    const contas = [...new Set(anunciosSelecionadosList.map((x) => x.mlContaId))];
+    if (contas.length === 0) return;
+    setEnvioLoteCarregando(true);
+    Promise.all(contas.map((c) => consultarMetodosEnvioML(token, c))).then((resultados) => {
+      setEnvioLoteCarregando(false);
+      const ok = resultados.filter((r) => r.ok) as { ok: true; metodos: string[] }[];
+      const ativos = ok.length === 0 ? [] : ok[0].metodos.filter((m) => ok.every((r) => r.metodos.includes(m)));
+      setEnvioLoteMetodosAtivos(ativos);
+    });
+  }
+
+  function metodosEnvioDisponiveisEnvioLote() {
+    const comuns = ML_METODO_ENVIO_OPTIONS.filter((o) =>
+      anunciosSelecionadosList.every((x) => x.item.transporteAceito.includes(o.value))
+    );
+    if (envioLoteMetodosAtivos == null) return comuns;
+    return comuns.filter((o) => envioLoteMetodosAtivos.includes(o.value));
+  }
+
+  function aplicarEnvioLote() {
+    if (!envioLoteMetodo) {
+      toast.error("Escolha o método de envio.");
+      return;
+    }
+    const selecoes = anunciosSelecionadosList.map(({ mlContaId, produtoId }) => ({ mlContaId, produtoId }));
+    start(async () => {
+      const res = await atualizarMetodoEnvioEmMassaAnunciosML(token, selecoes, envioLoteMetodo);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const falhas = res.resultados.filter((r) => !r.ok);
+      if (falhas.length === 0) toast.success(`Método de envio atualizado em ${res.resultados.length} anúncio(s).`);
+      else toast.error(`${res.resultados.length - falhas.length} atualizado(s), ${falhas.length} falharam: ${falhas[0].error}`);
+      setEnvioLoteModalAberto(false);
+      setAnunciosSelecionados(new Set());
+      router.refresh();
     });
   }
 
@@ -677,7 +836,8 @@ export default function SellerCatalogoDrop({
     onReativar: () => void,
     onAtualizarPreco: () => void,
     onExcluir: () => void,
-    labelAnunciado = "Anunciado"
+    labelAnunciado = "Anunciado",
+    chaveSelecao?: string
   ) {
     return (
       <div
@@ -685,6 +845,15 @@ export default function SellerCatalogoDrop({
         className="space-y-2 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5 lg:flex lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2 lg:space-y-0"
       >
         <div className="flex items-center gap-1.5 lg:w-40 lg:shrink-0">
+          {chaveSelecao && (
+            <input
+              type="checkbox"
+              checked={anunciosSelecionados.has(chaveSelecao)}
+              onChange={() => toggleAnuncioSelecionado(chaveSelecao)}
+              title="Marcar pra ação em massa (ativar/pausar/preço/método de envio)"
+              className="h-3.5 w-3.5 shrink-0 rounded border-neutral-300 text-brand"
+            />
+          )}
           <Store size={12} className="shrink-0 text-neutral-400" />
           <span className="text-xs font-semibold text-neutral-600">{a.contaNickname ?? "Conta ML"}</span>
         </div>
@@ -866,7 +1035,9 @@ export default function SellerCatalogoDrop({
                 () => pausar(p, a.mlContaId),
                 () => reativar(p, a.mlContaId),
                 () => atualizarPreco(p, a.mlContaId),
-                () => pedirExclusao(a.mlContaId, [p.id])
+                () => pedirExclusao(a.mlContaId, [p.id]),
+                "Anunciado",
+                chaveAnuncio(a.mlContaId, p.id)
               )
             )}
           </div>
@@ -927,6 +1098,41 @@ export default function SellerCatalogoDrop({
                   <Upload size={14} /> Publicar selecionados
                 </Button>
               )}
+            </div>
+          )}
+        </div>
+      )}
+      {anunciosPublicadosAvulsos.length > 0 && (
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+            anunciosSelecionados.size > 0 ? "border-brand/15 bg-brand/5" : "border-neutral-200 bg-white"
+          }`}
+        >
+          <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
+            <input
+              type="checkbox"
+              checked={todosAnunciosSelecionados}
+              onChange={alternarSelecionarTodosAnuncios}
+              className="h-4 w-4 rounded border-neutral-300 text-brand"
+            />
+            {anunciosSelecionados.size > 0
+              ? `${anunciosSelecionados.size} anúncio(s) publicado(s) selecionado(s)`
+              : `Selecionar anúncios publicados (${anunciosPublicadosAvulsos.length})`}
+          </label>
+          {anunciosSelecionados.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={ativarSelecionados} loading={pending}>
+                <Play size={13} /> Ativar
+              </Button>
+              <Button size="sm" variant="outline" onClick={pausarSelecionados} loading={pending}>
+                <Pause size={13} /> Pausar
+              </Button>
+              <Button size="sm" variant="outline" onClick={atualizarPrecoSelecionados} loading={pending}>
+                Atualizar preço
+              </Button>
+              <Button size="sm" variant="outline" onClick={abrirEdicaoEnvioLote}>
+                <Settings2 size={14} /> Trocar método de envio
+              </Button>
             </div>
           )}
         </div>
@@ -1230,6 +1436,48 @@ export default function SellerCatalogoDrop({
           <Field label="Tipo de anúncio" hint="Sem escolher, publica todos como Premium.">
             <Select value={loteTipoAnuncio || "gold_pro"} onChange={(e) => setLoteTipoAnuncio(e.target.value)}>
               {ML_TIPO_ANUNCIO_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </Modal>
+
+      <Modal
+        open={envioLoteModalAberto}
+        onClose={() => setEnvioLoteModalAberto(false)}
+        title="Trocar método de envio"
+        footer={
+          <Button onClick={aplicarEnvioLote} loading={pending}>
+            Aplicar a {anunciosSelecionadosList.length} anúncio(s)
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-neutral-500">
+            Troca o método de envio de cada anúncio já publicado selecionado, direto no Mercado Livre. O ML pode
+            recusar a troca dependendo da categoria/conta — anúncio que falhar continua com o método anterior.
+          </p>
+          <Field
+            label="Método de envio"
+            required
+            hint={
+              envioLoteCarregando
+                ? "Checando o que está ativo nas contas envolvidas…"
+                : metodosEnvioDisponiveisEnvioLote().length === 0
+                  ? "Nenhum método bate em todos os anúncios selecionados ao mesmo tempo — tente selecionar menos anúncios."
+                  : "Só os métodos aceitos por todos os selecionados e ativos nas contas envolvidas."
+            }
+          >
+            <Select
+              value={envioLoteMetodo}
+              onChange={(e) => setEnvioLoteMetodo(e.target.value)}
+              disabled={envioLoteCarregando || metodosEnvioDisponiveisEnvioLote().length === 0}
+            >
+              <option value="">Selecione…</option>
+              {metodosEnvioDisponiveisEnvioLote().map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>

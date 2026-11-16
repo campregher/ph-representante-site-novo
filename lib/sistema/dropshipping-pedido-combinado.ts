@@ -4,10 +4,12 @@ import { PEDIDOS_BUCKET } from "@/lib/sistema/dropshipping-pedido-arquivos";
 
 /**
  * Pacote combinado: junta vários pedidos "pronto" (do MESMO fornecedor, na
- * prática — a tela só oferece isso agrupado por fornecedor) num único PDF de
- * etiquetas, um único PDF de notas fiscais e uma única planilha, pra o
- * seller mandar de uma vez só no grupo de WhatsApp do fornecedor em vez de
- * um arquivo por pedido.
+ * prática — a tela só oferece isso agrupado por fornecedor) num único PDF
+ * intercalado (etiqueta do pedido 1 → NF do pedido 1 → etiqueta do pedido 2
+ * → NF do pedido 2 → ...) — mesma sequência que o "Imprimir arquivos de
+ * envio" do próprio Mercado Livre usa quando se seleciona vários pedidos —
+ * e uma planilha única, pra o seller mandar de uma vez só no grupo de
+ * WhatsApp do fornecedor em vez de um arquivo por pedido.
  */
 
 interface PedidoCombinadoRow {
@@ -36,12 +38,16 @@ interface PedidoCombinadoRow {
 const PACOTE_COLS =
   "id, numero, status, cliente_id, etiqueta_path, danfe_path, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
 
-async function mergePdfs(buffers: Buffer[]): Promise<Buffer> {
+/** Intercala etiqueta → NF → etiqueta → NF, na ordem dos pares informados —
+ *  não agrupa todas as etiquetas de um lado e todas as NFs do outro. */
+async function mergePdfsIntercalado(pares: { etiqueta: Buffer; danfe: Buffer }[]): Promise<Buffer> {
   const out = await PDFDocument.create();
-  for (const buf of buffers) {
-    const src = await PDFDocument.load(buf);
-    const pages = await out.copyPages(src, src.getPageIndices());
-    pages.forEach((p) => out.addPage(p));
+  for (const par of pares) {
+    for (const buf of [par.etiqueta, par.danfe]) {
+      const src = await PDFDocument.load(buf);
+      const pages = await out.copyPages(src, src.getPageIndices());
+      pages.forEach((p) => out.addPage(p));
+    }
   }
   return Buffer.from(await out.save());
 }
@@ -103,8 +109,7 @@ export interface PedidoCombinadoInfo {
 export type PacoteCombinado =
   | {
       ok: true;
-      etiquetas: Buffer;
-      danfes: Buffer;
+      etiquetasComNotas: Buffer;
       planilha: Buffer;
       incluidos: PedidoCombinadoInfo[];
       ignorados: PedidoCombinadoInfo[];
@@ -144,17 +149,16 @@ export async function gerarPacoteCombinado(clienteId: string, pedidoIds: string[
 
   const etiquetaBuffers = await Promise.all(etiquetaDownloads.map(async (d) => Buffer.from(await d.data!.arrayBuffer())));
   const danfeBuffers = await Promise.all(danfeDownloads.map(async (d) => Buffer.from(await d.data!.arrayBuffer())));
+  const pares = etiquetaBuffers.map((etiqueta, i) => ({ etiqueta, danfe: danfeBuffers[i] }));
 
-  const [etiquetas, danfes, planilha] = await Promise.all([
-    mergePdfs(etiquetaBuffers),
-    mergePdfs(danfeBuffers),
+  const [etiquetasComNotas, planilha] = await Promise.all([
+    mergePdfsIntercalado(pares),
     gerarPlanilhaCombinada(validos),
   ]);
 
   return {
     ok: true,
-    etiquetas,
-    danfes,
+    etiquetasComNotas,
     planilha,
     incluidos: validos.map((p) => ({ id: p.id, numero: p.numero })),
     ignorados,

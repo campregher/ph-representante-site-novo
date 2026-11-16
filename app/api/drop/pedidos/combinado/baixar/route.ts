@@ -16,8 +16,7 @@ export async function POST(req: Request) {
 
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
-  zip.file("etiquetas-combinadas.pdf", pacote.etiquetas);
-  zip.file("notas-fiscais-combinadas.pdf", pacote.danfes);
+  zip.file("etiquetas-e-notas-fiscais.pdf", pacote.etiquetasComNotas);
   zip.file("planilha-combinada.xlsx", pacote.planilha);
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
 

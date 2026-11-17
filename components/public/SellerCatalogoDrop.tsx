@@ -268,6 +268,23 @@ export default function SellerCatalogoDrop({
     return [...porNome.values()];
   }, [itens]);
 
+  // Separa os grupos (produto ou variações) por categoria interna (cadastro
+  // do admin) pra não listar tudo do fornecedor numa pilha só — "Sem
+  // categoria" sempre por último, categorias com nome em ordem alfabética.
+  const gruposPorCategoria = useMemo(() => {
+    const mapa = new Map<string, CatalogoDropItemView[][]>();
+    for (const variantes of grupos) {
+      const cat = variantes[0].categoria || "Sem categoria";
+      if (!mapa.has(cat)) mapa.set(cat, []);
+      mapa.get(cat)!.push(variantes);
+    }
+    return [...mapa.entries()].sort(([a], [b]) => {
+      if (a === "Sem categoria") return 1;
+      if (b === "Sem categoria") return -1;
+      return a.localeCompare(b);
+    });
+  }, [grupos]);
+
   // Produtos agrupados (variações) só publicam pelo controle do grupo —
   // não entram na seleção avulsa "publicar vários produtos numa conta".
   const idsEmGrupo = useMemo(() => {
@@ -1145,8 +1162,17 @@ export default function SellerCatalogoDrop({
           )}
         </div>
       )}
-      <div className="space-y-3">
-        {grupos.map((variantes) => {
+      <div className="space-y-6">
+        {gruposPorCategoria.map(([categoria, gruposDaCategoria]) => (
+          <div key={categoria} className="space-y-3">
+            {gruposPorCategoria.length > 1 && (
+              <h2 className="text-xs font-bold uppercase tracking-wide text-neutral-400">
+                {categoria}{" "}
+                <span className="font-normal normal-case text-neutral-300">({gruposDaCategoria.length})</span>
+              </h2>
+            )}
+            <div className="space-y-3">
+        {gruposDaCategoria.map((variantes) => {
           if (variantes.length === 1) return linhaItem(variantes[0], false);
           const base = variantes[0];
           const chave = base.id;
@@ -1258,6 +1284,9 @@ export default function SellerCatalogoDrop({
             </div>
           );
         })}
+            </div>
+          </div>
+        ))}
       </div>
 
       <Modal

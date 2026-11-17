@@ -64,7 +64,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, categoria_interna, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
       .gt("estoque_atual", 0)
@@ -92,6 +92,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     imagem_url: string | null;
     imagens: string[] | null;
     variacao: string | null;
+    categoria_interna: string | null;
     estoque_atual: number;
     ml_category_id: string | null;
     transporte_aceito: string[] | null;
@@ -183,7 +184,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         imagem_url: imagens[0] ?? r.imagem_url,
         imagens,
         variacao: r.variacao,
-        categoria: null,
+        categoria: r.categoria_interna,
         estoque_atual: r.estoque_atual,
         precoMinimo: cnpj?.preco_sugerido ?? null,
         custoReferencia: cnpj?.custo ?? null,

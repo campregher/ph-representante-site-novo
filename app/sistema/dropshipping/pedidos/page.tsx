@@ -82,7 +82,7 @@ function TabelaPedidos({
     <div className="space-y-2">
       {mostrarPrazo && (
         <p className="text-xs text-neutral-400">
-          Prazo estimado (etiqueta impressa + 24h) — não é o horário exato de corte da agência do Mercado Livre.
+          Prazo estimado (venda + 24h de manuseio) — não é o horário exato de corte da agência do Mercado Livre.
         </p>
       )}
     <TableScroll>

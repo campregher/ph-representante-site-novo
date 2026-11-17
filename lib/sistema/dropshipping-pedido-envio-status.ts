@@ -15,11 +15,12 @@ import { getMlContaInfo } from "@/lib/sistema/ml-auth";
  *   na resposta do ML — o "Até 14:00h" que a Central de Vendedores mostra
  *   parece ser um horário de corte da agência/transportadora, calculado por
  *   eles, não exposto na API. Por isso `ml_prazo_envio` é uma ESTIMATIVA
- *   nossa: `date_first_printed` (confirmado, vem preenchido quando a
- *   etiqueta já foi impressa) + `shipping_option.estimated_delivery_time.
- *   handling` horas (confirmado, vem em horas — 24 no caso testado). Sem
- *   etiqueta impressa ainda, não tem base nenhuma pra estimar — cai em
- *   "sem prazo informado" (ver classificarUrgenciaEnvio).
+ *   nossa: `date_created` do envio (confirmado — existe desde a hora da
+ *   venda, mesmo sem etiqueta impressa ainda; a 1ª tentativa usou
+ *   `date_first_printed`, mas a Central do ML mostra como "atrasado"/"hoje"
+ *   até pedido que ainda nem tem etiqueta impressa, então a contagem começa
+ *   na venda, não na impressão) + `shipping_option.estimated_delivery_time.
+ *   handling` horas (confirmado, vem em horas — 24 no caso testado).
  * - A API de claims (devolução) NUNCA foi testada aqui — o endpoint/campos
  *   abaixo são o melhor palpite a partir do conhecimento geral da API do
  *   ML, não confirmados contra uma devolução real. Tudo aqui é defensivo:
@@ -66,16 +67,16 @@ export async function consultarStatusEnvioML(mlContaId: string, shippingId: numb
     const res = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const data = await res.json();
-    // Estimativa (ver comentário no topo do arquivo) — só dá pra calcular
-    // depois que a etiqueta já foi impressa (date_first_printed preenchido).
-    const datePrinted = data?.date_first_printed as string | null | undefined;
+    // Estimativa (ver comentário no topo do arquivo) — conta a partir da
+    // venda (date_created), não da impressão da etiqueta.
+    const dateCreated = data?.date_created as string | null | undefined;
     const handlingHoras = Number(data?.shipping_option?.estimated_delivery_time?.handling);
     let prazoEnvio: string | null = null;
-    if (datePrinted) {
-      const impressa = new Date(datePrinted);
-      if (!Number.isNaN(impressa.getTime())) {
+    if (dateCreated) {
+      const criado = new Date(dateCreated);
+      if (!Number.isNaN(criado.getTime())) {
         const horas = Number.isFinite(handlingHoras) && handlingHoras > 0 ? handlingHoras : 24;
-        prazoEnvio = new Date(impressa.getTime() + horas * 60 * 60 * 1000).toISOString();
+        prazoEnvio = new Date(criado.getTime() + horas * 60 * 60 * 1000).toISOString();
       }
     }
     return {

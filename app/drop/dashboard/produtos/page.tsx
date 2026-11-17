@@ -1,20 +1,20 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Truck, ChevronRight, Mail, Phone } from "lucide-react";
+import { Truck, ChevronRight, MapPin } from "lucide-react";
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { catalogoDropSeller } from "@/lib/sistema/seller-catalogo";
-import { formatCNPJ, formatPhone } from "@/lib/sistema/format";
 import SellerLocked from "@/components/drop/SellerLocked";
 import { Card, CardBody } from "@/components/sistema/ui/Card";
 
+// Sem contato (telefone/WhatsApp/e-mail) nem CNPJ aqui — a PH é
+// intermediária entre seller e fábrica, contato direto quebraria esse
+// papel (ver lib/sistema/seller-catalogo.ts, CatalogoDropItem).
 interface FornecedorResumo {
   nome: string;
   logoUrl: string | null;
   razaoSocial: string | null;
-  cnpj: string | null;
-  telefone: string | null;
-  whatsapp: string | null;
-  email: string | null;
+  cidade: string | null;
+  uf: string | null;
   total: number;
   anunciados: number;
 }
@@ -42,10 +42,8 @@ export default async function DropDashboardFornecedoresPage() {
         nome: p.fornecedorNome ?? "Sem fornecedor definido",
         logoUrl: p.fornecedorLogoUrl,
         razaoSocial: p.fornecedorRazaoSocial,
-        cnpj: p.fornecedorCnpj,
-        telefone: p.fornecedorTelefone,
-        whatsapp: p.fornecedorWhatsapp,
-        email: p.fornecedorEmail,
+        cidade: p.fornecedorCidade,
+        uf: p.fornecedorUf,
         total: 0,
         anunciados: 0,
       } satisfies FornecedorResumo);
@@ -93,21 +91,13 @@ export default async function DropDashboardFornecedoresPage() {
                 <ChevronRight size={16} className="mt-2 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5" />
               </div>
 
-              <div className="space-y-1 text-xs text-neutral-500">
-                {f.cnpj && <p>CNPJ {formatCNPJ(f.cnpj)}</p>}
-                {(f.whatsapp || f.telefone) && (
-                  <p className="flex items-center gap-1.5">
-                    <Phone size={12} className="shrink-0 text-neutral-400" />
-                    {formatPhone(f.whatsapp || f.telefone || "")}
-                  </p>
-                )}
-                {f.email && (
-                  <p className="flex items-center gap-1.5">
-                    <Mail size={12} className="shrink-0 text-neutral-400" />
-                    <span className="truncate">{f.email}</span>
-                  </p>
-                )}
-              </div>
+              {f.cidade && (
+                <p className="flex items-center gap-1.5 text-xs text-neutral-500">
+                  <MapPin size={12} className="shrink-0 text-neutral-400" />
+                  {f.cidade}
+                  {f.uf ? `/${f.uf}` : ""}
+                </p>
+              )}
 
               <p className="mt-auto text-xs text-neutral-400">
                 {f.total} produto{f.total > 1 ? "s" : ""} · {f.anunciados} já anunciado{f.anunciados !== 1 ? "s" : ""}

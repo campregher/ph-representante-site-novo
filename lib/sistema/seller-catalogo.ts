@@ -30,10 +30,12 @@ export interface CatalogoDropItem {
   fornecedorNome: string | null;
   fornecedorLogoUrl: string | null;
   fornecedorRazaoSocial: string | null;
-  fornecedorCnpj: string | null;
-  fornecedorTelefone: string | null;
-  fornecedorWhatsapp: string | null;
-  fornecedorEmail: string | null;
+  fornecedorCidade: string | null;
+  fornecedorUf: string | null;
+  /** Nunca expõe telefone/WhatsApp/e-mail/CNPJ do fornecedor pro seller — a
+   *  PH é intermediária entre seller e fábrica, contato direto quebraria
+   *  esse papel (pedido explícito do usuário). Quem precisa desse contato
+   *  pra negociar é a própria PH, no admin (ver FornecedoresView.tsx). */
   /** métodos de envio aceitos por esse produto (cadastro do admin) e, dentre
    *  eles, o que esse seller registrou pra usar nesse anúncio (null = ainda
    *  não cadastrou — bloqueia publicar, ver seller-ml-catalogo.ts). */
@@ -62,7 +64,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj, telefone, whatsapp, email), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
       .gt("estoque_atual", 0)
@@ -94,14 +96,9 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     ml_category_id: string | null;
     transporte_aceito: string[] | null;
     fornecedor_id: string | null;
-    fornecedor: {
-      nome: string;
-      razao_social: string | null;
-      cnpj: string | null;
-      telefone: string | null;
-      whatsapp: string | null;
-      email: string | null;
-    } | null;
+    // `cnpj` aqui é só pra casar com `comercial.representadas` (logo/cidade)
+    // — nunca é devolvido pro seller (ver comentário em CatalogoDropItem).
+    fornecedor: { nome: string; razao_social: string | null; cnpj: string | null } | null;
     produto_precos: { custo: number; preco_sugerido: number | null; tabela: { codigo: string } | null }[];
   }[];
 
@@ -137,19 +134,26 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
 
   // Fornecedor de dropshipping normalmente já é uma representada da PH
   // (mesmo CNPJ, importado por `importarFornecedoresRepresentadas`) — em vez
-  // de pedir upload de logo de novo aqui, puxa o logo já cadastrado lá
-  // (`comercial.representadas.logo_url`), casando por CNPJ (dígitos).
+  // de pedir cadastro de novo aqui, puxa logo/cidade já cadastrados lá
+  // (`comercial.representadas`), casando por CNPJ (dígitos). Nunca busca
+  // telefone/whatsapp/email — a PH é intermediária, não expõe contato
+  // direto da fábrica pro seller.
   const cnpjsFornecedores = [
     ...new Set(rows.map((r) => (r.fornecedor?.cnpj ? onlyDigits(r.fornecedor.cnpj) : null)).filter((c): c is string => !!c)),
   ];
-  const logoPorCnpjFornecedor = new Map<string, string | null>();
+  const infoPorCnpjFornecedor = new Map<string, { logo_url: string | null; cidade: string | null; estado: string | null }>();
   if (cnpjsFornecedores.length) {
     const sistema = await createSistemaAdminClient();
     const { data: representadas } = await sistema
       .from("representadas")
-      .select("cnpj, logo_url")
+      .select("cnpj, logo_url, cidade, estado")
       .in("cnpj", cnpjsFornecedores);
-    for (const rep of representadas ?? []) logoPorCnpjFornecedor.set(rep.cnpj as string, rep.logo_url as string | null);
+    for (const rep of representadas ?? [])
+      infoPorCnpjFornecedor.set(rep.cnpj as string, {
+        logo_url: rep.logo_url as string | null,
+        cidade: rep.cidade as string | null,
+        estado: rep.estado as string | null,
+      });
   }
 
   const anunciosPorProduto = new Map<string, AnuncioInfo[]>();
@@ -188,12 +192,10 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,
         fornecedorNome: r.fornecedor?.nome ?? null,
-        fornecedorLogoUrl: r.fornecedor?.cnpj ? (logoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj)) ?? null) : null,
+        fornecedorLogoUrl: (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.logo_url) ?? null,
         fornecedorRazaoSocial: r.fornecedor?.razao_social ?? null,
-        fornecedorCnpj: r.fornecedor?.cnpj ?? null,
-        fornecedorTelefone: r.fornecedor?.telefone ?? null,
-        fornecedorWhatsapp: r.fornecedor?.whatsapp ?? null,
-        fornecedorEmail: r.fornecedor?.email ?? null,
+        fornecedorCidade: (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.cidade) ?? null,
+        fornecedorUf: (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.estado) ?? null,
         transporteAceito: r.transporte_aceito ?? [],
         metodoEnvio: custom?.metodo_envio ?? null,
         tipoAnuncio: custom?.tipo_anuncio ?? null,

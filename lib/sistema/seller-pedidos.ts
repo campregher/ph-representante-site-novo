@@ -1,4 +1,4 @@
-import { createDropshippingAdminClient } from "@/lib/supabase/server";
+import { createDropshippingAdminClient, createSistemaAdminClient } from "@/lib/supabase/server";
 import {
   processarPedidoAguardandoNF,
   precisaChecar,
@@ -26,6 +26,10 @@ export interface PedidoDrop {
    *  nesse caso ele não entra em nenhum grupo de envio combinado. */
   fornecedorId: string | null;
   fornecedorNome: string | null;
+  /** Apelido da conta do Mercado Livre que gerou essa venda — um seller pode
+   *  ter mais de uma conta conectada (ver getMlRecords). Null = conta sem
+   *  apelido salvo (ver bug corrigido em ml-auth.ts) ou pedido sem conta. */
+  contaNickname: string | null;
   /** Status REAL do Mercado Livre (envio físico/devolução) — diferente de
    *  `status` acima, que é só o repasse ao fornecedor. Ver
    *  dropshipping-pedido-envio-status.ts. */
@@ -112,6 +116,17 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
       }),
   ]);
 
+  // `cliente_ml_tokens` (apelido da conta) mora no schema `comercial` — não
+  // dá pra fazer embed cross-schema via PostgREST (mesmo padrão já usado em
+  // seller-catalogo.ts pros anúncios).
+  const contaIds = [...new Set(rows.map((p) => p.ml_conta_id).filter((v): v is string => !!v))];
+  const nicknamePorConta = new Map<string, string | null>();
+  if (contaIds.length) {
+    const sistema = await createSistemaAdminClient();
+    const { data: contas } = await sistema.from("cliente_ml_tokens").select("id, ml_nickname").in("id", contaIds);
+    for (const c of contas ?? []) nicknamePorConta.set(c.id as string, c.ml_nickname as string | null);
+  }
+
   return rows.map((p) => {
     const fornecedorIds = new Set(p.pedido_itens.map((it) => it.produto?.fornecedor_id).filter((v): v is string => !!v));
     const fornecedorId = fornecedorIds.size === 1 ? [...fornecedorIds][0] : null;
@@ -133,6 +148,7 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
       entregaUf: p.entrega_uf,
       fornecedorId,
       fornecedorNome,
+      contaNickname: p.ml_conta_id ? nicknamePorConta.get(p.ml_conta_id) ?? null : null,
       mlShippingStatus: p.ml_shipping_status,
       mlShippingSubstatus: p.ml_shipping_substatus,
       prazoEnvio: p.ml_prazo_envio,

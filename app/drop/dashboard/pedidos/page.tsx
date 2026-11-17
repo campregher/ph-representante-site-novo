@@ -1,5 +1,6 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, AlertTriangle } from "lucide-react";
+import { ChevronRight, AlertTriangle, Store } from "lucide-react";
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { pedidosDropSeller, type PedidoDrop } from "@/lib/sistema/seller-pedidos";
 import { classificarUrgenciaEnvio, type UrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
@@ -84,7 +85,7 @@ export default async function DropDashboardPedidosPage() {
             content: (
               <Card>
                 <CardBody className="p-0">
-                  <ListaPedidos pedidos={enviados} mostrarEnvioML />
+                  <BlocoPorConta pedidos={enviados} render={(lista) => <ListaPedidos pedidos={lista} mostrarEnvioML />} />
                 </CardBody>
               </Card>
             ),
@@ -106,9 +107,44 @@ function PassoEmitirNf({ pedidos }: { pedidos: PedidoDrop[] }) {
         description="A etiqueta só fica pronta pra baixar depois que a nota fiscal é declarada lá no Mercado Livre."
       />
       <CardBody className="p-0">
-        <ListaPedidos pedidos={pedidos} mostrarUrgencia />
+        <BlocoPorConta pedidos={pedidos} render={(lista) => <ListaPedidos pedidos={lista} mostrarUrgencia />} />
       </CardBody>
     </Card>
+  );
+}
+
+/** Separa por conta do Mercado Livre que gerou a venda (um seller pode ter
+ *  mais de uma conectada) — em vez de uma lista só, infinita, mistura de
+ *  todas as contas juntas. Com 1 conta só, não faz diferença nenhuma
+ *  mostrar o agrupamento — renderiza direto. */
+function BlocoPorConta({ pedidos, render }: { pedidos: PedidoDrop[]; render: (pedidos: PedidoDrop[]) => ReactNode }) {
+  if (pedidos.length === 0) return <p className="p-5 text-sm text-neutral-600">Nenhuma venda nessa situação.</p>;
+
+  const grupos = new Map<string, PedidoDrop[]>();
+  for (const p of pedidos) {
+    const chave = p.contaNickname ?? "Conta ML";
+    const lista = grupos.get(chave) ?? [];
+    lista.push(p);
+    grupos.set(chave, lista);
+  }
+  const gruposOrdenados = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  if (gruposOrdenados.length <= 1) return <>{render(pedidos)}</>;
+
+  return (
+    <div className="divide-y divide-neutral-100">
+      {gruposOrdenados.map(([conta, lista]) => (
+        <details key={conta} open className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-neutral-50 px-5 py-2.5 hover:bg-neutral-100">
+            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              <Store size={13} className="text-neutral-400" /> {conta}
+            </span>
+            <Badge tone="neutral">{lista.length}</Badge>
+          </summary>
+          {render(lista)}
+        </details>
+      ))}
+    </div>
   );
 }
 
@@ -197,28 +233,34 @@ function ListaDevolucoes({ pedidos }: { pedidos: PedidoDrop[] }) {
         {pedidos.length === 0 ? (
           <p className="p-5 text-sm text-neutral-600">Nenhuma devolução em andamento.</p>
         ) : (
-          <div className="divide-y divide-neutral-100">
-            {pedidos.map((p) => (
-              <Link
-                key={p.id}
-                href={`/drop/dashboard/pedidos/${p.id}`}
-                className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-neutral-50"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-neutral-900">
-                    #{p.numero} — {p.itens.map((it) => `${it.quantidade}x ${it.nome}`).join(", ")}
-                  </p>
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-red-600">
-                    <AlertTriangle size={12} /> {p.devolucaoMotivo ?? p.devolucaoStatus}
-                  </p>
-                </div>
-                <ChevronRight size={16} className="shrink-0 text-neutral-300" />
-              </Link>
-            ))}
-          </div>
+          <BlocoPorConta pedidos={pedidos} render={LinhasDevolucao} />
         )}
       </CardBody>
     </Card>
+  );
+}
+
+function LinhasDevolucao(pedidos: PedidoDrop[]) {
+  return (
+    <div className="divide-y divide-neutral-100">
+      {pedidos.map((p) => (
+        <Link
+          key={p.id}
+          href={`/drop/dashboard/pedidos/${p.id}`}
+          className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-neutral-50"
+        >
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-neutral-900">
+              #{p.numero} — {p.itens.map((it) => `${it.quantidade}x ${it.nome}`).join(", ")}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-red-600">
+              <AlertTriangle size={12} /> {p.devolucaoMotivo ?? p.devolucaoStatus}
+            </p>
+          </div>
+          <ChevronRight size={16} className="shrink-0 text-neutral-300" />
+        </Link>
+      ))}
+    </div>
   );
 }
 

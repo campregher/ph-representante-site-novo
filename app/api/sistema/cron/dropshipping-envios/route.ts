@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createDropshippingAdminClient } from "@/lib/supabase/server";
 import { atualizarEnvioEDevolucaoPedido } from "@/lib/sistema/dropshipping-pedido-envio-status";
 import { processarEnvioAutomaticoPorFornecedor } from "@/lib/sistema/dropshipping-pedido-envio-automatico";
+import { processarResumoNotificacoesPorEmail } from "@/lib/sistema/notificacoes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,8 +61,8 @@ export async function GET(req: Request) {
   const fornecedorIdsPorCliente = new Map<string, Set<string>>();
   for (const p of prontos ?? []) {
     const clienteId = p.cliente_id as string;
-    const itens = p.pedido_itens as unknown as { produto: { fornecedor_id: string | null }[] }[];
-    const fornecedorIds = itens.flatMap((it) => it.produto.map((pr) => pr.fornecedor_id)).filter((v): v is string => !!v);
+    const itens = p.pedido_itens as unknown as { produto: { fornecedor_id: string | null } | null }[];
+    const fornecedorIds = itens.map((it) => it.produto?.fornecedor_id).filter((v): v is string => !!v);
     if (fornecedorIds.length === 0) continue;
     const set = fornecedorIdsPorCliente.get(clienteId) ?? new Set<string>();
     for (const id of fornecedorIds) set.add(id);
@@ -73,6 +74,16 @@ export async function GET(req: Request) {
     } catch (e) {
       erros.push(`envio automático cliente ${clienteId}: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  // Rede de segurança do resumo de notificações (ver notificacoes.ts) — a
+  // checagem rápida de verdade acontece toda vez que uma notificação nova é
+  // criada; esse cron só garante que não fica mais de 1 dia sem mandar se o
+  // sistema ficar sem tráfego nenhum por muito tempo.
+  try {
+    await processarResumoNotificacoesPorEmail();
+  } catch (e) {
+    erros.push(`resumo de notificações: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return NextResponse.json({ ok: true, processados: pedidos?.length ?? 0, atualizados, erros });

@@ -178,14 +178,16 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
     .in("ml_item_id", mlItemIds);
   const produtoPorItem = new Map((anuncios ?? []).map((a) => [a.ml_item_id as string, a.produto_id as string]));
 
+  // Zero item bate com um anúncio publicado pelo sistema = essa venda não é
+  // de dropshipping — é um anúncio independente que o seller mantém na
+  // MESMA conta do ML (confirmado ao vivo: pedido #2000019095319898 era um
+  // "Kit 4 Caixas..." que nunca existiu no catálogo). Não é erro, não avisa
+  // ninguém — só segue sem criar pedido. ANTES isso virava um aviso "venda
+  // não rastreada" toda vez, inclusive repetido a cada reenvio do webhook
+  // pro mesmo pedido antigo (ML reenvia a cada mudança de status).
   const itensValidos = order.order_items.filter((it) => produtoPorItem.has(it.item.id));
   if (itensValidos.length === 0) {
-    await avisarGestores(
-      `Venda de dropshipping não rastreada — pedido ML #${orderId}`,
-      "Nenhum item bate com um anúncio publicado pelo sistema. Confira manualmente.",
-      "/sistema/dropshipping"
-    );
-    return { ok: false, motivo: "nenhum item da venda rastreado" };
+    return { ok: true, motivo: "venda fora do catálogo de dropshipping, nada a fazer" };
   }
 
   const produtoIds = [...new Set(itensValidos.map((it) => produtoPorItem.get(it.item.id)!))];

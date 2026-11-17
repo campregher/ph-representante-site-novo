@@ -81,6 +81,11 @@ export async function processarEnvioAutomaticoPorFornecedor(clienteId: string, f
 
   try {
     const drop = await createDropshippingAdminClient();
+    const sistema = await createSistemaAdminClient();
+    // pro resumo de notificações conseguir agrupar por seller (ver notificacoes.ts).
+    const { data: clienteRow } = await sistema.from("clientes").select("nome_fantasia").eq("id", clienteId).maybeSingle();
+    const sellerNome = (clienteRow?.nome_fantasia as string | undefined) ?? "Seller";
+
     const { data } = await drop
       .from("fornecedores")
       .select("id, nome, email, envio_automatico_intervalo_min")
@@ -136,7 +141,7 @@ export async function processarEnvioAutomaticoPorFornecedor(clienteId: string, f
         );
 
         await avisarGestores(
-          `Pacote enviado automaticamente pra ${f.nome}`,
+          `[${sellerNome}] Pacote enviado automaticamente pra ${f.nome}`,
           `${pacote.incluidos.length} pedido(s) liberado(s) e enviado(s) por e-mail sozinho — pedidos ${pacote.incluidos
             .map((i) => `#${i.numero}`)
             .join(", ")}.`

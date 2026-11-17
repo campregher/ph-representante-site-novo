@@ -145,6 +145,11 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
   const mlContaId = tokenRow.id as string;
   const clienteId = tokenRow.cliente_id as string;
 
+  // pro resumo de notificações conseguir agrupar por seller (ver
+  // notificacoes.ts) — prefixo "[Nome]" no título.
+  const { data: clienteRow } = await sistema.from("clientes").select("nome_fantasia").eq("id", clienteId).maybeSingle();
+  const sellerNome = (clienteRow?.nome_fantasia as string | undefined) ?? "Seller";
+
   const drop = await createDropshippingAdminClient();
 
   // idempotência — webhook do ML reenvia notificações
@@ -271,7 +276,7 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
   }
 
   await avisarGestores(
-    `Nova venda de dropshipping — pedido #${numero}`,
+    `[${sellerNome}] Nova venda de dropshipping — pedido #${numero}`,
     `Seller vendeu ${itensValidos.length} item(ns) pelo Mercado Livre. Aguardando a NF pra liberar a etiqueta.`,
     "/sistema/dropshipping"
   );

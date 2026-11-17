@@ -122,6 +122,14 @@ export interface MlAccountRecord {
  * Grava/renova o token de UMA conta do ML do seller. Um seller pode ter
  * várias contas conectadas (uma linha por ml_user_id) — reconectar a MESMA
  * conta (mesmo ml_user_id) só atualiza o token dela, não cria outra linha.
+ *
+ * `nickname` só vem preenchido na conexão inicial (ver callback/route.ts) —
+ * a renovação automática (`getValidMlToken`, a cada ~6h) chama isso sem
+ * nickname nenhum. BUG CORRIGIDO: antes isso sempre mandava
+ * `ml_nickname: null` no upsert, apagando o apelido real a cada renovação
+ * (confirmado em produção: 2 contas reais ficaram com apelido nulo). Agora
+ * só inclui `ml_nickname` no payload quando `nickname` é passado de
+ * propósito — upsert sem a coluna no payload preserva o valor já salvo.
  */
 export async function saveMlToken(
   clienteId: string,
@@ -130,17 +138,15 @@ export async function saveMlToken(
 ): Promise<void> {
   const db = await createSistemaAdminClient();
   const expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
-  const { error } = await db.from("cliente_ml_tokens").upsert(
-    {
-      cliente_id: clienteId,
-      ml_user_id: String(token.user_id),
-      ml_nickname: nickname ?? null,
-      access_token: token.access_token,
-      refresh_token: token.refresh_token,
-      expires_at: expiresAt,
-    },
-    { onConflict: "cliente_id,ml_user_id" }
-  );
+  const payload: Record<string, unknown> = {
+    cliente_id: clienteId,
+    ml_user_id: String(token.user_id),
+    access_token: token.access_token,
+    refresh_token: token.refresh_token,
+    expires_at: expiresAt,
+  };
+  if (nickname !== undefined) payload.ml_nickname = nickname;
+  const { error } = await db.from("cliente_ml_tokens").upsert(payload, { onConflict: "cliente_id,ml_user_id" });
   if (error) throw new Error(error.message);
 }
 

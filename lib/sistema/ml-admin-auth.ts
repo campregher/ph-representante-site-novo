@@ -94,19 +94,22 @@ async function refreshAdminAccessToken(refreshToken: string): Promise<MLTokenRes
   return res.json();
 }
 
+/** `nickname` só vem na conexão inicial — a renovação automática (abaixo)
+ *  chama isso sem nickname. BUG CORRIGIDO: antes mandava sempre
+ *  `ml_nickname: null`, apagando o apelido real a cada renovação (mesma
+ *  causa do bug espelhado em ml-auth.ts:saveMlToken, pro lado do seller).
+ *  Só inclui `ml_nickname` no payload quando passado de propósito. */
 export async function saveAdminMlToken(token: MLTokenResponse, nickname?: string): Promise<void> {
   const db = await createSistemaAdminClient();
   const expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
-  const { error } = await db.from("admin_ml_token").upsert(
-    {
-      ml_user_id: String(token.user_id),
-      ml_nickname: nickname ?? null,
-      access_token: token.access_token,
-      refresh_token: token.refresh_token,
-      expires_at: expiresAt,
-    },
-    { onConflict: "ml_user_id" }
-  );
+  const payload: Record<string, unknown> = {
+    ml_user_id: String(token.user_id),
+    access_token: token.access_token,
+    refresh_token: token.refresh_token,
+    expires_at: expiresAt,
+  };
+  if (nickname !== undefined) payload.ml_nickname = nickname;
+  const { error } = await db.from("admin_ml_token").upsert(payload, { onConflict: "ml_user_id" });
   if (error) throw new Error(error.message);
 }
 

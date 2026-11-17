@@ -247,8 +247,9 @@ export async function getDropPedidoDetalhe(id: string): Promise<DropPedidoDetalh
 /** Fornecedor de dropshipping normalmente já é uma representada da PH (mesmo
  *  CNPJ, importado por `importarFornecedoresRepresentadas`) — em vez de pedir
  *  upload de logo de novo aqui, busca o logo já cadastrado lá (`comercial.
- *  representadas.logo_url`), casando por CNPJ (dígitos). Sem CNPJ ou sem
- *  representada correspondente, fica `null` (ver fallback de ícone na UI). */
+ *  representadas.logo_url`), casando por CNPJ (dígitos). Sem representada
+ *  correspondente (ex.: fornecedor que só existe no dropshipping, como a
+ *  VIPAPLAST), cai no próprio `fornecedores.logo_url` — ver `listDropFornecedores`. */
 async function resolverLogosFornecedores<T extends { cnpj: string | null }>(fornecedores: T[]): Promise<Map<T, string | null>> {
   const resultado = new Map<T, string | null>();
   const cnpjs = [...new Set(fornecedores.map((f) => (f.cnpj ? onlyDigits(f.cnpj) : null)).filter((c): c is string => !!c))];
@@ -270,9 +271,9 @@ export async function listDropFornecedores(soAtivos = false): Promise<DropFornec
   let q = db.from("fornecedores").select("*").order("nome");
   if (soAtivos) q = q.eq("ativo", true);
   const { data } = await q;
-  const fornecedores = (data as Omit<DropFornecedor, "logo_url">[]) ?? [];
+  const fornecedores = (data as DropFornecedor[]) ?? [];
   const logos = await resolverLogosFornecedores(fornecedores);
-  return fornecedores.map((f) => ({ ...f, logo_url: logos.get(f) ?? null }));
+  return fornecedores.map((f) => ({ ...f, logo_url: logos.get(f) ?? f.logo_url ?? null }));
 }
 
 export async function dropFornecedorOptions(): Promise<{ id: string; label: string }[]> {

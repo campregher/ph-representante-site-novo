@@ -64,7 +64,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, categoria_interna, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, categoria_interna, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj, logo_url), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
       .gt("estoque_atual", 0)
@@ -99,7 +99,9 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     fornecedor_id: string | null;
     // `cnpj` aqui é só pra casar com `comercial.representadas` (logo/cidade)
     // — nunca é devolvido pro seller (ver comentário em CatalogoDropItem).
-    fornecedor: { nome: string; razao_social: string | null; cnpj: string | null } | null;
+    // `logo_url` é o fallback pra fornecedor sem representada correspondente
+    // (ex.: VIPAPLAST) — ver uso abaixo.
+    fornecedor: { nome: string; razao_social: string | null; cnpj: string | null; logo_url: string | null } | null;
     produto_precos: { custo: number; preco_sugerido: number | null; tabela: { codigo: string } | null }[];
   }[];
 
@@ -193,7 +195,10 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,
         fornecedorNome: r.fornecedor?.nome ?? null,
-        fornecedorLogoUrl: (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.logo_url) ?? null,
+        fornecedorLogoUrl:
+          (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.logo_url) ??
+          r.fornecedor?.logo_url ??
+          null,
         fornecedorRazaoSocial: r.fornecedor?.razao_social ?? null,
         fornecedorCidade: (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.cidade) ?? null,
         fornecedorUf: (r.fornecedor?.cnpj && infoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj))?.estado) ?? null,

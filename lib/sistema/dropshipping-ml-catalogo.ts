@@ -92,6 +92,66 @@ export async function metodosEnvioAtivosML(mlContaId: string): Promise<MlResult<
   return { ok: true, metodos };
 }
 
+export interface MetodoEnvioRealML {
+  mode: string;
+  type: string;
+  nome: string;
+}
+
+/** Nome de cada combinação (mode,type) exatamente como o próprio Mercado
+ *  Livre nomeia no painel dele ("Configurações da conta → Envios") — NÃO é
+ *  o mesmo vocabulário de `LABEL_METODO_ENVIO`/`metodosEnvioAtivosML` acima,
+ *  que é a categorização PRÓPRIA deste app (usada no questionário de
+ *  onboarding e em "Detalhes do produto" pra o seller escolher um método ao
+ *  publicar) e por isso conflava tipos reais diferentes (ex.: "fulfillment"
+ *  e "xd_drop_off" caíam fora, e "custom" virava "Correios"+"Entrega Direta"
+ *  ao mesmo tempo — bug encontrado ao vivo em 2026-11-17: a conta
+ *  EMBALAGENSBORGES tem Full e Coleta programada ativos e nenhum dos dois
+ *  aparecia). "not_specified" é um placeholder que a API sempre devolve,
+ *  não é um método de verdade — fica de fora. */
+const NOME_REAL_ML: Record<string, string> = {
+  "me2:drop_off": "Correios (agência)",
+  "me2:self_service": "Mercado Envios Flex",
+  "me2:fulfillment": "Mercado Envios Full",
+  "me2:cross_docking": "Coleta (agência)",
+  "me2:xd_drop_off": "Coleta programada",
+  "custom:custom": "Envio a combinar (fora do Mercado Envios)",
+};
+
+/**
+ * Mesma fonte de `metodosEnvioAtivosML` (GET /users/{user_id}/shipping_preferences,
+ * testada ao vivo), mas devolve TODO tipo ativo com o nome real do Mercado
+ * Livre, sem passar pelo vocabulário interno deste app — pra exibição em
+ * "Configuração" (ver app/drop/dashboard/configuracao/page.tsx).
+ */
+export async function metodosEnvioRealML(mlContaId: string): Promise<MlResult<{ metodos: MetodoEnvioRealML[] }>> {
+  let token: string;
+  let mlUserId: string;
+  try {
+    ({ token, mlUserId } = await getMlContaInfo(mlContaId));
+  } catch {
+    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
+  }
+
+  const res = await fetch(`${ML_BASE}/users/${mlUserId}/shipping_preferences`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao consultar métodos de envio no Mercado Livre.") };
+
+  const logistics = (data.logistics ?? []) as { mode: string; types: { type: string; status: string }[] }[];
+  const metodos: MetodoEnvioRealML[] = [];
+  for (const l of logistics) {
+    if (l.mode === "not_specified") continue;
+    for (const t of l.types) {
+      if (t.status !== "active") continue;
+      const chave = `${l.mode}:${t.type}`;
+      metodos.push({ mode: l.mode, type: t.type, nome: NOME_REAL_ML[chave] ?? chave });
+    }
+  }
+  return { ok: true, metodos };
+}
+
 export interface RecebimentoML {
   comissao: number;
   /** true só quando o modo de envio é me2 (Mercado Envios/Flex) — só aí

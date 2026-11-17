@@ -1,23 +1,18 @@
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { getMlRecords } from "@/lib/sistema/ml-auth";
-import { metodosEnvioAtivosML } from "@/lib/sistema/dropshipping-ml-catalogo";
-import { ML_METODO_ENVIO_OPTIONS } from "@/lib/sistema/schemas";
+import { metodosEnvioRealML } from "@/lib/sistema/dropshipping-ml-catalogo";
 import AlterarSenhaForm from "@/components/drop/AlterarSenhaForm";
 import FaturadorConfigCard from "@/components/drop/FaturadorConfigCard";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Badge } from "@/components/sistema/ui/Badge";
 import Link from "next/link";
 
-function labelMetodoEnvio(valor: string): string {
-  return ML_METODO_ENVIO_OPTIONS.find((o) => o.value === valor)?.label ?? valor;
-}
-
 /** Métodos de envio que o Mercado Livre tem de fato ATIVOS agora em cada
- *  conta conectada — só exibe (não dá pra alterar por aqui: quem controla
- *  isso é o próprio painel do Mercado Livre). Reaproveita
- *  `metodosEnvioAtivosML`, já confirmada ao vivo e usada hoje em "Detalhes
- *  do produto" (ver seller-ml-catalogo.ts). */
+ *  conta conectada — com o nome tal como o PRÓPRIO Mercado Livre usa (ver
+ *  `metodosEnvioRealML`), não a categoria interna deste app (correios/
+ *  mercado_envios/flex/entrega_direta, do questionário de onboarding). Só
+ *  exibe — quem controla isso é o próprio painel do Mercado Livre. */
 async function MetodosEnvioCard({ clienteId }: { clienteId: string }) {
   const contas = await getMlRecords(clienteId);
 
@@ -37,7 +32,7 @@ async function MetodosEnvioCard({ clienteId }: { clienteId: string }) {
   }
 
   const resultados = await Promise.all(
-    contas.map(async (c) => ({ conta: c, res: await metodosEnvioAtivosML(c.id) }))
+    contas.map(async (c) => ({ conta: c, res: await metodosEnvioRealML(c.id) }))
   );
 
   return (
@@ -57,8 +52,8 @@ async function MetodosEnvioCard({ clienteId }: { clienteId: string }) {
               <span className="text-xs text-neutral-500">Nenhum método ativo encontrado.</span>
             ) : (
               res.metodos.map((m) => (
-                <Badge key={m} tone="blue">
-                  {labelMetodoEnvio(m)}
+                <Badge key={`${m.mode}:${m.type}`} tone="blue">
+                  {m.nome}
                 </Badge>
               ))
             )}

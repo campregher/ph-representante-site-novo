@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, AlertTriangle, Store } from "lucide-react";
+import { ChevronRight, AlertTriangle, Store, Package } from "lucide-react";
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { pedidosDropSeller, type PedidoDrop } from "@/lib/sistema/seller-pedidos";
 import { classificarUrgenciaEnvio, type UrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
@@ -85,7 +85,12 @@ export default async function DropDashboardPedidosPage() {
             content: (
               <Card>
                 <CardBody className="p-0">
-                  <BlocoPorConta pedidos={enviados} render={(lista) => <ListaPedidos pedidos={lista} mostrarEnvioML />} />
+                  <BlocoPorConta
+                    pedidos={enviados}
+                    render={(lista) => (
+                      <BlocoPorFornecedor pedidos={lista} render={(lista2) => <ListaPedidos pedidos={lista2} mostrarEnvioML />} />
+                    )}
+                  />
                 </CardBody>
               </Card>
             ),
@@ -107,9 +112,48 @@ function PassoEmitirNf({ pedidos }: { pedidos: PedidoDrop[] }) {
         description="A etiqueta só fica pronta pra baixar depois que a nota fiscal é declarada lá no Mercado Livre."
       />
       <CardBody className="p-0">
-        <BlocoPorConta pedidos={pedidos} render={(lista) => <ListaPedidos pedidos={lista} mostrarUrgencia mostrarEnvioML />} />
+        <BlocoPorConta
+          pedidos={pedidos}
+          render={(lista) => (
+            <BlocoPorFornecedor pedidos={lista} render={(lista2) => <ListaPedidos pedidos={lista2} mostrarUrgencia mostrarEnvioML />} />
+          )}
+        />
       </CardBody>
     </Card>
+  );
+}
+
+/** Mesma ideia de `BlocoPorConta`, um nível abaixo — separa por fornecedor
+ *  dentro de cada conta. Pedido sem fornecedor identificável (item misto de
+ *  mais de um fornecedor, raro) cai num grupo à parte em vez de sumir. */
+function BlocoPorFornecedor({ pedidos, render }: { pedidos: PedidoDrop[]; render: (pedidos: PedidoDrop[]) => ReactNode }) {
+  if (pedidos.length === 0) return <p className="p-5 text-sm text-neutral-600">Nenhuma venda nessa situação.</p>;
+
+  const grupos = new Map<string, PedidoDrop[]>();
+  for (const p of pedidos) {
+    const chave = p.fornecedorNome ?? "Fornecedor não identificado";
+    const lista = grupos.get(chave) ?? [];
+    lista.push(p);
+    grupos.set(chave, lista);
+  }
+  const gruposOrdenados = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  if (gruposOrdenados.length <= 1) return <>{render(pedidos)}</>;
+
+  return (
+    <div className="divide-y divide-neutral-100">
+      {gruposOrdenados.map(([fornecedor, lista]) => (
+        <details key={fornecedor} open>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-neutral-50/60 px-5 py-2 pl-8 hover:bg-neutral-100">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+              <Package size={12} className="text-neutral-400" /> {fornecedor}
+            </span>
+            <Badge tone="neutral">{lista.length}</Badge>
+          </summary>
+          {render(lista)}
+        </details>
+      ))}
+    </div>
   );
 }
 
@@ -149,10 +193,12 @@ function BlocoPorConta({ pedidos, render }: { pedidos: PedidoDrop[]; render: (pe
 }
 
 /** Passo 2 — os 2 sub-passos (baixar o pacote, depois marcar como enviado)
- *  já ficam dentro do próprio PedidosFornecedorGroup, numerados ali. */
+ *  já ficam dentro do próprio PedidosFornecedorGroup, numerados ali. Separado
+ *  por conta do Mercado Livre (como os outros passos) e, dentro de cada
+ *  conta, por fornecedor — cada pacote combinado é sempre de UM fornecedor
+ *  de UMA conta só, nunca mistura. */
 function PassoLiberarEtiqueta({ pedidos }: { pedidos: PedidoDrop[] }) {
-  const gruposProntos = agruparPorFornecedor(pedidos);
-  if (gruposProntos.length === 0) {
+  if (pedidos.length === 0) {
     return (
       <Card>
         <CardBody className="text-sm text-neutral-600">Nenhuma venda com etiqueta liberada pra enviar ao fornecedor agora.</CardBody>
@@ -165,12 +211,24 @@ function PassoLiberarEtiqueta({ pedidos }: { pedidos: PedidoDrop[] }) {
         title="Baixe o pacote e mande pro fornecedor"
         description="① Selecione os pedidos de um fornecedor e baixe um único pacote (etiquetas, notas fiscais e planilha). ② Depois de mandar no grupo de WhatsApp dele, marque como enviado."
       />
-      <CardBody className="space-y-3">
-        {gruposProntos.map((g) => (
-          <PedidosFornecedorGroup key={g.fornecedorNome} fornecedorNome={g.fornecedorNome} pedidos={g.pedidos} />
-        ))}
+      <CardBody className="p-0">
+        <BlocoPorConta pedidos={pedidos} render={(lista) => <GruposPorFornecedor pedidos={lista} />} />
       </CardBody>
     </Card>
+  );
+}
+
+function GruposPorFornecedor({ pedidos }: { pedidos: PedidoDrop[] }) {
+  const grupos = agruparPorFornecedor(pedidos);
+  if (grupos.length === 0) {
+    return <p className="p-5 text-sm text-neutral-600">Nenhuma venda com fornecedor identificado.</p>;
+  }
+  return (
+    <div className="space-y-3 p-5">
+      {grupos.map((g) => (
+        <PedidosFornecedorGroup key={g.fornecedorNome} fornecedorNome={g.fornecedorNome} pedidos={g.pedidos} />
+      ))}
+    </div>
   );
 }
 
@@ -233,7 +291,10 @@ function ListaDevolucoes({ pedidos }: { pedidos: PedidoDrop[] }) {
         {pedidos.length === 0 ? (
           <p className="p-5 text-sm text-neutral-600">Nenhuma devolução em andamento.</p>
         ) : (
-          <BlocoPorConta pedidos={pedidos} render={LinhasDevolucao} />
+          <BlocoPorConta
+            pedidos={pedidos}
+            render={(lista) => <BlocoPorFornecedor pedidos={lista} render={LinhasDevolucao} />}
+          />
         )}
       </CardBody>
     </Card>

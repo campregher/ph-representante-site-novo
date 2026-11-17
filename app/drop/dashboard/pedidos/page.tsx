@@ -32,6 +32,13 @@ const URGENCIA_LABEL: Record<UrgenciaEnvio, { label: string; tone: "red" | "yell
   sem_prazo: { label: "Sem prazo informado", tone: "neutral" },
 };
 
+/** "Atrasado"/"Enviar hoje" só faz sentido ANTES do envio acontecer — é a
+ *  urgência de DESPACHAR. Depois que o Mercado Livre já despachou, entregou,
+ *  não entregou ou cancelou, mostrar urgência junto é contraditório (ex.:
+ *  "Atrasado" + "Entregue" ou "Cancelado" + "Nos próximos dias") — nesses
+ *  casos o status real já é a informação que importa, a urgência some. */
+const ENVIO_JA_RESOLVIDO = new Set(["shipped", "delivered", "not_delivered", "cancelled"]);
+
 export default async function DropDashboardPedidosPage() {
   const seller = await requireSeller();
 
@@ -247,7 +254,8 @@ function ListaPedidos({
   return (
     <div className="divide-y divide-neutral-100">
       {pedidos.map((p) => {
-        const urgencia = mostrarUrgencia ? URGENCIA_LABEL[classificarUrgenciaEnvio(p.prazoEnvio)] : null;
+        const resolvido = !!p.mlShippingStatus && ENVIO_JA_RESOLVIDO.has(p.mlShippingStatus);
+        const urgencia = mostrarUrgencia && !resolvido ? URGENCIA_LABEL[classificarUrgenciaEnvio(p.prazoEnvio)] : null;
         const envioMl = mostrarEnvioML && p.mlShippingStatus ? ML_SHIPPING_LABEL[p.mlShippingStatus] : null;
         const totalCaixas = p.itens.reduce((s, it) => s + it.caixas, 0);
         return (

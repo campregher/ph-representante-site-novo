@@ -563,6 +563,7 @@ export const dropFornecedorSchema = z.object({
   whatsapp: optionalText,
   email: optionalEmail,
   observacoes: optionalText,
+  logo_url: optionalText,
   ativo: z.boolean().default(true),
 });
 

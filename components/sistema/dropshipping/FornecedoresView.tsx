@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Upload, Download } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import type { DropFornecedor } from "@/lib/sistema/types";
 import { salvarDropFornecedor, excluirDropFornecedor, importarFornecedoresRepresentadas } from "@/lib/sistema/actions/dropshipping";
 import { formatCNPJ, formatPhone } from "@/lib/sistema/format";
@@ -15,11 +16,12 @@ import { Field, Input, Textarea, FormGrid } from "@/components/sistema/ui/Field"
 import { Badge } from "@/components/sistema/ui/Badge";
 import { EmptyState } from "@/components/sistema/ui/State";
 import { TableScroll, Table, Thead, Tbody, Tr, Th, Td } from "@/components/sistema/ui/Table";
+import LogoUpload from "@/components/sistema/LogoUpload";
 
 const empty = {
   id: null as string | null,
   nome: "", razao_social: "", cnpj: "", telefone: "", whatsapp: "", email: "",
-  observacoes: "", ativo: true,
+  observacoes: "", logo_url: "", ativo: true,
 };
 
 export default function FornecedoresView({
@@ -40,7 +42,7 @@ export default function FornecedoresView({
     setF({
       id: x.id, nome: x.nome, razao_social: x.razao_social ?? "", cnpj: x.cnpj ?? "",
       telefone: x.telefone ?? "", whatsapp: x.whatsapp ?? "", email: x.email ?? "",
-      observacoes: x.observacoes ?? "", ativo: x.ativo,
+      observacoes: x.observacoes ?? "", logo_url: x.logo_url ?? "", ativo: x.ativo,
     });
     setOpen(true);
   }
@@ -107,7 +109,18 @@ export default function FornecedoresView({
             <Tbody>
               {fornecedores.map((x) => (
                 <Tr key={x.id}>
-                  <Td className="font-medium text-neutral-900">{x.nome}</Td>
+                  <Td className="font-medium text-neutral-900">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-neutral-200 bg-white">
+                        {x.logo_url ? (
+                          <Image src={x.logo_url} alt="" width={28} height={28} className="h-full w-full object-contain" unoptimized />
+                        ) : (
+                          <span className="text-[8px] text-neutral-300">sem logo</span>
+                        )}
+                      </div>
+                      {x.nome}
+                    </div>
+                  </Td>
                   <Td>{x.cnpj ? formatCNPJ(x.cnpj) : "—"}</Td>
                   <Td>
                     {x.telefone || x.whatsapp ? formatPhone(x.telefone || x.whatsapp || "") : ""}
@@ -137,6 +150,9 @@ export default function FornecedoresView({
         footer={<Button onClick={salvar} loading={pending}>Salvar</Button>}
       >
         <div className="space-y-4">
+          <Field label="Logo">
+            <LogoUpload value={f.logo_url} onChange={(v) => set("logo_url", v)} folder="dropshipping-fornecedores" />
+          </Field>
           <FormGrid>
             <Field label="Nome" required><Input value={f.nome} onChange={(e) => set("nome", e.target.value)} /></Field>
             <Field label="Razão social"><Input value={f.razao_social} onChange={(e) => set("razao_social", e.target.value)} /></Field>

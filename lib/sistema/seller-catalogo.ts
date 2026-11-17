@@ -27,6 +27,12 @@ export interface CatalogoDropItem {
   anuncios: AnuncioInfo[];
   fornecedorId: string | null;
   fornecedorNome: string | null;
+  fornecedorLogoUrl: string | null;
+  fornecedorRazaoSocial: string | null;
+  fornecedorCnpj: string | null;
+  fornecedorTelefone: string | null;
+  fornecedorWhatsapp: string | null;
+  fornecedorEmail: string | null;
   /** métodos de envio aceitos por esse produto (cadastro do admin) e, dentre
    *  eles, o que esse seller registrou pra usar nesse anúncio (null = ainda
    *  não cadastrou — bloqueia publicar, ver seller-ml-catalogo.ts). */
@@ -55,7 +61,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, logo_url, razao_social, cnpj, telefone, whatsapp, email), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
       .gt("estoque_atual", 0)
@@ -87,7 +93,15 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     ml_category_id: string | null;
     transporte_aceito: string[] | null;
     fornecedor_id: string | null;
-    fornecedor: { nome: string } | null;
+    fornecedor: {
+      nome: string;
+      logo_url: string | null;
+      razao_social: string | null;
+      cnpj: string | null;
+      telefone: string | null;
+      whatsapp: string | null;
+      email: string | null;
+    } | null;
     produto_precos: { custo: number; preco_sugerido: number | null; tabela: { codigo: string } | null }[];
   }[];
 
@@ -157,6 +171,12 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,
         fornecedorNome: r.fornecedor?.nome ?? null,
+        fornecedorLogoUrl: r.fornecedor?.logo_url ?? null,
+        fornecedorRazaoSocial: r.fornecedor?.razao_social ?? null,
+        fornecedorCnpj: r.fornecedor?.cnpj ?? null,
+        fornecedorTelefone: r.fornecedor?.telefone ?? null,
+        fornecedorWhatsapp: r.fornecedor?.whatsapp ?? null,
+        fornecedorEmail: r.fornecedor?.email ?? null,
         transporteAceito: r.transporte_aceito ?? [],
         metodoEnvio: custom?.metodo_envio ?? null,
         tipoAnuncio: custom?.tipo_anuncio ?? null,

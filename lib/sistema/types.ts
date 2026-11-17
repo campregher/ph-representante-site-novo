@@ -381,6 +381,7 @@ export interface DropFornecedor {
   whatsapp: string | null;
   email: string | null;
   observacoes: string | null;
+  logo_url: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;

@@ -564,6 +564,12 @@ export const dropFornecedorSchema = z.object({
   email: optionalEmail,
   observacoes: optionalText,
   ativo: z.boolean().default(true),
+  /** Minutos entre lotes automáticos pro fornecedor — null/vazio = desativado
+   *  (continua 100% manual). Ver dropshipping-pedido-envio-automatico.ts. */
+  envio_automatico_intervalo_min: z
+    .union([z.coerce.number().int().positive(), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (v === "" || v == null ? null : v)),
 });
 
 export const dropProdutoSchema = z.object({

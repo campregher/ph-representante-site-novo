@@ -20,7 +20,7 @@ import { TableScroll, Table, Thead, Tbody, Tr, Th, Td } from "@/components/siste
 const empty = {
   id: null as string | null,
   nome: "", razao_social: "", cnpj: "", telefone: "", whatsapp: "", email: "",
-  observacoes: "", ativo: true,
+  observacoes: "", ativo: true, envio_automatico_intervalo_min: "",
 };
 
 export default function FornecedoresView({
@@ -42,6 +42,7 @@ export default function FornecedoresView({
       id: x.id, nome: x.nome, razao_social: x.razao_social ?? "", cnpj: x.cnpj ?? "",
       telefone: x.telefone ?? "", whatsapp: x.whatsapp ?? "", email: x.email ?? "",
       observacoes: x.observacoes ?? "", ativo: x.ativo,
+      envio_automatico_intervalo_min: x.envio_automatico_intervalo_min?.toString() ?? "",
     });
     setOpen(true);
   }
@@ -164,6 +165,18 @@ export default function FornecedoresView({
             <Field label="WhatsApp"><Input value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} inputMode="tel" /></Field>
           </FormGrid>
           <Field label="Observações"><Textarea value={f.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={2} /></Field>
+          <Field
+            label="Envio automático pro fornecedor"
+            hint="Minutos entre lotes automáticos do pacote combinado (etiquetas + planilha) por e-mail, assim que os pedidos ficam prontos — vazio desativa, continua 100% manual. Precisa de e-mail cadastrado acima."
+          >
+            <Input
+              value={f.envio_automatico_intervalo_min}
+              onChange={(e) => set("envio_automatico_intervalo_min", e.target.value)}
+              type="number"
+              min={1}
+              placeholder="ex.: 180 (a cada 3h) — vazio = desativado"
+            />
+          </Field>
           <label className="flex items-center gap-2 text-sm text-neutral-700">
             <input type="checkbox" checked={f.ativo} onChange={(e) => set("ativo", e.target.checked)} className="h-4 w-4 rounded border-neutral-300 text-brand" />
             Ativo

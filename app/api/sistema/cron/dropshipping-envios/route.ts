@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createDropshippingAdminClient } from "@/lib/supabase/server";
 import { atualizarEnvioEDevolucaoPedido } from "@/lib/sistema/dropshipping-pedido-envio-status";
+import { processarEnvioAutomaticoPorFornecedor } from "@/lib/sistema/dropshipping-pedido-envio-automatico";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,34 @@ export async function GET(req: Request) {
       atualizados++;
     } catch (e) {
       erros.push(`pedido ${p.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Rede de segurança do envio automático pro fornecedor (ver
+  // dropshipping-pedido-envio-automatico.ts): a checagem rápida de verdade
+  // acontece quando o seller abre "Pedidos" — esse cron só garante que um
+  // fornecedor com lote pendente não fique esquecido se o seller não voltar
+  // ao app por um tempo.
+  const { data: prontos } = await db
+    .from("pedidos")
+    .select("cliente_id, pedido_itens(produto:produtos(fornecedor_id))")
+    .eq("status", "pronto")
+    .limit(500);
+  const fornecedorIdsPorCliente = new Map<string, Set<string>>();
+  for (const p of prontos ?? []) {
+    const clienteId = p.cliente_id as string;
+    const itens = p.pedido_itens as unknown as { produto: { fornecedor_id: string | null }[] }[];
+    const fornecedorIds = itens.flatMap((it) => it.produto.map((pr) => pr.fornecedor_id)).filter((v): v is string => !!v);
+    if (fornecedorIds.length === 0) continue;
+    const set = fornecedorIdsPorCliente.get(clienteId) ?? new Set<string>();
+    for (const id of fornecedorIds) set.add(id);
+    fornecedorIdsPorCliente.set(clienteId, set);
+  }
+  for (const [clienteId, fornecedorIds] of fornecedorIdsPorCliente) {
+    try {
+      await processarEnvioAutomaticoPorFornecedor(clienteId, [...fornecedorIds]);
+    } catch (e) {
+      erros.push(`envio automático cliente ${clienteId}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

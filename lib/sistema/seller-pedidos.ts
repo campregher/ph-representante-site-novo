@@ -6,6 +6,7 @@ import {
   type MensagemPedido,
 } from "@/lib/sistema/dropshipping-pedido-arquivos";
 import { atualizarEnvioEDevolucaoPedido, precisaChecarEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
+import { processarEnvioAutomaticoPorFornecedor } from "@/lib/sistema/dropshipping-pedido-envio-automatico";
 
 export interface PedidoDropItem {
   sku: string;
@@ -115,6 +116,22 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
         }
       }),
   ]);
+
+  // Pedidos "pronto" (NF+etiqueta liberadas) podem já estar prontos pro
+  // fornecedor automático (ver dropshipping-pedido-envio-automatico.ts) —
+  // nunca lança, falha aqui não pode quebrar a página.
+  const fornecedorIdsProntos = [
+    ...new Set(
+      rows
+        .filter((p) => p.status === "pronto")
+        .flatMap((p) => p.pedido_itens.map((it) => it.produto?.fornecedor_id).filter((v): v is string => !!v))
+    ),
+  ];
+  try {
+    await processarEnvioAutomaticoPorFornecedor(clienteId, fornecedorIdsProntos);
+  } catch (e) {
+    console.error("[seller-pedidos] processarEnvioAutomaticoPorFornecedor:", e);
+  }
 
   // `cliente_ml_tokens` (apelido da conta) mora no schema `comercial` — não
   // dá pra fazer embed cross-schema via PostgREST (mesmo padrão já usado em

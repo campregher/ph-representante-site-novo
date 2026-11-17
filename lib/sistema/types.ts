@@ -383,12 +383,18 @@ export interface DropFornecedor {
   whatsapp: string | null;
   email: string | null;
   observacoes: string | null;
-  /** Não é coluna própria — puxado de `comercial.representadas.logo_url` por
-   *  CNPJ (ver `listDropFornecedores`), já que o fornecedor de dropshipping
-   *  normalmente já é uma representada da PH (mesmo CNPJ) com logo cadastrado
-   *  lá. `null` quando não casa com nenhuma representada. */
+  /** Prioriza `comercial.representadas.logo_url` por CNPJ (ver
+   *  `listDropFornecedores`), já que o fornecedor de dropshipping normalmente
+   *  já é uma representada da PH (mesmo CNPJ) com logo cadastrado lá — sem
+   *  casar com nenhuma representada, cai na própria coluna `logo_url` desse
+   *  fornecedor (caso de quem só existe no dropshipping, ex.: VIPAPLAST). */
   logo_url: string | null;
   ativo: boolean;
+  /** Minutos entre lotes automáticos do pacote combinado pro fornecedor —
+   *  null = desativado, continua 100% manual (ver
+   *  dropshipping-pedido-envio-automatico.ts). */
+  envio_automatico_intervalo_min: number | null;
+  envio_automatico_ultimo_em: string | null;
   created_at: string;
   updated_at: string;
 }

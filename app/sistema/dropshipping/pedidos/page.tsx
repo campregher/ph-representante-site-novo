@@ -1,12 +1,13 @@
 import { requireSistemaProfile } from "@/lib/sistema/auth";
 import { listDropPedidos, type DropPedidoAdmin } from "@/lib/sistema/dropshipping";
 import { formatBRL, formatDateTime } from "@/lib/sistema/format";
-import { classificarUrgenciaEnvio, type UrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
+import { classificarUrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
 import { PageHeader } from "@/components/sistema/ui/State";
 import { Badge } from "@/components/sistema/ui/Badge";
 import RowLink from "@/components/sistema/RowLink";
 import { TableScroll, Table, Thead, Th, Tbody, Tr, Td } from "@/components/sistema/ui/Table";
 import PedidosTabs from "@/components/drop/PedidosTabs";
+import AutoRefresh from "@/components/drop/AutoRefresh";
 
 const STATUS_LABEL = {
   aguardando_nf: { label: "Aguardando NF", tone: "yellow" as const },
@@ -28,23 +29,27 @@ const ML_SHIPPING_LABEL: Record<string, { label: string; tone: "blue" | "green" 
   cancelled: { label: "Cancelado", tone: "neutral" },
 };
 
-const URGENCIA_LABEL: Record<UrgenciaEnvio, { label: string; tone: "red" | "yellow" | "blue" | "neutral" }> = {
-  atrasado: { label: "Atrasado", tone: "red" },
-  hoje: { label: "Enviar hoje", tone: "yellow" },
-  em_breve: { label: "Nos próximos dias", tone: "blue" },
-  sem_prazo: { label: "Sem prazo informado", tone: "neutral" },
-};
-
 export default async function DropPedidosPage() {
   await requireSistemaProfile();
   const pedidos = await listDropPedidos();
 
+  // Mesmas 3 faixas de urgência do painel de vendas do próprio Mercado
+  // Livre — "sem prazo informado" entra em "Próximos dias" (o campo de
+  // prazo ainda não foi confirmado contra um envio real, ver aviso em
+  // dropshipping-pedido-envio-status.ts).
   const aEnviar = pedidos.filter((p) => p.status === "aguardando_nf" || p.status === "pronto");
+  const atrasados = aEnviar.filter((p) => classificarUrgenciaEnvio(p.prazoEnvio) === "atrasado");
+  const hoje = aEnviar.filter((p) => classificarUrgenciaEnvio(p.prazoEnvio) === "hoje");
+  const proximosDias = aEnviar.filter((p) => {
+    const u = classificarUrgenciaEnvio(p.prazoEnvio);
+    return u === "em_breve" || u === "sem_prazo";
+  });
   const enviados = pedidos.filter((p) => p.status === "enviado");
   const devolucoes = pedidos.filter((p) => !!p.devolucaoStatus);
 
   return (
     <div>
+      <AutoRefresh />
       <PageHeader
         title="Pedidos"
         description="Vendas de dropshipping no Mercado Livre com etiqueta já liberada — só acompanhamento, o seller resolve a etiqueta/NF com o fornecedor dele direto. Pedidos aguardando o seller declarar a NF no Mercado Livre não aparecem aqui."
@@ -52,7 +57,9 @@ export default async function DropPedidosPage() {
 
       <PedidosTabs
         tabs={[
-          { id: "a_enviar", label: "A enviar", count: aEnviar.length, content: <TabelaPedidos pedidos={aEnviar} mostrarUrgencia /> },
+          { id: "atrasados", label: "Atrasados", count: atrasados.length, content: <TabelaPedidos pedidos={atrasados} mostrarPrazo /> },
+          { id: "hoje", label: "Hoje", count: hoje.length, content: <TabelaPedidos pedidos={hoje} mostrarPrazo /> },
+          { id: "proximos_dias", label: "Próximos dias", count: proximosDias.length, content: <TabelaPedidos pedidos={proximosDias} mostrarPrazo /> },
           { id: "enviados", label: "Enviados", count: enviados.length, content: <TabelaPedidos pedidos={enviados} mostrarEnvioML /> },
           { id: "devolucoes", label: "Devoluções", count: devolucoes.length, content: <TabelaDevolucoes pedidos={devolucoes} /> },
         ]}
@@ -63,11 +70,11 @@ export default async function DropPedidosPage() {
 
 function TabelaPedidos({
   pedidos,
-  mostrarUrgencia = false,
+  mostrarPrazo = false,
   mostrarEnvioML = false,
 }: {
   pedidos: DropPedidoAdmin[];
-  mostrarUrgencia?: boolean;
+  mostrarPrazo?: boolean;
   mostrarEnvioML?: boolean;
 }) {
   if (pedidos.length === 0) return <p className="text-sm text-neutral-500">Nenhum pedido nessa situação.</p>;
@@ -83,7 +90,7 @@ function TabelaPedidos({
             <Th>Entrega</Th>
             <Th>Valor</Th>
             <Th>Status</Th>
-            {mostrarUrgencia && <Th>Prazo</Th>}
+            {mostrarPrazo && <Th>Prazo de despacho</Th>}
             {mostrarEnvioML && <Th>Envio (ML)</Th>}
             <Th>Data</Th>
           </Tr>
@@ -91,7 +98,6 @@ function TabelaPedidos({
         <Tbody>
           {pedidos.map((p) => {
             const status = STATUS_LABEL[p.status];
-            const urgencia = mostrarUrgencia ? URGENCIA_LABEL[classificarUrgenciaEnvio(p.prazoEnvio)] : null;
             const envioMl = mostrarEnvioML && p.mlShippingStatus ? ML_SHIPPING_LABEL[p.mlShippingStatus] : null;
             const totalCaixas = p.itens.reduce((s, it) => s + it.caixas, 0);
             return (
@@ -105,9 +111,7 @@ function TabelaPedidos({
                 <Td>
                   <Badge tone={status.tone}>{status.label}</Badge>
                 </Td>
-                {mostrarUrgencia && (
-                  <Td>{urgencia && <Badge tone={urgencia.tone}>{urgencia.label}</Badge>}</Td>
-                )}
+                {mostrarPrazo && <Td className="whitespace-nowrap text-neutral-400">{p.prazoEnvio ? formatDateTime(p.prazoEnvio) : "—"}</Td>}
                 {mostrarEnvioML && (
                   <Td>{envioMl ? <Badge tone={envioMl.tone}>{envioMl.label}</Badge> : "—"}</Td>
                 )}

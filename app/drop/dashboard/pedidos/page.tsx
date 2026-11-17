@@ -2,13 +2,14 @@ import Link from "next/link";
 import { ChevronRight, AlertTriangle } from "lucide-react";
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { pedidosDropSeller, type PedidoDrop } from "@/lib/sistema/seller-pedidos";
-import { classificarUrgenciaEnvio, type UrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
+import { classificarUrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
 import { formatDateTime } from "@/lib/sistema/format";
 import SellerLocked from "@/components/drop/SellerLocked";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 import { Badge } from "@/components/sistema/ui/Badge";
 import PedidosFornecedorGroup, { type PedidoCombinavel } from "@/components/drop/PedidosFornecedorGroup";
 import PedidosTabs from "@/components/drop/PedidosTabs";
+import AutoRefresh from "@/components/drop/AutoRefresh";
 
 const STATUS_LABEL = {
   aguardando_nf: { label: "Aguardando você emitir a NF no Mercado Livre", tone: "yellow" as const },
@@ -31,14 +32,6 @@ const ML_SHIPPING_LABEL: Record<string, { label: string; tone: "blue" | "green" 
   cancelled: { label: "Cancelado", tone: "neutral" },
 };
 
-const URGENCIA_LABEL: Record<UrgenciaEnvio, { label: string; tone: "red" | "yellow" | "blue" | "neutral" }> = {
-  atrasado: { label: "Atrasado", tone: "red" },
-  hoje: { label: "Enviar hoje", tone: "yellow" },
-  em_breve: { label: "Nos próximos dias", tone: "blue" },
-  sem_prazo: { label: "Sem prazo informado", tone: "neutral" },
-};
-const URGENCIA_ORDEM: UrgenciaEnvio[] = ["atrasado", "hoje", "em_breve", "sem_prazo"];
-
 export default async function DropDashboardPedidosPage() {
   const seller = await requireSeller();
 
@@ -52,14 +45,25 @@ export default async function DropDashboardPedidosPage() {
   }
 
   const pedidos = await pedidosDropSeller(seller.id);
-  const gruposProntos = agruparProntosPorFornecedor(pedidos);
 
+  // Mesmas 3 faixas de urgência que o próprio Mercado Livre usa no painel
+  // de vendas dele ("Envios de hoje"/"Próximos dias"/atrasado em destaque) —
+  // "sem prazo informado" entra em "Próximos dias" (ver aviso no topo de
+  // dropshipping-pedido-envio-status.ts: esse campo ainda não foi
+  // confirmado contra um envio real, pode estar vindo null por enquanto).
   const aEnviar = pedidos.filter((p) => p.status === "aguardando_nf" || p.status === "pronto");
+  const atrasados = aEnviar.filter((p) => classificarUrgenciaEnvio(p.prazoEnvio) === "atrasado");
+  const hoje = aEnviar.filter((p) => classificarUrgenciaEnvio(p.prazoEnvio) === "hoje");
+  const proximosDias = aEnviar.filter((p) => {
+    const u = classificarUrgenciaEnvio(p.prazoEnvio);
+    return u === "em_breve" || u === "sem_prazo";
+  });
   const enviados = pedidos.filter((p) => p.status === "enviado");
   const devolucoes = pedidos.filter((p) => !!p.devolucaoStatus);
 
   return (
     <div className="max-w-3xl space-y-4">
+      <AutoRefresh />
       <div>
         <h1 className="text-lg font-bold text-neutral-900">Pedidos</h1>
         <p className="text-sm text-neutral-500">
@@ -69,29 +73,9 @@ export default async function DropDashboardPedidosPage() {
 
       <PedidosTabs
         tabs={[
-          {
-            id: "a_enviar",
-            label: "A enviar",
-            count: aEnviar.length,
-            content: (
-              <div className="space-y-4">
-                {gruposProntos.length > 0 && (
-                  <Card>
-                    <CardHeader
-                      title="Pronto pra enviar ao fornecedor"
-                      description="Selecione os pedidos de um fornecedor e baixe um único pacote (etiquetas, notas fiscais e planilha) pra mandar de uma vez no grupo de WhatsApp dele."
-                    />
-                    <CardBody className="space-y-3">
-                      {gruposProntos.map((g) => (
-                        <PedidosFornecedorGroup key={g.fornecedorNome} fornecedorNome={g.fornecedorNome} pedidos={g.pedidos} />
-                      ))}
-                    </CardBody>
-                  </Card>
-                )}
-                <PedidosPorUrgencia pedidos={aEnviar} />
-              </div>
-            ),
-          },
+          { id: "atrasados", label: "Atrasados", count: atrasados.length, content: <BlocoAEnviar pedidos={atrasados} /> },
+          { id: "hoje", label: "Hoje", count: hoje.length, content: <BlocoAEnviar pedidos={hoje} /> },
+          { id: "proximos_dias", label: "Próximos dias", count: proximosDias.length, content: <BlocoAEnviar pedidos={proximosDias} /> },
           {
             id: "enviados",
             label: "Enviados",
@@ -104,50 +88,55 @@ export default async function DropDashboardPedidosPage() {
               </Card>
             ),
           },
-          {
-            id: "devolucoes",
-            label: "Devoluções",
-            count: devolucoes.length,
-            content: <ListaDevolucoes pedidos={devolucoes} />,
-          },
+          { id: "devolucoes", label: "Devoluções", count: devolucoes.length, content: <ListaDevolucoes pedidos={devolucoes} /> },
         ]}
       />
     </div>
   );
 }
 
-function PedidosPorUrgencia({ pedidos }: { pedidos: PedidoDrop[] }) {
+/** Conteúdo de cada aba de urgência (Atrasados/Hoje/Próximos dias) — separa
+ *  os já "pronto" (agrupados por fornecedor, pro pacote combinado) dos que
+ *  ainda estão "aguardando_nf" (nada a baixar ainda, só o aviso). */
+function BlocoAEnviar({ pedidos }: { pedidos: PedidoDrop[] }) {
   if (pedidos.length === 0) {
     return (
       <Card>
-        <CardBody className="text-sm text-neutral-600">Nenhuma venda aguardando envio no momento.</CardBody>
+        <CardBody className="text-sm text-neutral-600">Nenhuma venda nessa situação.</CardBody>
       </Card>
     );
   }
-  const grupos = new Map<UrgenciaEnvio, PedidoDrop[]>();
-  for (const p of pedidos) {
-    const urgencia = classificarUrgenciaEnvio(p.prazoEnvio);
-    const lista = grupos.get(urgencia) ?? [];
-    lista.push(p);
-    grupos.set(urgencia, lista);
-  }
+
+  const prontos = pedidos.filter((p) => p.status === "pronto");
+  const aguardandoNf = pedidos.filter((p) => p.status === "aguardando_nf");
+  const gruposProntos = agruparPorFornecedor(prontos);
+
   return (
     <div className="space-y-4">
-      {URGENCIA_ORDEM.filter((u) => grupos.has(u)).map((urgencia) => (
-        <Card key={urgencia}>
+      {gruposProntos.length > 0 && (
+        <Card>
           <CardHeader
-            title={
-              <span className="flex items-center gap-2">
-                {URGENCIA_LABEL[urgencia].label}
-                <Badge tone={URGENCIA_LABEL[urgencia].tone}>{grupos.get(urgencia)!.length}</Badge>
-              </span>
-            }
+            title="Pronto pra enviar ao fornecedor"
+            description="Selecione os pedidos de um fornecedor e baixe um único pacote (etiquetas, notas fiscais e planilha) pra mandar de uma vez no grupo de WhatsApp dele."
           />
-          <CardBody className="p-0">
-            <ListaPedidos pedidos={grupos.get(urgencia)!} />
+          <CardBody className="space-y-3">
+            {gruposProntos.map((g) => (
+              <PedidosFornecedorGroup key={g.fornecedorNome} fornecedorNome={g.fornecedorNome} pedidos={g.pedidos} />
+            ))}
           </CardBody>
         </Card>
-      ))}
+      )}
+      {aguardandoNf.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Aguardando você emitir a NF no Mercado Livre"
+            description="A etiqueta só fica pronta pra baixar depois que você declara a nota fiscal do consumidor final lá no Mercado Livre."
+          />
+          <CardBody className="p-0">
+            <ListaPedidos pedidos={aguardandoNf} />
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 }
@@ -226,10 +215,10 @@ function ListaDevolucoes({ pedidos }: { pedidos: PedidoDrop[] }) {
   );
 }
 
-function agruparProntosPorFornecedor(pedidos: PedidoDrop[]): { fornecedorNome: string; pedidos: PedidoCombinavel[] }[] {
+function agruparPorFornecedor(pedidos: PedidoDrop[]): { fornecedorNome: string; pedidos: PedidoCombinavel[] }[] {
   const grupos = new Map<string, PedidoCombinavel[]>();
   for (const p of pedidos) {
-    if (p.status !== "pronto" || !p.fornecedorNome) continue;
+    if (!p.fornecedorNome) continue;
     const totalCaixas = p.itens.reduce((s, it) => s + it.caixas, 0);
     const item: PedidoCombinavel = {
       id: p.id,

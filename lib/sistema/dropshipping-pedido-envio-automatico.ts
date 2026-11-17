@@ -100,8 +100,8 @@ export async function processarEnvioAutomaticoPorFornecedor(clienteId: string, f
           .eq("status", "pronto");
         const pedidoIds = (pedidosProntos ?? [])
           .filter((p) => {
-            const itens = p.pedido_itens as unknown as { produto: { fornecedor_id: string | null }[] }[];
-            return itens.length > 0 && itens.every((it) => it.produto[0]?.fornecedor_id === f.id);
+            const itens = p.pedido_itens as unknown as { produto: { fornecedor_id: string | null } | null }[];
+            return itens.length > 0 && itens.every((it) => it.produto?.fornecedor_id === f.id);
           })
           .map((p) => p.id as string);
         if (pedidoIds.length === 0) continue;

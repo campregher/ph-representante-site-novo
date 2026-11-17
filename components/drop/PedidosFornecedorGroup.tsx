@@ -4,12 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Send, Package } from "lucide-react";
 import { buttonClass } from "@/components/sistema/ui/buttonClass";
+import { Badge } from "@/components/sistema/ui/Badge";
 
 export interface PedidoCombinavel {
   id: string;
   numero: number;
   resumo: string;
   totalCaixas: number;
+  /** Status real do Mercado Livre já formatado pro seller (ver ML_SHIPPING_LABEL
+   *  em page.tsx) — null quando ainda não há nada pra mostrar. Calculado no
+   *  Server Component pra esse componente cliente não precisar da regra de
+   *  rótulo/tom. */
+  envioMl: { label: string; tone: "blue" | "green" | "red" | "neutral" } | null;
 }
 
 interface Props {
@@ -123,6 +129,11 @@ export default function PedidosFornecedorGroup({ fornecedorNome, pedidos }: Prop
                 #{p.numero} — {p.resumo}
               </p>
               <p className="text-xs text-neutral-400">{p.totalCaixas} caixa(s) a enviar</p>
+              {p.envioMl && (
+                <div className="mt-1">
+                  <Badge tone={p.envioMl.tone}>{p.envioMl.label}</Badge>
+                </div>
+              )}
             </div>
           </label>
         ))}
@@ -140,12 +151,14 @@ export default function PedidosFornecedorGroup({ fornecedorNome, pedidos }: Prop
         <button
           type="button"
           onClick={marcarEnviado}
-          disabled={selecionados.size === 0 || marcando || !baixado}
-          title={!baixado ? "Baixe o pacote primeiro" : undefined}
+          disabled={selecionados.size === 0 || marcando}
           className={buttonClass({ variant: "primary", size: "sm" })}
         >
           <Send size={13} /> ② {marcando ? "Marcando…" : "Marcar como enviado ao fornecedor"}
         </button>
+        {!baixado && (
+          <p className="w-full text-xs text-neutral-400">Já baixou o pacote e mandou pro fornecedor? Marque como enviado.</p>
+        )}
         {erro && <p className="w-full text-xs text-red-600">{erro}</p>}
       </div>
     </div>

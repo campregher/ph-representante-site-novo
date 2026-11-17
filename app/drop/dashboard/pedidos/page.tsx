@@ -107,7 +107,7 @@ function PassoEmitirNf({ pedidos }: { pedidos: PedidoDrop[] }) {
         description="A etiqueta só fica pronta pra baixar depois que a nota fiscal é declarada lá no Mercado Livre."
       />
       <CardBody className="p-0">
-        <BlocoPorConta pedidos={pedidos} render={(lista) => <ListaPedidos pedidos={lista} mostrarUrgencia />} />
+        <BlocoPorConta pedidos={pedidos} render={(lista) => <ListaPedidos pedidos={lista} mostrarUrgencia mostrarEnvioML />} />
       </CardBody>
     </Card>
   );
@@ -274,6 +274,7 @@ function agruparPorFornecedor(pedidos: PedidoDrop[]): { fornecedorNome: string; 
       numero: p.numero,
       resumo: p.itens.map((it) => `${it.quantidade}x ${it.nome}`).join(", "),
       totalCaixas,
+      envioMl: p.mlShippingStatus ? ML_SHIPPING_LABEL[p.mlShippingStatus] ?? null : null,
     };
     const lista = grupos.get(p.fornecedorNome) ?? [];
     lista.push(item);

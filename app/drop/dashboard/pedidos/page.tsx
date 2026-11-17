@@ -113,6 +113,9 @@ function BlocoAEnviar({ pedidos }: { pedidos: PedidoDrop[] }) {
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-neutral-400">
+        Prazo estimado (etiqueta impressa + 24h) — não é o horário exato de corte da agência do Mercado Livre.
+      </p>
       {gruposProntos.length > 0 && (
         <Card>
           <CardHeader

@@ -79,6 +79,12 @@ function TabelaPedidos({
 }) {
   if (pedidos.length === 0) return <p className="text-sm text-neutral-500">Nenhum pedido nessa situação.</p>;
   return (
+    <div className="space-y-2">
+      {mostrarPrazo && (
+        <p className="text-xs text-neutral-400">
+          Prazo estimado (etiqueta impressa + 24h) — não é o horário exato de corte da agência do Mercado Livre.
+        </p>
+      )}
     <TableScroll>
       <Table>
         <Thead>
@@ -90,7 +96,7 @@ function TabelaPedidos({
             <Th>Entrega</Th>
             <Th>Valor</Th>
             <Th>Status</Th>
-            {mostrarPrazo && <Th>Prazo de despacho</Th>}
+            {mostrarPrazo && <Th>Prazo estimado</Th>}
             {mostrarEnvioML && <Th>Envio (ML)</Th>}
             <Th>Data</Th>
           </Tr>
@@ -121,7 +127,8 @@ function TabelaPedidos({
           })}
         </Tbody>
       </Table>
-    </TableScroll>
+      </TableScroll>
+    </div>
   );
 }
 

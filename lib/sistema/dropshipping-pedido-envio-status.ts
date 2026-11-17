@@ -10,13 +10,22 @@ import { getMlContaInfo } from "@/lib/sistema/ml-auth";
  * IMPORTANTE — confiança dos campos abaixo:
  * - `GET /shipments/{id}` (status/substatus) já é usado com sucesso neste
  *   projeto (`buscarEnvio` em dropshipping-pedido-sync.ts) — confiável.
- * - O prazo de despacho (`ml_prazo_envio`) e a API de claims (devolução)
- *   NUNCA foram testados aqui. Os nomes de campo/endpoint abaixo são o
- *   melhor palpite a partir do conhecimento geral da API do ML, não
- *   confirmados contra uma venda/devolução real — por isso tudo aqui é
- *   defensivo: qualquer formato inesperado cai em `catch`/fallback `null`
- *   em vez de quebrar a página. Ajustar assim que aparecer um caso real
- *   (mesmo processo já usado pra NF/etiqueta, ver topo de ml-pedido-sync.ts).
+ * - O prazo de despacho (`ml_prazo_envio`) foi checado ao vivo contra um
+ *   envio real (17/11/2026): NÃO existe um campo pronto de "despachar até"
+ *   na resposta do ML — o "Até 14:00h" que a Central de Vendedores mostra
+ *   parece ser um horário de corte da agência/transportadora, calculado por
+ *   eles, não exposto na API. Por isso `ml_prazo_envio` é uma ESTIMATIVA
+ *   nossa: `date_first_printed` (confirmado, vem preenchido quando a
+ *   etiqueta já foi impressa) + `shipping_option.estimated_delivery_time.
+ *   handling` horas (confirmado, vem em horas — 24 no caso testado). Sem
+ *   etiqueta impressa ainda, não tem base nenhuma pra estimar — cai em
+ *   "sem prazo informado" (ver classificarUrgenciaEnvio).
+ * - A API de claims (devolução) NUNCA foi testada aqui — o endpoint/campos
+ *   abaixo são o melhor palpite a partir do conhecimento geral da API do
+ *   ML, não confirmados contra uma devolução real. Tudo aqui é defensivo:
+ *   qualquer formato inesperado cai em `catch`/fallback `null` em vez de
+ *   quebrar a página. Ajustar assim que aparecer um caso real (mesmo
+ *   processo já usado pra NF/etiqueta, ver topo de ml-pedido-sync.ts).
  */
 
 const ML_BASE = "https://api.mercadolibre.com";
@@ -57,12 +66,22 @@ export async function consultarStatusEnvioML(mlContaId: string, shippingId: numb
     const res = await fetch(`${ML_BASE}/shipments/${shippingId}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const data = await res.json();
-    // palpite do campo de prazo — não confirmado ao vivo ainda (ver comentário no topo do arquivo)
-    const prazoEnvio = data?.shipping_option?.estimated_handling_limit?.date ?? null;
+    // Estimativa (ver comentário no topo do arquivo) — só dá pra calcular
+    // depois que a etiqueta já foi impressa (date_first_printed preenchido).
+    const datePrinted = data?.date_first_printed as string | null | undefined;
+    const handlingHoras = Number(data?.shipping_option?.estimated_delivery_time?.handling);
+    let prazoEnvio: string | null = null;
+    if (datePrinted) {
+      const impressa = new Date(datePrinted);
+      if (!Number.isNaN(impressa.getTime())) {
+        const horas = Number.isFinite(handlingHoras) && handlingHoras > 0 ? handlingHoras : 24;
+        prazoEnvio = new Date(impressa.getTime() + horas * 60 * 60 * 1000).toISOString();
+      }
+    }
     return {
       status: typeof data.status === "string" ? data.status : null,
       substatus: typeof data.substatus === "string" ? data.substatus : null,
-      prazoEnvio: typeof prazoEnvio === "string" ? prazoEnvio : null,
+      prazoEnvio,
     };
   } catch (e) {
     console.error("[dropshipping-pedido-envio-status] consultarStatusEnvioML:", e);

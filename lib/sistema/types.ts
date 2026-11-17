@@ -381,6 +381,10 @@ export interface DropFornecedor {
   whatsapp: string | null;
   email: string | null;
   observacoes: string | null;
+  /** Não é coluna própria — puxado de `comercial.representadas.logo_url` por
+   *  CNPJ (ver `listDropFornecedores`), já que o fornecedor de dropshipping
+   *  normalmente já é uma representada da PH (mesmo CNPJ) com logo cadastrado
+   *  lá. `null` quando não casa com nenhuma representada. */
   logo_url: string | null;
   ativo: boolean;
   created_at: string;

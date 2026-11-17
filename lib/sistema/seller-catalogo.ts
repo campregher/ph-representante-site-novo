@@ -1,4 +1,5 @@
 import { createDropshippingAdminClient, createSistemaAdminClient } from "@/lib/supabase/server";
+import { onlyDigits } from "@/lib/sistema/format";
 
 export interface AnuncioInfo {
   mlContaId: string;
@@ -61,7 +62,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, logo_url, razao_social, cnpj, telefone, whatsapp, email), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj, telefone, whatsapp, email), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
       .gt("estoque_atual", 0)
@@ -95,7 +96,6 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     fornecedor_id: string | null;
     fornecedor: {
       nome: string;
-      logo_url: string | null;
       razao_social: string | null;
       cnpj: string | null;
       telefone: string | null;
@@ -135,6 +135,23 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     for (const c of contas ?? []) nicknamePorConta.set(c.id as string, c.ml_nickname as string | null);
   }
 
+  // Fornecedor de dropshipping normalmente já é uma representada da PH
+  // (mesmo CNPJ, importado por `importarFornecedoresRepresentadas`) — em vez
+  // de pedir upload de logo de novo aqui, puxa o logo já cadastrado lá
+  // (`comercial.representadas.logo_url`), casando por CNPJ (dígitos).
+  const cnpjsFornecedores = [
+    ...new Set(rows.map((r) => (r.fornecedor?.cnpj ? onlyDigits(r.fornecedor.cnpj) : null)).filter((c): c is string => !!c)),
+  ];
+  const logoPorCnpjFornecedor = new Map<string, string | null>();
+  if (cnpjsFornecedores.length) {
+    const sistema = await createSistemaAdminClient();
+    const { data: representadas } = await sistema
+      .from("representadas")
+      .select("cnpj, logo_url")
+      .in("cnpj", cnpjsFornecedores);
+    for (const rep of representadas ?? []) logoPorCnpjFornecedor.set(rep.cnpj as string, rep.logo_url as string | null);
+  }
+
   const anunciosPorProduto = new Map<string, AnuncioInfo[]>();
   for (const a of anunciosRows) {
     const lista = anunciosPorProduto.get(a.produto_id) ?? [];
@@ -171,7 +188,7 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
         anuncios: anunciosPorProduto.get(r.id) ?? [],
         fornecedorId: r.fornecedor_id,
         fornecedorNome: r.fornecedor?.nome ?? null,
-        fornecedorLogoUrl: r.fornecedor?.logo_url ?? null,
+        fornecedorLogoUrl: r.fornecedor?.cnpj ? (logoPorCnpjFornecedor.get(onlyDigits(r.fornecedor.cnpj)) ?? null) : null,
         fornecedorRazaoSocial: r.fornecedor?.razao_social ?? null,
         fornecedorCnpj: r.fornecedor?.cnpj ?? null,
         fornecedorTelefone: r.fornecedor?.telefone ?? null,

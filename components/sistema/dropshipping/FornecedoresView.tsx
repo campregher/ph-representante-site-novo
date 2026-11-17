@@ -16,12 +16,11 @@ import { Field, Input, Textarea, FormGrid } from "@/components/sistema/ui/Field"
 import { Badge } from "@/components/sistema/ui/Badge";
 import { EmptyState } from "@/components/sistema/ui/State";
 import { TableScroll, Table, Thead, Tbody, Tr, Th, Td } from "@/components/sistema/ui/Table";
-import LogoUpload from "@/components/sistema/LogoUpload";
 
 const empty = {
   id: null as string | null,
   nome: "", razao_social: "", cnpj: "", telefone: "", whatsapp: "", email: "",
-  observacoes: "", logo_url: "", ativo: true,
+  observacoes: "", ativo: true,
 };
 
 export default function FornecedoresView({
@@ -42,7 +41,7 @@ export default function FornecedoresView({
     setF({
       id: x.id, nome: x.nome, razao_social: x.razao_social ?? "", cnpj: x.cnpj ?? "",
       telefone: x.telefone ?? "", whatsapp: x.whatsapp ?? "", email: x.email ?? "",
-      observacoes: x.observacoes ?? "", logo_url: x.logo_url ?? "", ativo: x.ativo,
+      observacoes: x.observacoes ?? "", ativo: x.ativo,
     });
     setOpen(true);
   }
@@ -150,13 +149,16 @@ export default function FornecedoresView({
         footer={<Button onClick={salvar} loading={pending}>Salvar</Button>}
       >
         <div className="space-y-4">
-          <Field label="Logo">
-            <LogoUpload value={f.logo_url} onChange={(v) => set("logo_url", v)} folder="dropshipping-fornecedores" />
-          </Field>
+          <p className="text-xs text-neutral-400">
+            O logo é puxado automaticamente do cadastro de representadas quando o CNPJ bate com um ali — não precisa
+            subir de novo aqui. Pra trocar o logo, atualize em &quot;Representadas&quot;.
+          </p>
           <FormGrid>
             <Field label="Nome" required><Input value={f.nome} onChange={(e) => set("nome", e.target.value)} /></Field>
             <Field label="Razão social"><Input value={f.razao_social} onChange={(e) => set("razao_social", e.target.value)} /></Field>
-            <Field label="CNPJ"><Input value={f.cnpj} onChange={(e) => set("cnpj", e.target.value)} inputMode="numeric" /></Field>
+            <Field label="CNPJ" hint="Usado também pra casar com a representada e puxar o logo de lá.">
+              <Input value={f.cnpj} onChange={(e) => set("cnpj", e.target.value)} inputMode="numeric" />
+            </Field>
             <Field label="E-mail"><Input value={f.email} onChange={(e) => set("email", e.target.value)} type="email" /></Field>
             <Field label="Telefone"><Input value={f.telefone} onChange={(e) => set("telefone", e.target.value)} inputMode="tel" /></Field>
             <Field label="WhatsApp"><Input value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} inputMode="tel" /></Field>

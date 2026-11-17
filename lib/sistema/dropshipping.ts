@@ -1,6 +1,7 @@
 import { createDropshippingClient, createSistemaAdminClient } from "@/lib/supabase/server";
 import type { DropFornecedor, DropProdutoRow, DropTabelaCodigo } from "@/lib/sistema/types";
 import { buscarMensagensPedido, type MensagemPedido } from "@/lib/sistema/dropshipping-pedido-arquivos";
+import { onlyDigits } from "@/lib/sistema/format";
 
 export interface DropPedidoAdmin {
   id: string;
@@ -201,12 +202,35 @@ export async function getDropPedidoDetalhe(id: string): Promise<DropPedidoDetalh
   };
 }
 
+/** Fornecedor de dropshipping normalmente já é uma representada da PH (mesmo
+ *  CNPJ, importado por `importarFornecedoresRepresentadas`) — em vez de pedir
+ *  upload de logo de novo aqui, busca o logo já cadastrado lá (`comercial.
+ *  representadas.logo_url`), casando por CNPJ (dígitos). Sem CNPJ ou sem
+ *  representada correspondente, fica `null` (ver fallback de ícone na UI). */
+async function resolverLogosFornecedores<T extends { cnpj: string | null }>(fornecedores: T[]): Promise<Map<T, string | null>> {
+  const resultado = new Map<T, string | null>();
+  const cnpjs = [...new Set(fornecedores.map((f) => (f.cnpj ? onlyDigits(f.cnpj) : null)).filter((c): c is string => !!c))];
+  if (cnpjs.length === 0) {
+    for (const f of fornecedores) resultado.set(f, null);
+    return resultado;
+  }
+  const sistema = await createSistemaAdminClient();
+  const { data } = await sistema.from("representadas").select("cnpj, logo_url").in("cnpj", cnpjs);
+  const logoPorCnpj = new Map((data ?? []).map((r) => [r.cnpj as string, r.logo_url as string | null]));
+  for (const f of fornecedores) {
+    resultado.set(f, f.cnpj ? (logoPorCnpj.get(onlyDigits(f.cnpj)) ?? null) : null);
+  }
+  return resultado;
+}
+
 export async function listDropFornecedores(soAtivos = false): Promise<DropFornecedor[]> {
   const db = await createDropshippingClient();
   let q = db.from("fornecedores").select("*").order("nome");
   if (soAtivos) q = q.eq("ativo", true);
   const { data } = await q;
-  return (data as DropFornecedor[]) ?? [];
+  const fornecedores = (data as Omit<DropFornecedor, "logo_url">[]) ?? [];
+  const logos = await resolverLogosFornecedores(fornecedores);
+  return fornecedores.map((f) => ({ ...f, logo_url: logos.get(f) ?? null }));
 }
 
 export async function dropFornecedorOptions(): Promise<{ id: string; label: string }[]> {

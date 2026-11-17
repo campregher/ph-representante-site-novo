@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { DROP_NAV_ITEMS } from "@/lib/sistema/drop-nav";
 import SignOutButton from "@/components/sistema/SignOutButton";
+import ReportarProblemaButton from "@/components/drop/ReportarProblemaButton";
 
 interface Props {
   seller: { nome: string; email: string | null };
@@ -54,6 +55,9 @@ export default function DropDashboardShell({ seller, children }: Props) {
         />
       </div>
       {nav}
+      <div className="shrink-0 space-y-0.5 border-t border-white/10 px-3 py-3">
+        <ReportarProblemaButton />
+      </div>
       <div className="shrink-0 border-t border-white/10 px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-neutral-500">
         Portal do Seller
       </div>

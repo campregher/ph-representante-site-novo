@@ -546,3 +546,51 @@ export async function getDropClienteDetalhe(clienteId: string): Promise<DropClie
     })),
   };
 }
+
+// ────────────────────────── Relatos de problema (sellers) ─────────────────
+
+export interface DropRelatoProblema {
+  id: string;
+  clienteId: string;
+  sellerNome: string;
+  titulo: string;
+  descricao: string;
+  pagina: string | null;
+  status: string;
+  respostaAdmin: string | null;
+  createdAt: string;
+  resolvidoEm: string | null;
+}
+
+/** Relatos de problema reportados por sellers (botão "Reportar problema" no
+ *  portal) — cruza `dropshipping.relatos_problema` com `comercial.clientes`
+ *  pro nome do seller, mesmo padrão de cross-schema já usado no resto do
+ *  admin de dropshipping. */
+export async function listRelatosProblema(): Promise<DropRelatoProblema[]> {
+  const drop = await createDropshippingAdminClient();
+  const { data: relatos } = await drop
+    .from("relatos_problema")
+    .select("id, cliente_id, titulo, descricao, pagina, status, resposta_admin, created_at, resolvido_em")
+    .order("created_at", { ascending: false })
+    .limit(300);
+  const rows = relatos ?? [];
+  if (rows.length === 0) return [];
+
+  const clienteIds = [...new Set(rows.map((r) => r.cliente_id as string))];
+  const sistema = await createSistemaAdminClient();
+  const { data: clientes } = await sistema.from("clientes").select("id, nome_fantasia").in("id", clienteIds);
+  const nomePorCliente = new Map((clientes ?? []).map((c) => [c.id as string, (c.nome_fantasia as string | null) ?? "Seller"]));
+
+  return rows.map((r) => ({
+    id: r.id as string,
+    clienteId: r.cliente_id as string,
+    sellerNome: nomePorCliente.get(r.cliente_id as string) ?? "Seller",
+    titulo: r.titulo as string,
+    descricao: r.descricao as string,
+    pagina: r.pagina as string | null,
+    status: r.status as string,
+    respostaAdmin: r.resposta_admin as string | null,
+    createdAt: r.created_at as string,
+    resolvidoEm: r.resolvido_em as string | null,
+  }));
+}

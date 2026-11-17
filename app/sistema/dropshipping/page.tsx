@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { Truck, Boxes, ClipboardList, ArrowRight } from "lucide-react";
+import { Truck, Boxes, ClipboardList, ArrowRight, Users } from "lucide-react";
 import { requireSistemaProfile } from "@/lib/sistema/auth";
-import { listDropFornecedores, listDropProdutos, listDropPedidos } from "@/lib/sistema/dropshipping";
+import { listDropFornecedores, listDropProdutos, listDropPedidos, listDropClientes } from "@/lib/sistema/dropshipping";
 import { PageHeader } from "@/components/sistema/ui/State";
 import { StatCard } from "@/components/sistema/ui/Card";
 import { buttonClass } from "@/components/sistema/ui/buttonClass";
 
 export default async function DropshippingPage() {
   await requireSistemaProfile();
-  const [fornecedores, produtos, pedidos] = await Promise.all([
+  const [fornecedores, produtos, pedidos, clientes] = await Promise.all([
     listDropFornecedores(),
     listDropProdutos(),
     listDropPedidos(),
+    listDropClientes(),
   ]);
 
   return (
@@ -19,12 +20,24 @@ export default async function DropshippingPage() {
       <PageHeader title="Dropshipping" description="Catálogo próprio, separado da representação — seller CNPJ negocia o preço direto com o fornecedor." />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Clientes" value={String(clientes.length)} icon={<Users size={16} />} />
         <StatCard label="Fornecedores" value={String(fornecedores.length)} icon={<Truck size={16} />} />
         <StatCard label="Produtos" value={String(produtos.length)} icon={<Boxes size={16} />} />
         <StatCard label="Pedidos" value={String(pedidos.length)} icon={<ClipboardList size={16} />} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
+        <Link href="/sistema/dropshipping/clientes" className="group flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-5 hover:border-brand/30">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/10 text-brand"><Users size={18} /></div>
+            <div>
+              <p className="font-semibold text-neutral-900">Clientes</p>
+              <p className="text-sm text-neutral-500">Sellers, anúncios publicados e vendas por cliente.</p>
+            </div>
+          </div>
+          <ArrowRight size={16} className="text-neutral-300 group-hover:text-brand" />
+        </Link>
+
         <Link href="/sistema/dropshipping/pedidos" className="group flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-5 hover:border-brand/30">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/10 text-brand"><ClipboardList size={18} /></div>

@@ -361,3 +361,188 @@ export async function dropTabelaIds(): Promise<Record<DropTabelaCodigo, string>>
   for (const t of data ?? []) map[t.codigo as string] = t.id as string;
   return map as Record<DropTabelaCodigo, string>;
 }
+
+// ──────────────────────────────── Clientes (sellers) ──────────────────────
+
+export interface DropClienteResumo {
+  id: string;
+  nomeFantasia: string | null;
+  email: string | null;
+  status: string;
+  createdAt: string;
+  totalAnuncios: number;
+  totalVendas: number;
+  valorTotalVendido: number;
+  contasMl: number;
+}
+
+/** Visão do admin sobre os sellers de dropshipping (`comercial.clientes`
+ *  com `is_seller=true`) — pra cada um, quantos anúncios tem publicado,
+ *  quantas vendas já fez e quanto já vendeu, cruzando os schemas `comercial`
+ *  (cadastro/contas ML) e `dropshipping` (anúncios/pedidos) igual o resto
+ *  do admin de dropshipping já faz. */
+export async function listDropClientes(): Promise<DropClienteResumo[]> {
+  const sistema = await createSistemaAdminClient();
+  const { data: clientes } = await sistema
+    .from("clientes")
+    .select("id, nome_fantasia, email, status, created_at")
+    .eq("is_seller", true)
+    .order("nome_fantasia");
+  const clienteIds = (clientes ?? []).map((c) => c.id as string);
+  if (clienteIds.length === 0) return [];
+
+  const drop = await createDropshippingAdminClient();
+  const [{ data: anuncios }, { data: pedidos }, { data: contas }] = await Promise.all([
+    drop.from("seller_ml_anuncios").select("cliente_id").in("cliente_id", clienteIds),
+    drop.from("pedidos").select("cliente_id, valor_total").in("cliente_id", clienteIds),
+    sistema.from("cliente_ml_tokens").select("cliente_id").in("cliente_id", clienteIds),
+  ]);
+
+  const contagem = (rows: { cliente_id: string }[] | null) => {
+    const mapa = new Map<string, number>();
+    for (const r of rows ?? []) mapa.set(r.cliente_id, (mapa.get(r.cliente_id) ?? 0) + 1);
+    return mapa;
+  };
+  const contagemAnuncios = contagem((anuncios ?? []) as { cliente_id: string }[]);
+  const contagemContas = contagem((contas ?? []) as { cliente_id: string }[]);
+
+  const contagemPedidos = new Map<string, number>();
+  const valorPorCliente = new Map<string, number>();
+  for (const p of pedidos ?? []) {
+    const id = p.cliente_id as string;
+    contagemPedidos.set(id, (contagemPedidos.get(id) ?? 0) + 1);
+    valorPorCliente.set(id, (valorPorCliente.get(id) ?? 0) + Number(p.valor_total ?? 0));
+  }
+
+  return (clientes ?? []).map((c) => {
+    const id = c.id as string;
+    return {
+      id,
+      nomeFantasia: c.nome_fantasia as string | null,
+      email: c.email as string | null,
+      status: c.status as string,
+      createdAt: c.created_at as string,
+      totalAnuncios: contagemAnuncios.get(id) ?? 0,
+      totalVendas: contagemPedidos.get(id) ?? 0,
+      valorTotalVendido: valorPorCliente.get(id) ?? 0,
+      contasMl: contagemContas.get(id) ?? 0,
+    };
+  });
+}
+
+export interface DropClienteAnuncio {
+  id: string;
+  produtoNome: string;
+  produtoSku: string;
+  mlItemId: string;
+  mlStatus: string;
+  precoRevenda: number;
+  permalink: string | null;
+  contaNickname: string | null;
+}
+
+export interface DropClientePedidoResumo {
+  id: string;
+  numero: number;
+  status: string;
+  valorTotal: number;
+  createdAt: string;
+}
+
+export interface DropClienteDetalhe {
+  id: string;
+  nomeFantasia: string | null;
+  razaoSocial: string | null;
+  email: string | null;
+  whatsapp: string | null;
+  status: string;
+  createdAt: string;
+  contas: { id: string; nickname: string | null }[];
+  anuncios: DropClienteAnuncio[];
+  totalVendas: number;
+  valorTotalVendido: number;
+  vendasPorStatus: Record<string, number>;
+  pedidosRecentes: DropClientePedidoResumo[];
+}
+
+/** Detalhe de UM seller de dropshipping — anúncios publicados (com link pro
+ *  Mercado Livre) e histórico de vendas, pra quem administra conseguir ver
+ *  de relance o que esse cliente já publicou e já vendeu. */
+export async function getDropClienteDetalhe(clienteId: string): Promise<DropClienteDetalhe | null> {
+  const sistema = await createSistemaAdminClient();
+  const { data: cliente } = await sistema
+    .from("clientes")
+    .select("id, nome_fantasia, razao_social, email, whatsapp, status, created_at")
+    .eq("id", clienteId)
+    .eq("is_seller", true)
+    .maybeSingle();
+  if (!cliente) return null;
+
+  const { data: contasRaw } = await sistema.from("cliente_ml_tokens").select("id, ml_nickname").eq("cliente_id", clienteId);
+  const contas = (contasRaw ?? []).map((c) => ({ id: c.id as string, nickname: c.ml_nickname as string | null }));
+  const nicknamePorConta = new Map(contas.map((c) => [c.id, c.nickname]));
+
+  const drop = await createDropshippingAdminClient();
+  const [{ data: anunciosRaw }, { data: pedidosRaw }] = await Promise.all([
+    drop
+      .from("seller_ml_anuncios")
+      .select("id, ml_conta_id, ml_item_id, ml_status, preco_revenda, ml_permalink, produto:produtos(nome, sku)")
+      .eq("cliente_id", clienteId)
+      .order("created_at", { ascending: false }),
+    drop
+      .from("pedidos")
+      .select("id, numero, status, valor_total, created_at")
+      .eq("cliente_id", clienteId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+  ]);
+
+  const anuncios = ((anunciosRaw ?? []) as unknown as {
+    id: string;
+    ml_conta_id: string;
+    ml_item_id: string;
+    ml_status: string;
+    preco_revenda: number;
+    ml_permalink: string | null;
+    produto: { nome: string; sku: string } | null;
+  }[]).map((a) => ({
+    id: a.id,
+    produtoNome: a.produto?.nome ?? "—",
+    produtoSku: a.produto?.sku ?? "—",
+    mlItemId: a.ml_item_id,
+    mlStatus: a.ml_status,
+    precoRevenda: Number(a.preco_revenda),
+    permalink: a.ml_permalink,
+    contaNickname: nicknamePorConta.get(a.ml_conta_id) ?? null,
+  }));
+
+  const pedidos = (pedidosRaw ?? []) as { id: string; numero: number; status: string; valor_total: number; created_at: string }[];
+  const vendasPorStatus: Record<string, number> = {};
+  let valorTotalVendido = 0;
+  for (const p of pedidos) {
+    vendasPorStatus[p.status] = (vendasPorStatus[p.status] ?? 0) + 1;
+    valorTotalVendido += Number(p.valor_total ?? 0);
+  }
+
+  return {
+    id: cliente.id as string,
+    nomeFantasia: cliente.nome_fantasia as string | null,
+    razaoSocial: cliente.razao_social as string | null,
+    email: cliente.email as string | null,
+    whatsapp: cliente.whatsapp as string | null,
+    status: cliente.status as string,
+    createdAt: cliente.created_at as string,
+    contas,
+    anuncios,
+    totalVendas: pedidos.length,
+    valorTotalVendido,
+    vendasPorStatus,
+    pedidosRecentes: pedidos.slice(0, 20).map((p) => ({
+      id: p.id,
+      numero: p.numero,
+      status: p.status,
+      valorTotal: Number(p.valor_total),
+      createdAt: p.created_at,
+    })),
+  };
+}

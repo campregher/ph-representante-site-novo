@@ -111,7 +111,11 @@ export default function ClienteForm({
         toast.error(res.error);
         return;
       }
-      toast.success(initial ? "Cliente atualizado." : "Cliente criado.");
+      if (res.emailPendente) {
+        toast.success("Cliente atualizado. O e-mail novo fica pendente até o seller confirmar pelo link que mandamos pra ele — o login antigo continua valendo até lá.");
+      } else {
+        toast.success(initial ? "Cliente atualizado." : "Cliente criado.");
+      }
       router.push(`/sistema/clientes/${res.id}`);
       router.refresh();
     });
@@ -230,7 +234,17 @@ export default function ClienteForm({
             <Field label="WhatsApp" error={errors.whatsapp?.message}>
               <Input {...register("whatsapp")} inputMode="tel" placeholder="(11) 99999-9999" />
             </Field>
-            <Field label="E-mail" error={errors.email?.message}>
+            <Field
+              label="E-mail"
+              error={errors.email?.message}
+              hint={
+                initial?.is_seller && initial?.email_pendente
+                  ? `Troca pra "${initial.email_pendente}" pendente de confirmação pelo seller.`
+                  : initial?.is_seller
+                    ? "Login de verdade fica no Supabase Auth — mudar aqui manda um link de confirmação pro e-mail novo antes de trocar de fato."
+                    : undefined
+              }
+            >
               <Input {...register("email")} type="email" />
             </Field>
             <Field label="Site" error={errors.site?.message}>

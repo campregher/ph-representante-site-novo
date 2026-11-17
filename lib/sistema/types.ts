@@ -151,6 +151,8 @@ export interface Cliente {
   telefone: string | null;
   whatsapp: string | null;
   email: string | null;
+  /** E-mail novo de um seller aguardando confirmação (ver seller-troca-email.ts) — `email` acima só muda depois do clique no link. */
+  email_pendente: string | null;
   site: string | null;
   cep: string | null;
   logradouro: string | null;

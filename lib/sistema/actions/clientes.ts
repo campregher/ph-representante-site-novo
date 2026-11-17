@@ -9,6 +9,7 @@ import {
   clienteRepresentadaSchema,
 } from "@/lib/sistema/schemas";
 import { onlyDigits } from "@/lib/sistema/format";
+import { solicitarTrocaEmailSeller } from "@/lib/sistema/actions/seller-troca-email";
 import type { ActionResult } from "@/lib/sistema/types";
 
 async function guard() {
@@ -30,7 +31,10 @@ function friendly(e: { code?: string; message: string }): string {
   return e.message;
 }
 
-export async function saveCliente(id: string | null, raw: unknown): Promise<ActionResult> {
+export async function saveCliente(
+  id: string | null,
+  raw: unknown
+): Promise<ActionResult<{ id: string; emailPendente?: boolean }>> {
   const g = await guard();
   if (g.error) return { ok: false, error: g.error };
 
@@ -53,11 +57,36 @@ export async function saveCliente(id: string | null, raw: unknown): Promise<Acti
   if (g.profile!.role === "vendedor") payload.vendedor_id = g.profile!.id;
 
   if (id) {
+    // Seller com login de verdade (auth_user_id) — o e-mail daqui é só o
+    // texto exibido no CRM, não troca quem consegue logar (auth.users.email).
+    // Pra não deixar os dois fora de sincronia sem ninguém perceber, uma
+    // troca de e-mail nesse caso fica pendente até confirmação no endereço
+    // novo (ver solicitarTrocaEmailSeller) — o `email` atual não muda aqui.
+    const { data: atual } = await supabase
+      .from("clientes")
+      .select("email, is_seller, auth_user_id, nome_fantasia, razao_social")
+      .eq("id", id)
+      .maybeSingle();
+    const novoEmail = typeof v.email === "string" ? v.email.trim() : "";
+    const trocaEmailPendente =
+      !!atual?.is_seller &&
+      !!atual?.auth_user_id &&
+      !!novoEmail &&
+      novoEmail.toLowerCase() !== ((atual?.email as string | null) ?? "").toLowerCase();
+
+    if (trocaEmailPendente) delete payload.email;
+
     const { error } = await supabase.from("clientes").update(payload).eq("id", id);
     if (error) return { ok: false, error: friendly(error) };
+
+    if (trocaEmailPendente) {
+      const nome = (atual!.nome_fantasia as string) || (atual!.razao_social as string) || "seller";
+      await solicitarTrocaEmailSeller(id, novoEmail, nome);
+    }
+
     revalidatePath("/sistema/clientes");
     revalidatePath(`/sistema/clientes/${id}`);
-    return { ok: true, id };
+    return { ok: true, id, emailPendente: trocaEmailPendente };
   }
 
   const { data, error } = await supabase

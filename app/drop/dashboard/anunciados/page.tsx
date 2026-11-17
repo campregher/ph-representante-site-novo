@@ -38,6 +38,7 @@ export default async function DropDashboardAnunciadosPage() {
               token={seller.portalToken}
               mlContas={mlContas.map((c) => ({ id: c.id, nickname: c.ml_nickname }))}
               itens={anunciados.map((p) => ({ ...p, precoMinimo: p.precoMinimo as number }))}
+              permitePublicar={false}
             />
           )}
         </CardBody>

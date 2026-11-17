@@ -180,10 +180,17 @@ export default function SellerCatalogoDrop({
   token,
   itens,
   mlContas,
+  permitePublicar = true,
 }: {
   token: string;
   itens: CatalogoDropItemView[];
   mlContas: MlContaView[];
+  /** false na tela "Anunciados" (/drop/dashboard/anunciados) — lá só se
+   *  gerencia o que já está publicado (ativar/pausar/preço/método de envio
+   *  em massa), não faz sentido mostrar seleção/botão de PUBLICAR de novo
+   *  (isso fica em "Produtos para Anunciar"). Com `true` (padrão), nada muda
+   *  pro catálogo completo. */
+  permitePublicar?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -286,10 +293,11 @@ export default function SellerCatalogoDrop({
    *  grupo de variações (chave = id da primeira variação) — pra "Selecionar
    *  todos" marcar/desmarcar de uma vez. */
   const chavesSelecionaveis = useMemo(() => {
+    if (!permitePublicar) return [];
     const chaves = publicaveis.map((p) => p.id);
     for (const variantes of grupos) if (variantes.length > 1) chaves.push(variantes[0].id);
     return chaves;
-  }, [publicaveis, grupos]);
+  }, [publicaveis, grupos, permitePublicar]);
 
   const todosSelecionados = chavesSelecionaveis.length > 0 && chavesSelecionaveis.every((k) => selecionados.has(k));
 
@@ -917,7 +925,7 @@ export default function SellerCatalogoDrop({
    *  aqui — essa linha só mostra os dados da variação e "ver cadastro". */
   function linhaItem(p: CatalogoDropItemView, indentado: boolean) {
     const disponiveis = contasDisponiveis(p);
-    const podeSelecionar = !indentado && p.mlCategoriaDefinida && disponiveis.length > 0;
+    const podeSelecionar = !indentado && p.mlCategoriaDefinida && disponiveis.length > 0 && permitePublicar;
     if (indentado) {
       return (
         <div key={p.id} className="flex items-center gap-2 border-t border-neutral-100 px-1 py-2.5 first:border-t-0">
@@ -1001,13 +1009,13 @@ export default function SellerCatalogoDrop({
           <div className="flex w-full shrink-0 flex-col items-end gap-1.5 sm:w-auto">
             <div className="flex items-end gap-2">
               <PrecoInput value={precos[p.id] ?? ""} onChange={(v) => setPrecos((s) => ({ ...s, [p.id]: v }))} />
-              {disponiveis.length > 0 && p.mlCategoriaDefinida && (
+              {permitePublicar && disponiveis.length > 0 && p.mlCategoriaDefinida && (
                 <Button size="sm" onClick={() => publicar(p)} loading={pending} disabled={!mlConectado}>
                   <Upload size={13} /> Publicar
                 </Button>
               )}
             </div>
-            {disponiveis.length > 1 && p.mlCategoriaDefinida && (
+            {permitePublicar && disponiveis.length > 1 && p.mlCategoriaDefinida && (
               <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
                 {disponiveis.map((c) => (
                   <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">
@@ -1155,14 +1163,16 @@ export default function SellerCatalogoDrop({
             <div key={chave} className={CARD}>
               <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:justify-between">
                 <div className="flex w-full min-w-0 items-start gap-3 sm:w-auto sm:flex-1">
-                  <input
-                    type="checkbox"
-                    checked={selecionados.has(chave)}
-                    onChange={() => toggleSelecionado(chave)}
-                    disabled={!mlConectado}
-                    title="Marcar pra editar em massa (método de envio/tipo de anúncio)"
-                    className="mt-5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand"
-                  />
+                  {permitePublicar && (
+                    <input
+                      type="checkbox"
+                      checked={selecionados.has(chave)}
+                      onChange={() => toggleSelecionado(chave)}
+                      disabled={!mlConectado}
+                      title="Marcar pra editar em massa (método de envio/tipo de anúncio)"
+                      className="mt-5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => toggleProdutoAberto(chave)}
@@ -1203,13 +1213,13 @@ export default function SellerCatalogoDrop({
                 <div className="flex w-full shrink-0 flex-col items-end gap-1.5 sm:w-auto">
                   <div className="flex items-end gap-2">
                     <PrecoInput value={precos[chave] ?? ""} onChange={(v) => setPrecos((s) => ({ ...s, [chave]: v }))} />
-                    {disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
+                    {permitePublicar && disponiveisGrupo.length > 0 && base.mlCategoriaDefinida && (
                       <Button size="sm" onClick={() => publicarGrupo(variantes)} loading={pending} disabled={!mlConectado}>
                         <Upload size={13} /> Publicar variações
                       </Button>
                     )}
                   </div>
-                  {disponiveisGrupo.length > 1 && base.mlCategoriaDefinida && (
+                  {permitePublicar && disponiveisGrupo.length > 1 && base.mlCategoriaDefinida && (
                     <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
                       {disponiveisGrupo.map((c) => (
                         <label key={c.id} className="flex items-center gap-1 text-xs text-neutral-500">

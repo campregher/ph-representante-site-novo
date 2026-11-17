@@ -19,10 +19,16 @@ export interface SellerProfile {
   liberado: boolean;
   /** respondeu o questionário pós-aprovação (categorias/canal/volume) */
   onboardingCompleto: boolean;
+  /** true quando o bloqueio é manutenção temporária do dropshipping (marcador
+   *  em `observacoes`, ver bloquearSellerManutencao), não bloqueio
+   *  definitivo — muda a mensagem em SellerLocked.tsx. */
+  manutencao: boolean;
 }
 
+export const MARCADOR_MANUTENCAO = "[manutencao_dropshipping]";
+
 const SELLER_COLS =
-  "id, portal_token, nome_fantasia, razao_social, email, status, tipo_pessoa, email_confirmado, onboarding_completo";
+  "id, portal_token, nome_fantasia, razao_social, email, status, tipo_pessoa, email_confirmado, onboarding_completo, observacoes";
 
 /**
  * Seller autenticado (via cookie do Supabase Auth) + dados de `comercial.clientes`.
@@ -58,6 +64,7 @@ export const getAuthedSellerResult = cache(async (): Promise<AuthedSellerResult>
       emailConfirmado: !!data.email_confirmado,
       liberado: status !== "prospect" && status !== "bloqueado" && !!data.email_confirmado,
       onboardingCompleto: !!data.onboarding_completo,
+      manutencao: status === "bloqueado" && !!(data.observacoes as string | null)?.includes(MARCADOR_MANUTENCAO),
     },
   };
 });

@@ -1,7 +1,6 @@
 import { requireSistemaProfile } from "@/lib/sistema/auth";
 import { listDropPedidos, type DropPedidoAdmin } from "@/lib/sistema/dropshipping";
 import { formatBRL, formatDateTime } from "@/lib/sistema/format";
-import { classificarUrgenciaEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
 import { PageHeader } from "@/components/sistema/ui/State";
 import { Badge } from "@/components/sistema/ui/Badge";
 import RowLink from "@/components/sistema/RowLink";
@@ -33,17 +32,11 @@ export default async function DropPedidosPage() {
   await requireSistemaProfile();
   const pedidos = await listDropPedidos();
 
-  // Mesmas 3 faixas de urgência do painel de vendas do próprio Mercado
-  // Livre — "sem prazo informado" entra em "Próximos dias" (o campo de
-  // prazo ainda não foi confirmado contra um envio real, ver aviso em
-  // dropshipping-pedido-envio-status.ts).
-  const aEnviar = pedidos.filter((p) => p.status === "aguardando_nf" || p.status === "pronto");
-  const atrasados = aEnviar.filter((p) => classificarUrgenciaEnvio(p.prazoEnvio) === "atrasado");
-  const hoje = aEnviar.filter((p) => classificarUrgenciaEnvio(p.prazoEnvio) === "hoje");
-  const proximosDias = aEnviar.filter((p) => {
-    const u = classificarUrgenciaEnvio(p.prazoEnvio);
-    return u === "em_breve" || u === "sem_prazo";
-  });
+  // Passo 2 do fluxo do seller (etiqueta liberada, aguardando repasse ao
+  // fornecedor) — o admin não acompanha o passo 1 (emitir NF): essa fila é
+  // só do seller, `listDropPedidos` nem traz pedido "aguardando_nf" (ver
+  // comentário em lib/sistema/dropshipping.ts).
+  const liberarEtiqueta = pedidos.filter((p) => p.status === "pronto");
   const enviados = pedidos.filter((p) => p.status === "enviado");
   const devolucoes = pedidos.filter((p) => !!p.devolucaoStatus);
 
@@ -57,9 +50,12 @@ export default async function DropPedidosPage() {
 
       <PedidosTabs
         tabs={[
-          { id: "atrasados", label: "Atrasados", count: atrasados.length, content: <TabelaPedidos pedidos={atrasados} mostrarPrazo /> },
-          { id: "hoje", label: "Hoje", count: hoje.length, content: <TabelaPedidos pedidos={hoje} mostrarPrazo /> },
-          { id: "proximos_dias", label: "Próximos dias", count: proximosDias.length, content: <TabelaPedidos pedidos={proximosDias} mostrarPrazo /> },
+          {
+            id: "liberar_etiqueta",
+            label: "Etiqueta liberada",
+            count: liberarEtiqueta.length,
+            content: <TabelaPedidos pedidos={liberarEtiqueta} mostrarPrazo />,
+          },
           { id: "enviados", label: "Enviados", count: enviados.length, content: <TabelaPedidos pedidos={enviados} mostrarEnvioML /> },
           { id: "devolucoes", label: "Devoluções", count: devolucoes.length, content: <TabelaDevolucoes pedidos={devolucoes} /> },
         ]}

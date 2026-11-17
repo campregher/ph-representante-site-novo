@@ -135,7 +135,7 @@ export default function PedidosFornecedorGroup({ fornecedorNome, pedidos }: Prop
           disabled={selecionados.size === 0 || baixando}
           className={buttonClass({ variant: "outline", size: "sm" })}
         >
-          <Download size={13} /> {baixando ? "Gerando pacote…" : `Baixar pacote combinado (${selecionados.size})`}
+          <Download size={13} /> ① {baixando ? "Gerando pacote…" : `Baixar pacote combinado (${selecionados.size})`}
         </button>
         <button
           type="button"
@@ -144,7 +144,7 @@ export default function PedidosFornecedorGroup({ fornecedorNome, pedidos }: Prop
           title={!baixado ? "Baixe o pacote primeiro" : undefined}
           className={buttonClass({ variant: "primary", size: "sm" })}
         >
-          <Send size={13} /> {marcando ? "Marcando…" : "Marcar como enviado ao fornecedor"}
+          <Send size={13} /> ② {marcando ? "Marcando…" : "Marcar como enviado ao fornecedor"}
         </button>
         {erro && <p className="w-full text-xs text-red-600">{erro}</p>}
       </div>

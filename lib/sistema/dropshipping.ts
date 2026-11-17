@@ -1,6 +1,7 @@
-import { createDropshippingClient, createSistemaAdminClient } from "@/lib/supabase/server";
+import { createDropshippingClient, createDropshippingAdminClient, createSistemaAdminClient } from "@/lib/supabase/server";
 import type { DropFornecedor, DropProdutoRow, DropTabelaCodigo } from "@/lib/sistema/types";
 import { buscarMensagensPedido, type MensagemPedido } from "@/lib/sistema/dropshipping-pedido-arquivos";
+import { atualizarEnvioEDevolucaoPedido, precisaChecarEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
 import { onlyDigits } from "@/lib/sistema/format";
 
 export interface DropPedidoAdmin {
@@ -13,10 +14,18 @@ export interface DropPedidoAdmin {
   entregaCidade: string | null;
   entregaUf: string | null;
   itens: { sku: string; nome: string; quantidade: number; caixas: number }[];
+  /** Status REAL do Mercado Livre (envio físico/devolução) — diferente de
+   *  `status` acima, que é só o repasse ao fornecedor. Ver
+   *  dropshipping-pedido-envio-status.ts. */
+  mlShippingStatus: string | null;
+  mlShippingSubstatus: string | null;
+  prazoEnvio: string | null;
+  devolucaoStatus: string | null;
+  devolucaoMotivo: string | null;
 }
 
 const PEDIDO_ADMIN_COLS =
-  "id, numero, status, created_at, cliente_id, valor_total, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
+  "id, numero, status, canal, created_at, cliente_id, ml_conta_id, ml_shipping_id, pedido_externo, valor_total, entrega_cidade, entrega_uf, ml_shipping_status, ml_shipping_substatus, ml_prazo_envio, ml_envio_atualizado_em, devolucao_status, devolucao_motivo, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit)";
 
 /** Visão do admin sobre os pedidos de dropshipping de todos os sellers —
  *  só acompanhamento, nenhuma ação (quem resolve é o próprio seller com o
@@ -36,14 +45,42 @@ export async function listDropPedidos(): Promise<DropPedidoAdmin[]> {
     id: string;
     numero: number;
     status: DropPedidoAdmin["status"];
+    canal: string;
     created_at: string;
     cliente_id: string;
+    ml_conta_id: string | null;
+    ml_shipping_id: number | null;
+    pedido_externo: string | null;
     valor_total: number;
     entrega_cidade: string | null;
     entrega_uf: string | null;
+    ml_shipping_status: string | null;
+    ml_shipping_substatus: string | null;
+    ml_prazo_envio: string | null;
+    ml_envio_atualizado_em: string | null;
+    devolucao_status: string | null;
+    devolucao_motivo: string | null;
     pedido_itens: { quantidade: number; sku_snapshot: string | null; descricao_snapshot: string | null; unidades_por_kit: number }[];
   }[];
   if (rows.length === 0) return [];
+
+  // checagem on-demand (throttlada) do status real de envio/devolução — usa o
+  // client admin (service role) só pra esse update pontual, pra não depender
+  // de policy de escrita de RLS pro staff em `dropshipping.pedidos`.
+  const pedidosParaChecar = rows.filter(precisaChecarEnvio);
+  if (pedidosParaChecar.length > 0) {
+    const dropAdmin = await createDropshippingAdminClient();
+    await Promise.all(
+      pedidosParaChecar.map(async (p) => {
+        try {
+          const patch = await atualizarEnvioEDevolucaoPedido(dropAdmin, p);
+          Object.assign(p, patch);
+        } catch (e) {
+          console.error("[dropshipping] atualizarEnvioEDevolucaoPedido:", e);
+        }
+      })
+    );
+  }
 
   const clienteIds = [...new Set(rows.map((r) => r.cliente_id))];
   const sistema = await createSistemaAdminClient();
@@ -61,6 +98,11 @@ export async function listDropPedidos(): Promise<DropPedidoAdmin[]> {
     sellerNome: nomePorCliente.get(r.cliente_id) ?? "—",
     entregaCidade: r.entrega_cidade,
     entregaUf: r.entrega_uf,
+    mlShippingStatus: r.ml_shipping_status,
+    mlShippingSubstatus: r.ml_shipping_substatus,
+    prazoEnvio: r.ml_prazo_envio,
+    devolucaoStatus: r.devolucao_status,
+    devolucaoMotivo: r.devolucao_motivo,
     itens: r.pedido_itens.map((it) => ({
       sku: it.sku_snapshot ?? "—",
       nome: it.descricao_snapshot ?? "—",

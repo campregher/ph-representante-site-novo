@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { createDropshippingAdminClient } from "@/lib/supabase/server";
+import { atualizarEnvioEDevolucaoPedido } from "@/lib/sistema/dropshipping-pedido-envio-status";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const PEDIDOS_COLS = "id, canal, ml_conta_id, ml_shipping_id, pedido_externo, ml_envio_atualizado_em";
+
+/**
+ * Cron diário (ver vercel.json — Vercel Hobby só libera 1x/dia) — rede de
+ * segurança pro status real de envio/devolução dos pedidos de dropshipping
+ * (ver dropshipping-pedido-envio-status.ts). A checagem rápida de verdade
+ * acontece via webhook (topics "shipments"/"post_purchase") e quando o
+ * seller/admin abrem a página de Pedidos; esse cron só garante que nenhum
+ * pedido fique sem atualizar se o webhook falhar ou não estiver habilitado
+ * no painel de desenvolvedores do ML.
+ */
+export async function GET(req: Request) {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers.get("authorization");
+  if (secret && auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "não autorizado" }, { status: 401 });
+  }
+
+  const db = await createDropshippingAdminClient();
+  // pedidos "enviado" (repasse) também entram — o ML pode continuar
+  // atualizando o envio físico/devolução bem depois do repasse pro
+  // fornecedor. "cancelado" fica de fora (não há mais o que acompanhar).
+  const { data: pedidos, error } = await db
+    .from("pedidos")
+    .select(PEDIDOS_COLS)
+    .in("status", ["aguardando_nf", "pronto", "enviado"])
+    .limit(200);
+
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+  let atualizados = 0;
+  const erros: string[] = [];
+  for (const p of pedidos ?? []) {
+    try {
+      await atualizarEnvioEDevolucaoPedido(db, p as never);
+      atualizados++;
+    } catch (e) {
+      erros.push(`pedido ${p.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  return NextResponse.json({ ok: true, processados: pedidos?.length ?? 0, atualizados, erros });
+}

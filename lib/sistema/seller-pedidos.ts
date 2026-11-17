@@ -5,6 +5,7 @@ import {
   buscarMensagensPedido,
   type MensagemPedido,
 } from "@/lib/sistema/dropshipping-pedido-arquivos";
+import { atualizarEnvioEDevolucaoPedido, precisaChecarEnvio } from "@/lib/sistema/dropshipping-pedido-envio-status";
 
 export interface PedidoDropItem {
   sku: string;
@@ -25,10 +26,18 @@ export interface PedidoDrop {
    *  nesse caso ele não entra em nenhum grupo de envio combinado. */
   fornecedorId: string | null;
   fornecedorNome: string | null;
+  /** Status REAL do Mercado Livre (envio físico/devolução) — diferente de
+   *  `status` acima, que é só o repasse ao fornecedor. Ver
+   *  dropshipping-pedido-envio-status.ts. */
+  mlShippingStatus: string | null;
+  mlShippingSubstatus: string | null;
+  prazoEnvio: string | null;
+  devolucaoStatus: string | null;
+  devolucaoMotivo: string | null;
 }
 
 const PEDIDOS_COLS =
-  "id, numero, status, created_at, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit, produto:produtos(fornecedor_id, fornecedor:fornecedores(nome)))";
+  "id, numero, status, canal, created_at, ml_conta_id, ml_shipping_id, pedido_externo, ultima_checagem_em, entrega_nome, entrega_telefone, entrega_cep, entrega_logradouro, entrega_numero, entrega_bairro, entrega_cidade, entrega_uf, ml_shipping_status, ml_shipping_substatus, ml_prazo_envio, ml_envio_atualizado_em, devolucao_status, devolucao_motivo, pedido_itens(quantidade, sku_snapshot, descricao_snapshot, unidades_por_kit, produto:produtos(fornecedor_id, fornecedor:fornecedores(nome)))";
 
 /**
  * Pedidos de dropshipping do seller, mais recentes primeiro. Pra cada pedido
@@ -51,6 +60,7 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
     id: string;
     numero: number;
     status: PedidoDrop["status"];
+    canal: string;
     created_at: string;
     ml_conta_id: string | null;
     ml_shipping_id: number | null;
@@ -64,6 +74,12 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
     entrega_bairro: string | null;
     entrega_cidade: string | null;
     entrega_uf: string | null;
+    ml_shipping_status: string | null;
+    ml_shipping_substatus: string | null;
+    ml_prazo_envio: string | null;
+    ml_envio_atualizado_em: string | null;
+    devolucao_status: string | null;
+    devolucao_motivo: string | null;
     pedido_itens: {
       quantidade: number;
       sku_snapshot: string | null;
@@ -73,8 +89,8 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
     }[];
   }[];
 
-  await Promise.all(
-    rows
+  await Promise.all([
+    ...rows
       .filter((p) => p.status === "aguardando_nf" && precisaChecar(p))
       .map(async (p) => {
         try {
@@ -83,8 +99,18 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
         } catch (e) {
           console.error("[seller-pedidos] processarPedidoAguardandoNF:", e);
         }
-      })
-  );
+      }),
+    ...rows
+      .filter((p) => p.status !== "cancelado" && precisaChecarEnvio(p))
+      .map(async (p) => {
+        try {
+          const patch = await atualizarEnvioEDevolucaoPedido(db, p);
+          Object.assign(p, patch);
+        } catch (e) {
+          console.error("[seller-pedidos] atualizarEnvioEDevolucaoPedido:", e);
+        }
+      }),
+  ]);
 
   return rows.map((p) => {
     const fornecedorIds = new Set(p.pedido_itens.map((it) => it.produto?.fornecedor_id).filter((v): v is string => !!v));
@@ -107,6 +133,11 @@ export async function pedidosDropSeller(clienteId: string): Promise<PedidoDrop[]
       entregaUf: p.entrega_uf,
       fornecedorId,
       fornecedorNome,
+      mlShippingStatus: p.ml_shipping_status,
+      mlShippingSubstatus: p.ml_shipping_substatus,
+      prazoEnvio: p.ml_prazo_envio,
+      devolucaoStatus: p.devolucao_status,
+      devolucaoMotivo: p.devolucao_motivo,
     };
   });
 }

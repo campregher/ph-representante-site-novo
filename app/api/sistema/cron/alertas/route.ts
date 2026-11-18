@@ -66,14 +66,24 @@ export async function GET(req: Request) {
   const corte30 = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const { data: clientes } = await db
     .from("clientes")
-    .select("vendedor_id, data_ultima_compra, status")
+    .select("vendedor_id, nome_fantasia, razao_social, data_ultima_compra, status")
     .in("status", ["ativo", "reativacao"]);
   const porVend = new Map<string, number>();
+  // guardado só pra enriquecer o e-mail (nome do cliente + há quantos dias) — a
+  // notificação em si continua resumida em 1 linha, como já era.
+  const paradosPorVend = new Map<string, { nome: string; dias: number }[]>();
+  const hojeMs = Date.now();
   for (const c of clientes ?? []) {
     const v = c.vendedor_id as string | null;
     if (!v) continue;
     const ultima = c.data_ultima_compra as string | null;
-    if (!ultima || ultima < corte30) porVend.set(v, (porVend.get(v) ?? 0) + 1);
+    if (!ultima || ultima < corte30) {
+      porVend.set(v, (porVend.get(v) ?? 0) + 1);
+      const nome = (c.nome_fantasia as string | null) || (c.razao_social as string | null) || "Cliente sem nome";
+      const dias = ultima ? Math.floor((hojeMs - new Date(ultima).getTime()) / 86_400_000) : Infinity;
+      if (!paradosPorVend.has(v)) paradosPorVend.set(v, []);
+      paradosPorVend.get(v)!.push({ nome, dias });
+    }
   }
   for (const [userId, qtd] of porVend) {
     avisos.push({
@@ -147,7 +157,19 @@ export async function GET(req: Request) {
       const perfil = perfilMap.get(userId);
       if (!perfil?.ativo || !perfil.email) continue;
       const linhas = lista
-        .map((a) => `<li style="margin:4px 0">${a.titulo}</li>`)
+        .map((a) => {
+          if (a.tipo !== "cliente") return `<li style="margin:4px 0">${a.titulo}</li>`;
+          const parados = (paradosPorVend.get(userId) ?? [])
+            .sort((x, y) => y.dias - x.dias)
+            .map(
+              (p) =>
+                `<li style="margin:2px 0;color:#444">${p.nome}${
+                  p.dias === Infinity ? " (nunca comprou)" : ` — há ${p.dias} dias`
+                }</li>`
+            )
+            .join("");
+          return `<li style="margin:4px 0">${a.titulo}<ul style="margin:4px 0 8px 0">${parados}</ul></li>`;
+        })
         .join("");
       try {
         await sendEmail({

@@ -7,13 +7,19 @@ import { Plus, Pencil, Trash2, Upload, Download } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import type { DropFornecedor } from "@/lib/sistema/types";
-import { salvarDropFornecedor, excluirDropFornecedor, importarFornecedoresRepresentadas } from "@/lib/sistema/actions/dropshipping";
+import {
+  salvarDropFornecedor,
+  excluirDropFornecedor,
+  alternarAtivoDropFornecedor,
+  importarFornecedoresRepresentadas,
+} from "@/lib/sistema/actions/dropshipping";
 import { formatCNPJ, formatPhone } from "@/lib/sistema/format";
 import { Modal, ConfirmDialog } from "@/components/sistema/ui/Modal";
 import { Button } from "@/components/sistema/ui/Button";
 import { buttonClass } from "@/components/sistema/ui/buttonClass";
 import { Field, Input, Textarea, FormGrid } from "@/components/sistema/ui/Field";
 import { Badge } from "@/components/sistema/ui/Badge";
+import { Switch } from "@/components/sistema/ui/Switch";
 import { EmptyState } from "@/components/sistema/ui/State";
 import { TableScroll, Table, Thead, Tbody, Tr, Th, Td } from "@/components/sistema/ui/Table";
 
@@ -35,6 +41,7 @@ export default function FornecedoresView({
   const [open, setOpen] = useState(false);
   const [f, setF] = useState(empty);
   const [del, setDel] = useState<DropFornecedor | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const set = (k: keyof typeof empty, v: string | boolean) => setF((s) => ({ ...s, [k]: v }));
 
   function editar(x: DropFornecedor) {
@@ -64,6 +71,16 @@ export default function FornecedoresView({
       const res = await excluirDropFornecedor(x.id);
       if (!res.ok) { toast.error(res.error); return; }
       toast.success("Excluído.");
+      router.refresh();
+    });
+  }
+  function alternarAtivo(x: DropFornecedor) {
+    setTogglingId(x.id);
+    start(async () => {
+      const res = await alternarAtivoDropFornecedor(x.id, !x.ativo);
+      setTogglingId(null);
+      if (!res.ok) { toast.error(res.error); return; }
+      toast.success(x.ativo ? "Fornecedor inativado." : "Fornecedor ativado.");
       router.refresh();
     });
   }
@@ -126,7 +143,23 @@ export default function FornecedoresView({
                     {x.telefone || x.whatsapp ? formatPhone(x.telefone || x.whatsapp || "") : ""}
                     {x.email ? <div className="text-xs text-neutral-400">{x.email}</div> : null}
                   </Td>
-                  <Td><Badge tone={x.ativo ? "green" : "neutral"}>{x.ativo ? "Ativo" : "Inativo"}</Badge></Td>
+                  <Td>
+                    {podeEditar ? (
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={x.ativo}
+                          onChange={() => alternarAtivo(x)}
+                          disabled={pending && togglingId === x.id}
+                          label={x.ativo ? "Inativar fornecedor" : "Ativar fornecedor"}
+                        />
+                        <span className={`text-xs font-medium ${x.ativo ? "text-success" : "text-neutral-400"}`}>
+                          {x.ativo ? "Ativo" : "Inativo"}
+                        </span>
+                      </div>
+                    ) : (
+                      <Badge tone={x.ativo ? "green" : "neutral"}>{x.ativo ? "Ativo" : "Inativo"}</Badge>
+                    )}
+                  </Td>
                   {podeEditar && (
                     <Td className="text-right">
                       <div className="flex justify-end gap-1">
@@ -151,13 +184,13 @@ export default function FornecedoresView({
       >
         <div className="space-y-4">
           <p className="text-xs text-neutral-400">
-            O logo é puxado automaticamente do cadastro de representadas quando o CNPJ bate com um ali — não precisa
-            subir de novo aqui. Pra trocar o logo, atualize em &quot;Representadas&quot;.
+            O logotipo é obtido automaticamente do cadastro de representadas com o mesmo CNPJ.
+            Para alterá-lo, atualize o cadastro em &quot;Representadas&quot;.
           </p>
           <FormGrid>
             <Field label="Nome" required><Input value={f.nome} onChange={(e) => set("nome", e.target.value)} /></Field>
             <Field label="Razão social"><Input value={f.razao_social} onChange={(e) => set("razao_social", e.target.value)} /></Field>
-            <Field label="CNPJ" hint="Usado também pra casar com a representada e puxar o logo de lá.">
+            <Field label="CNPJ" hint="Usado para identificar a representada com o mesmo CNPJ e obter seu logotipo.">
               <Input value={f.cnpj} onChange={(e) => set("cnpj", e.target.value)} inputMode="numeric" />
             </Field>
             <Field label="E-mail"><Input value={f.email} onChange={(e) => set("email", e.target.value)} type="email" /></Field>
@@ -166,8 +199,8 @@ export default function FornecedoresView({
           </FormGrid>
           <Field label="Observações"><Textarea value={f.observacoes} onChange={(e) => set("observacoes", e.target.value)} rows={2} /></Field>
           <Field
-            label="Envio automático pro fornecedor"
-            hint="Minutos entre lotes automáticos do pacote combinado (etiquetas + planilha) por e-mail, assim que os pedidos ficam prontos — vazio desativa, continua 100% manual. Precisa de e-mail cadastrado acima."
+            label="Envio automático para o fornecedor"
+            hint="Intervalo, em minutos, entre envios automáticos de etiquetas e planilha por e-mail. Informe um e-mail acima para ativar. Deixe o intervalo vazio para manter o envio manual."
           >
             <Input
               value={f.envio_automatico_intervalo_min}

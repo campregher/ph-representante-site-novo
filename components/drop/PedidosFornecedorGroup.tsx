@@ -157,7 +157,7 @@ export default function PedidosFornecedorGroup({ fornecedorNome, pedidos }: Prop
           <Send size={13} /> ② {marcando ? "Marcando…" : "Marcar como enviado ao fornecedor"}
         </button>
         {!baixado && (
-          <p className="w-full text-xs text-neutral-400">Já baixou o pacote e mandou pro fornecedor? Marque como enviado.</p>
+          <p className="w-full text-xs text-neutral-400">Já baixou o pacote e mandou para o fornecedor? Marque como enviado.</p>
         )}
         {erro && <p className="w-full text-xs text-red-600">{erro}</p>}
       </div>

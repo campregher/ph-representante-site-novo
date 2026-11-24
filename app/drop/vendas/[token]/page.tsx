@@ -34,7 +34,7 @@ export default async function SellerVendasPage({
     return (
       <AuthCard title={`Olá, ${nome}!`} subtitle="Suas vendas aparecem aqui assim que seu cadastro for liberado.">
         <Link href={`/drop/portal/${token}`} className="text-sm text-brand hover:underline">
-          Voltar pro portal
+          Voltar para o portal
         </Link>
       </AuthCard>
     );
@@ -46,7 +46,7 @@ export default async function SellerVendasPage({
     <AuthCard title={`Vendas — ${nome}`} subtitle="Suas vendas no Mercado Livre." maxWidthClassName="max-w-3xl">
       <div className="space-y-4">
         <Link href={`/drop/portal/${token}`} className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-brand">
-          <ArrowLeft size={14} /> Voltar pro portal
+          <ArrowLeft size={14} /> Voltar para o portal
         </Link>
 
         <div className="grid grid-cols-3 gap-3">

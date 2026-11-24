@@ -4,16 +4,21 @@ import { motion } from "framer-motion";
 import { LayoutDashboard, Megaphone, Search, BarChart3, MousePointerClick, TrendingUp, FileBarChart, MessageSquare, ArrowRight } from "lucide-react";
 import { WHATSAPP_URL } from "@/lib/constants";
 
+// Todos os cards usam o mesmo tratamento neutro — cor fica reservada pro único
+// card que já é a nossa especialidade principal (Anúncios) e pro banner de CTA.
+const NEUTRAL = { border: "border-gray-200", iconBg: "bg-gray-100", iconC: "text-gray-600", labelC: "text-gray-500" };
+const HIGHLIGHT = { border: "border-brand/40", iconBg: "bg-brand/10", iconC: "text-brand", labelC: "text-brand" };
+
 const services = [
-  { icon: LayoutDashboard,  platform: "Mercado Livre", title: "Gestão de Conta MercadoLivre",     desc: "Gerenciamento completo: reputação, atendimento, métricas e saúde da conta.",        border: "border-yellow-300",  iconBg: "bg-yellow-50",  iconC: "text-yellow-600",  labelC: "text-yellow-600" },
-  { icon: LayoutDashboard,  platform: "Shopee",        title: "Gestão de Conta Shopee",           desc: "Gestão profissional da loja Shopee: classificação, avaliações e operação completa.", border: "border-orange-300",  iconBg: "bg-orange-50",  iconC: "text-orange-600",  labelC: "text-orange-600" },
-  { icon: Megaphone,        platform: "Anúncios",      title: "Criação de Anúncios Profissionais", desc: "Fotos, títulos otimizados, descrições persuasivas para maximizar conversão.",        border: "border-brand/40",    iconBg: "bg-brand/10",   iconC: "text-brand",       labelC: "text-brand" },
-  { icon: Search,           platform: "SEO",           title: "SEO para Marketplace",             desc: "Otimização de anúncios para aparecer nas primeiras posições de busca orgânica.",    border: "border-green-300",   iconBg: "bg-green-50",   iconC: "text-green-600",   labelC: "text-green-600" },
-  { icon: MousePointerClick,platform: "Ads",           title: "Gestão de Anúncios Pagos",         desc: "Campanhas ML Ads e Shopee Ads com estratégia de ROAS otimizado.",                   border: "border-blue-300",    iconBg: "bg-blue-50",    iconC: "text-blue-600",    labelC: "text-blue-600" },
-  { icon: TrendingUp,       platform: "Estratégia",    title: "Estratégia de Vendas",             desc: "Planejamento de precificação, mix de produtos e posicionamento competitivo.",        border: "border-purple-300",  iconBg: "bg-purple-50",  iconC: "text-purple-600",  labelC: "text-purple-600" },
-  { icon: FileBarChart,     platform: "Análise",       title: "Análise de Métricas",              desc: "Relatórios de desempenho, faturamento, ticket médio e diagnóstico de gargalos.",    border: "border-cyan-300",    iconBg: "bg-cyan-50",    iconC: "text-cyan-600",    labelC: "text-cyan-600" },
-  { icon: BarChart3,        platform: "Conversão",     title: "Otimização de Conversão",          desc: "Testes A/B, melhoria de fotos, perguntas e respostas e taxa de conversão.",         border: "border-orange-300",  iconBg: "bg-orange-50",  iconC: "text-orange-600",  labelC: "text-orange-600" },
-  { icon: MessageSquare,    platform: "Consultoria",   title: "Consultoria para Sellers",         desc: "Mentoria 1:1 para sellers que querem crescer e profissionalizar a operação.",        border: "border-pink-300",    iconBg: "bg-pink-50",    iconC: "text-pink-600",    labelC: "text-pink-600" },
+  { icon: LayoutDashboard,  platform: "Mercado Livre", title: "Gestão de conta no Mercado Livre",     desc: "Gerenciamento completo: reputação, atendimento, métricas e saúde da conta.",        ...NEUTRAL },
+  { icon: LayoutDashboard,  platform: "Shopee",        title: "Gestão de conta na Shopee",           desc: "Gestão profissional da loja Shopee: classificação, avaliações e operação completa.", ...NEUTRAL },
+  { icon: Megaphone,        platform: "Anúncios",      title: "Criação de Anúncios Profissionais", desc: "Fotos, títulos otimizados e descrições claras para melhorar a conversão.",        ...HIGHLIGHT },
+  { icon: Search,           platform: "SEO",           title: "SEO para Marketplace",             desc: "Otimização de títulos, descrições e palavras-chave para melhorar a visibilidade dos anúncios nas buscas.",    ...NEUTRAL },
+  { icon: MousePointerClick,platform: "Ads",           title: "Gestão de anúncios pagos",         desc: "Campanhas no Mercado Livre e na Shopee com foco no retorno sobre o investimento em publicidade.",                   ...NEUTRAL },
+  { icon: TrendingUp,       platform: "Estratégia",    title: "Estratégia de Vendas",             desc: "Planejamento de precificação, mix de produtos e posicionamento competitivo.",        ...NEUTRAL },
+  { icon: FileBarChart,     platform: "Análise",       title: "Análise de Métricas",              desc: "Relatórios de desempenho, faturamento, ticket médio e diagnóstico de gargalos.",    ...NEUTRAL },
+  { icon: BarChart3,        platform: "Conversão",     title: "Otimização de Conversão",          desc: "Testes A/B, melhoria de fotos, perguntas e respostas e taxa de conversão.",         ...NEUTRAL },
+  { icon: MessageSquare,    platform: "Consultoria",   title: "Consultoria para Sellers",         desc: "Mentoria 1:1 para sellers que querem crescer e profissionalizar a operação.",        ...NEUTRAL },
 ];
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.06 } } };
@@ -31,7 +36,7 @@ export default function Services() {
             <span className="text-xs font-bold text-brand uppercase tracking-widest">Serviços Digitais</span>
             <span className="w-6 h-[3px] bg-brand flex-shrink-0" />
           </div>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-4 text-gray-900">Gestão de <span className="text-brand">Marketplaces</span></h2>
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium mb-4 text-gray-900">Gestão de <span className="text-brand">Marketplaces</span></h2>
           <p className="text-gray-600 text-lg max-w-2xl mx-auto">Além da representação comercial, oferecemos serviços completos para sellers escalarem suas vendas.</p>
         </motion.div>
 
@@ -61,7 +66,7 @@ export default function Services() {
           <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div>
               <h3 className="text-2xl font-black text-white mb-2">Quer escalar suas vendas?</h3>
-              <p className="text-red-100 max-w-lg">Nossa equipe de especialistas pode transformar sua operação e multiplicar seu faturamento nos marketplaces.</p>
+              <p className="text-red-100 max-w-lg">Conte com nossa equipe para organizar sua operação e desenvolver suas vendas nos marketplaces.</p>
             </div>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2 px-6 py-3 bg-white text-brand hover:bg-red-50 font-bold rounded-md transition-all text-sm whitespace-nowrap flex-shrink-0 shadow-lg"

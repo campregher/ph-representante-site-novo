@@ -112,7 +112,7 @@ export default function ClienteForm({
         return;
       }
       if (res.emailPendente) {
-        toast.success("Cliente atualizado. O e-mail novo fica pendente até o seller confirmar pelo link que mandamos pra ele — o login antigo continua valendo até lá.");
+        toast.success("Cliente atualizado. O e-mail novo fica pendente até o seller confirmar pelo link que mandamos para ele — o login antigo continua valendo até lá.");
       } else {
         toast.success(initial ? "Cliente atualizado." : "Cliente criado.");
       }
@@ -239,9 +239,9 @@ export default function ClienteForm({
               error={errors.email?.message}
               hint={
                 initial?.is_seller && initial?.email_pendente
-                  ? `Troca pra "${initial.email_pendente}" pendente de confirmação pelo seller.`
+                  ? `Troca para "${initial.email_pendente}" pendente de confirmação pelo seller.`
                   : initial?.is_seller
-                    ? "Login de verdade fica no Supabase Auth — mudar aqui manda um link de confirmação pro e-mail novo antes de trocar de fato."
+                    ? "Login de verdade fica no Supabase Auth — mudar aqui manda um link de confirmação para o e-mail novo antes de trocar de fato."
                     : undefined
               }
             >

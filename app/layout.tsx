@@ -1,7 +1,28 @@
 import type { Metadata } from "next";
+import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  weight: ["400", "500", "600"],
+  style: ["normal"],
+  display: "swap",
+});
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  variable: "--font-plex-sans",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-plex-mono",
+  weight: ["400", "500"],
+  display: "swap",
+});
 
 const GOOGLE_ADS_ID = "AW-18096631778";
 
@@ -131,44 +152,7 @@ const structuredData = [
       "@id": `${siteUrl}/#localbusiness`,
     },
   },
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: [
-      {
-        "@type": "Question",
-        name: "Como funciona o dropshipping automotivo?",
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: "Você anuncia os produtos das representadas no Mercado Livre ou Shopee com sua margem. Quando o cliente compra, você repassa o pedido com a etiqueta SKU. A representada recebe, embala e posta com destino ao cliente final. Os custos são repassados à representada, que fatura diariamente ou semanalmente.",
-        },
-      },
-      {
-        "@type": "Question",
-        name: "Preciso ter estoque para trabalhar com a PH Representante?",
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: "No dropshipping não é necessário ter estoque. No atacado, o cliente compra em volume e mantém o próprio estoque.",
-        },
-      },
-      {
-        "@type": "Question",
-        name: "A PH Representante atende todo o Brasil?",
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: "Sim. A PH Representante atende distribuidores, lojistas e sellers de todo o Brasil.",
-        },
-      },
-      {
-        "@type": "Question",
-        name: "A PH faz gestão de conta no Mercado Livre e Shopee?",
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: "Sim. A PH oferece criação de anúncios, SEO para marketplace, gestão de ads, análise de métricas e consultoria estratégica para sellers.",
-        },
-      },
-    ],
-  },
+
 ];
 
 export default function RootLayout({
@@ -179,7 +163,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className="h-full antialiased"
+      className={`h-full antialiased ${fraunces.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
       <body className="min-h-full flex flex-col bg-dark-900 text-white">
         <script

@@ -17,7 +17,7 @@ export default async function ConfirmarTrocaEmailPage({
     : {
         icon: <CheckCircle2 size={36} className="text-green-600" />,
         titulo: `E-mail confirmado, ${res.nome}!`,
-        texto: `A partir de agora, use ${res.novoEmail} pra fazer login.`,
+        texto: `A partir de agora, use ${res.novoEmail} para fazer login.`,
       };
 
   return (

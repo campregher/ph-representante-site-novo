@@ -152,6 +152,51 @@ export async function metodosEnvioRealML(mlContaId: string): Promise<MlResult<{ 
   return { ok: true, metodos };
 }
 
+export interface MetricasContaML {
+  /** ISO date — data de criação da conta no Mercado Livre (`registration_date`). */
+  contaDesde: string | null;
+  /** `seller_reputation.transactions.completed` — vendas concluídas, histórico total. */
+  vendasCompletas: number | null;
+  /** `seller_reputation.level_id` (ex.: "5_green") — null = conta nova, ainda sem reputação formada. */
+  reputacaoLevelId: string | null;
+  /** "silver" | "gold" | "platinum" | null — selo MercadoLíder, independente do level_id acima. */
+  powerSellerStatus: string | null;
+}
+
+/**
+ * "Cartão de visita" da conta conectada — tempo de conta, vendas e
+ * reputação, tudo em GET /users/{user_id} (mesmo endpoint do nickname no
+ * callback de conexão, só que lendo o resto da resposta que antes era
+ * descartado). Usado em /drop/dashboard/integracao pra o seller ver a saúde
+ * da conta antes de publicar (ver DropMlContas.tsx).
+ */
+export async function metricasContaML(mlContaId: string): Promise<MlResult<{ metricas: MetricasContaML }>> {
+  let token: string;
+  let mlUserId: string;
+  try {
+    ({ token, mlUserId } = await getMlContaInfo(mlContaId));
+  } catch {
+    return { ok: false, error: "Conecte sua conta do Mercado Livre primeiro." };
+  }
+
+  const res = await fetch(`${ML_BASE}/users/${mlUserId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) return { ok: false, error: mlErro(data, "Erro ao consultar dados da conta no Mercado Livre.") };
+
+  const reputacao = data.seller_reputation ?? {};
+  return {
+    ok: true,
+    metricas: {
+      contaDesde: data.registration_date ?? null,
+      vendasCompletas: reputacao.transactions?.completed ?? null,
+      reputacaoLevelId: reputacao.level_id ?? null,
+      powerSellerStatus: reputacao.power_seller_status ?? null,
+    },
+  };
+}
+
 export interface RecebimentoML {
   comissao: number;
   /** true só quando o modo de envio é me2 (Mercado Envios/Flex) — só aí
@@ -251,10 +296,10 @@ export async function resolverShippingML(
     return { error: "Cadastre o método de envio desse produto em \"Detalhes do produto\" antes de anunciar." };
   }
   if (!transporteAceito.includes(metodoEnvio)) {
-    return { error: "O método de envio cadastrado pra esse produto não é mais aceito por ele — revise em \"Detalhes do produto\"." };
+    return { error: "O método de envio cadastrado para esse produto não é mais aceito por ele — revise em \"Detalhes do produto\"." };
   }
   if (!(metodoEnvio in LABEL_METODO_ENVIO)) {
-    return { error: "Esse método de envio não funciona no Mercado Livre (ex.: Shopee Express é só pra Shopee) — escolha outro em \"Detalhes do produto\"." };
+    return { error: "Esse método de envio não funciona no Mercado Livre (ex.: Shopee Express é só para Shopee) — escolha outro em \"Detalhes do produto\"." };
   }
 
   const ativosRes = await metodosEnvioAtivosML(mlContaId);
@@ -332,7 +377,7 @@ export async function publicarAnuncioMLDrop(
   if ("ambiguo" in familyAttrs) {
     return {
       ok: false,
-      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH pra configurar.`,
+      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH para configurar.`,
     };
   }
 
@@ -456,7 +501,7 @@ export async function publicarGrupoMLDrop(
 ): Promise<MlResult<{ resultados: PublicarVarianteResultado[] }>> {
   if (!grupo.ml_category_id)
     return { ok: false, error: "Produto sem categoria do Mercado Livre definida (fale com a PH)." };
-  if (grupo.variantes.length < 2) return { ok: false, error: "Esse produto não tem variações pra agrupar." };
+  if (grupo.variantes.length < 2) return { ok: false, error: "Esse produto não tem variações para agrupar." };
 
   const shippingRes = await resolverShippingML(mlContaId, grupo.transporte_aceito, grupo.metodo_envio);
   if ("error" in shippingRes) return { ok: false, error: shippingRes.error };
@@ -472,7 +517,7 @@ export async function publicarGrupoMLDrop(
   if ("ambiguo" in familyAttrs) {
     return {
       ok: false,
-      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH pra configurar.`,
+      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH para configurar.`,
     };
   }
 

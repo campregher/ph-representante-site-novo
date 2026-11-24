@@ -31,7 +31,7 @@ export default async function DropDashboardAnunciadosPage() {
         <CardBody>
           {anunciados.length === 0 ? (
             <p className="text-sm text-neutral-600">
-              Você ainda não anunciou nenhum produto. Vá em &quot;Produtos para Anunciar&quot; pra começar.
+              Você ainda não anunciou nenhum produto. Vá em &quot;Produtos para Anunciar&quot; para começar.
             </p>
           ) : (
             <SellerCatalogoDrop

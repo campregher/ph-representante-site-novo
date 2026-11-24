@@ -113,7 +113,7 @@ export async function publicarAnuncioML(
   if ("ambiguo" in familyAttrs) {
     return {
       ok: false,
-      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH pra configurar.`,
+      error: `Categoria do Mercado Livre exige o atributo "${familyAttrs.ambiguo}" com mais de uma opção possível — fale com a PH para configurar.`,
     };
   }
 

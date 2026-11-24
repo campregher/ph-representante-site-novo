@@ -12,7 +12,7 @@ import { buttonClass } from "@/components/sistema/ui/buttonClass";
 
 const STATUS_LABEL = {
   aguardando_nf: { label: "Aguardando você emitir a NF no Mercado Livre", tone: "yellow" as const },
-  pronto: { label: "Pronto pra enviar ao fornecedor", tone: "green" as const },
+  pronto: { label: "Pronto para enviar ao fornecedor", tone: "green" as const },
   enviado: { label: "Enviado", tone: "blue" as const },
   cancelado: { label: "Cancelado", tone: "neutral" as const },
 };
@@ -111,7 +111,7 @@ export default async function DropPedidoDetalhePage({ params }: { params: Promis
               </a>
             </div>
           ) : (
-            <p className="text-sm text-neutral-500">Declare a nota fiscal do consumidor final no Mercado Livre pra liberar a etiqueta.</p>
+            <p className="text-sm text-neutral-500">Declare a nota fiscal do consumidor final no Mercado Livre para liberar a etiqueta.</p>
           )}
         </CardBody>
       </Card>

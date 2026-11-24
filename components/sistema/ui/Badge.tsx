@@ -4,10 +4,10 @@ type Tone = "neutral" | "green" | "yellow" | "red" | "blue" | "purple" | "brand"
 
 const TONES: Record<Tone, string> = {
   neutral: "bg-neutral-100 text-neutral-700 ring-neutral-200",
-  green: "bg-green-50 text-green-700 ring-green-200",
-  yellow: "bg-amber-50 text-amber-700 ring-amber-200",
+  green: "bg-success/10 text-success ring-success/20",
+  yellow: "bg-warning/10 text-warning ring-warning/20",
   red: "bg-red-50 text-red-700 ring-red-200",
-  blue: "bg-blue-50 text-blue-700 ring-blue-200",
+  blue: "bg-info/10 text-info ring-info/20",
   purple: "bg-purple-50 text-purple-700 ring-purple-200",
   brand: "bg-brand/10 text-brand ring-brand/20",
 };

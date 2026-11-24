@@ -514,7 +514,7 @@ export default function SellerCatalogoDrop({
   function publicar(item: CatalogoDropItemView) {
     const preco = precoValido(item);
     if (preco == null) {
-      toast.error(`Preço mínimo pra esse produto é ${formatBRL(item.precoMinimo)}.`);
+      toast.error(`Preço mínimo para esse produto é ${formatBRL(item.precoMinimo)}.`);
       return;
     }
     if (!item.metodoEnvio) {
@@ -556,7 +556,7 @@ export default function SellerCatalogoDrop({
     const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
     const v = Number((precos[base.id] ?? "").replace(",", "."));
     if (!Number.isFinite(v) || v < precoMinimoGrupo) {
-      toast.error(`Preço mínimo pra esse produto é ${formatBRL(precoMinimoGrupo)}.`);
+      toast.error(`Preço mínimo para esse produto é ${formatBRL(precoMinimoGrupo)}.`);
       return;
     }
     if (!variantes.some((p) => p.metodoEnvio)) {
@@ -617,7 +617,7 @@ export default function SellerCatalogoDrop({
     const precoMinimoGrupo = Math.max(...variantes.map((v) => v.precoMinimo));
     const v = Number((precos[chave] ?? "").replace(",", "."));
     if (!Number.isFinite(v) || v < precoMinimoGrupo) {
-      toast.error(`Preço mínimo pra esse produto é ${formatBRL(precoMinimoGrupo)}.`);
+      toast.error(`Preço mínimo para esse produto é ${formatBRL(precoMinimoGrupo)}.`);
       return;
     }
     start(async () => {
@@ -710,7 +710,7 @@ export default function SellerCatalogoDrop({
         toast.error(res.error);
         return;
       }
-      toast.success("Produto atualizado pro seu anúncio.");
+      toast.success("Produto atualizado para o seu anúncio.");
       setDetalhe(null);
       router.refresh();
     });
@@ -724,7 +724,7 @@ export default function SellerCatalogoDrop({
         toast.error(res.error);
         return;
       }
-      toast.success("Restaurado pro cadastro padrão da PH.");
+      toast.success("Restaurado para o cadastro padrão da PH.");
       setDetalhe(null);
       router.refresh();
     });
@@ -835,7 +835,7 @@ export default function SellerCatalogoDrop({
   function atualizarPreco(item: CatalogoDropItemView, mlContaId: string) {
     const preco = precoValido(item);
     if (preco == null) {
-      toast.error(`Preço mínimo pra esse produto é ${formatBRL(item.precoMinimo)}.`);
+      toast.error(`Preço mínimo para esse produto é ${formatBRL(item.precoMinimo)}.`);
       return;
     }
     start(async () => {
@@ -875,7 +875,7 @@ export default function SellerCatalogoDrop({
               type="checkbox"
               checked={anunciosSelecionados.has(chaveSelecao)}
               onChange={() => toggleAnuncioSelecionado(chaveSelecao)}
-              title="Marcar pra ação em massa (ativar/pausar/preço/método de envio)"
+              title="Marcar para ação em massa (ativar/pausar/preço/método de envio)"
               className="h-3.5 w-3.5 shrink-0 rounded border-neutral-300 text-brand"
             />
           )}
@@ -1074,7 +1074,7 @@ export default function SellerCatalogoDrop({
   if (itens.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-neutral-200 py-10 text-center">
-        <p className="text-sm text-neutral-500">Nenhum produto disponível pra venda no momento.</p>
+        <p className="text-sm text-neutral-500">Nenhum produto disponível para venda no momento.</p>
       </div>
     );
   }
@@ -1083,7 +1083,7 @@ export default function SellerCatalogoDrop({
     <div className="space-y-4">
       {!mlConectado && (
         <div className="flex items-center gap-2 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-yellow-800">
-          Conecte uma conta do Mercado Livre em Integração pra poder publicar anúncios.
+          Conecte uma conta do Mercado Livre em Integração para poder publicar anúncios.
         </div>
       )}
       {chavesSelecionaveis.length > 0 && (
@@ -1195,7 +1195,7 @@ export default function SellerCatalogoDrop({
                       checked={selecionados.has(chave)}
                       onChange={() => toggleSelecionado(chave)}
                       disabled={!mlConectado}
-                      title="Marcar pra editar em massa (método de envio/tipo de anúncio)"
+                      title="Marcar para editar em massa (método de envio/tipo de anúncio)"
                       className="mt-5 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand"
                     />
                   )}
@@ -1351,7 +1351,7 @@ export default function SellerCatalogoDrop({
                   ? "Checando o que está ativo agora na sua conta do Mercado Livre…"
                   : metodosEnvioDisponiveis(detalhe).length === 0
                     ? mlContas.length === 0
-                      ? "Conecte uma conta do Mercado Livre pra poder escolher o método de envio."
+                      ? "Conecte uma conta do Mercado Livre para poder escolher o método de envio."
                       : "Nenhum método de envio que esse produto aceita está ativo agora na(s) sua(s) conta(s) do Mercado Livre — ative em Mercado Envios/Flex no painel do ML, ou fale com a PH se o produto aceitar o método certo."
                     : "Mostra só o que está ativo agora na sua conta do Mercado Livre e que esse produto aceita."
               }
@@ -1444,7 +1444,7 @@ export default function SellerCatalogoDrop({
       >
         <div className="space-y-4">
           <p className="text-xs text-neutral-500">
-            Aplica o mesmo método de envio e tipo de anúncio pros <strong>{itensParaEdicaoEmMassa.length}</strong> produtos
+            Aplica o mesmo método de envio e tipo de anúncio para os <strong>{itensParaEdicaoEmMassa.length}</strong> produtos
             dentro do que você marcou (grupo de variações conta todas elas) — assim não precisa abrir &ldquo;Detalhes&rdquo; de
             cada um antes de publicar em lote. Cada produto continua podendo ser editado individualmente depois.
           </p>
@@ -1456,7 +1456,7 @@ export default function SellerCatalogoDrop({
                 ? "Checando o que está ativo na conta escolhida…"
                 : metodosEnvioDisponiveisLote().length === 0
                   ? "Nenhum método bate em todos os produtos selecionados ao mesmo tempo nessa conta — tente selecionar menos produtos ou trocar a conta."
-                  : "Só os métodos aceitos por todos os selecionados e ativos na conta escolhida pra publicar."
+                  : "Só os métodos aceitos por todos os selecionados e ativos na conta escolhida para publicar."
             }
           >
             <Select
@@ -1531,7 +1531,7 @@ export default function SellerCatalogoDrop({
         onClose={() => setConfirmExcluir(null)}
         onConfirm={confirmarExclusao}
         title="Excluir anúncio?"
-        message="O anúncio é fechado no Mercado Livre (definitivo — não dá pra reabrir) e some da sua lista aqui. Você pode publicar de novo do zero depois, se quiser."
+        message="O anúncio é fechado no Mercado Livre (definitivo — não dá para reabrir) e some da sua lista aqui. Você pode publicar de novo do zero depois, se quiser."
         confirmLabel="Excluir"
         danger
         loading={pending}

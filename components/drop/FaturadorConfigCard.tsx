@@ -33,7 +33,7 @@ export default function FaturadorConfigCard({ initial }: { initial: boolean }) {
       <CardBody className="space-y-3">
         <p className="text-sm text-neutral-600">{REGRA_NF_TEXTO}</p>
         <div className="space-y-1.5 text-sm text-neutral-600">
-          <p>Pra ativar, no painel do Mercado Livre (fora daqui) você precisa ter:</p>
+          <p>Para ativar, no painel do Mercado Livre (fora daqui) você precisa ter:</p>
           <ul className="list-disc space-y-0.5 pl-5">
             <li>CNPJ e Inscrição Estadual atualizados</li>
             <li>Certificado digital tipo A1 cadastrado no Mercado Livre</li>

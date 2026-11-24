@@ -113,16 +113,16 @@ export async function processarEnvioAutomaticoPorFornecedor(clienteId: string, f
 
         const pacote = await gerarPacoteCombinado(clienteId, pedidoIds);
         if (!pacote.ok) {
-          console.error(`[dropshipping-pedido-envio-automatico] gerarPacoteCombinado falhou pra ${f.nome}:`, pacote.erro);
+          console.error(`[dropshipping-pedido-envio-automatico] gerarPacoteCombinado falhou para ${f.nome}:`, pacote.erro);
           continue;
         }
 
         await sendEmail({
           to: f.email!,
-          subject: `Novos pedidos pra enviar — ${pacote.incluidos.length} pedido(s)`,
+          subject: `Novos pedidos para enviar — ${pacote.incluidos.length} pedido(s)`,
           html: `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6">
             <p>Olá!</p>
-            <p>Seguem ${pacote.incluidos.length} pedido(s) novo(s) liberado(s) pra envio — etiquetas e planilha em anexo.</p>
+            <p>Seguem ${pacote.incluidos.length} pedido(s) novo(s) liberado(s) para envio — etiquetas e planilha em anexo.</p>
             <p>Pedidos: ${pacote.incluidos.map((i) => `#${i.numero}`).join(", ")}</p>
           </div>`,
           attachments: [
@@ -141,7 +141,7 @@ export async function processarEnvioAutomaticoPorFornecedor(clienteId: string, f
         );
 
         await avisarGestores(
-          `[${sellerNome}] Pacote enviado automaticamente pra ${f.nome}`,
+          `[${sellerNome}] Pacote enviado automaticamente para ${f.nome}`,
           `${pacote.incluidos.length} pedido(s) liberado(s) e enviado(s) por e-mail sozinho — pedidos ${pacote.incluidos
             .map((i) => `#${i.numero}`)
             .join(", ")}.`

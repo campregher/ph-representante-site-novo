@@ -16,7 +16,7 @@ const pillars = [
   { icon: Truck,       title: "Logística nacional",               desc: "Enviamos para todo o Brasil com agilidade, atendendo atacado e dropshipping." },
   { icon: Award,       title: "Produtos de alta demanda",         desc: "Catálogo focado em itens com alto giro e boa margem nos principais marketplaces." },
   { icon: BarChart2,   title: "Especialistas em marketplaces",    desc: "Experiência sólida em Mercado Livre e Shopee — sabemos o que vende de verdade." },
-  { icon: Globe,       title: "Seller do Brasil inteiro",         desc: "Atendemos sellers de norte a sul, de iniciantes a grandes operadores." },
+  { icon: Globe,       title: "Sellers de todo o Brasil",         desc: "Atendemos sellers de norte a sul, de iniciantes a grandes operadores." },
 ];
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
@@ -32,7 +32,7 @@ export default function About() {
             <span className="text-xs font-bold text-brand uppercase tracking-widest">Quem Somos</span>
             <span className="w-6 h-[3px] bg-brand flex-shrink-0" />
           </div>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-4 text-gray-900">A PH Representante</h2>
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium mb-4 text-gray-900">A PH Representante</h2>
           <p className="text-gray-600 text-lg max-w-2xl mx-auto leading-relaxed">
             Somos especialistas em representação comercial de acessórios automotivos,
             conectando fabricantes de qualidade a distribuidores, lojistas e sellers em todo o Brasil.
@@ -45,7 +45,7 @@ export default function About() {
             <motion.div key={s.label} variants={item}
               className="bg-white border border-gray-900 rounded-md p-6 text-center hover:border-brand transition-all duration-200"
             >
-              <p className="text-4xl font-black mb-2 text-brand">{s.value}</p>
+              <p className="font-mono text-4xl font-semibold mb-2 text-brand">{s.value}</p>
               <p className="text-sm text-gray-600">{s.label}</p>
             </motion.div>
           ))}

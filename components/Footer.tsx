@@ -40,7 +40,7 @@ export default function Footer() {
             className="flex flex-col sm:flex-row items-center justify-between gap-6"
           >
             <div>
-              <h3 className="text-xl font-black text-white mb-1">Pronto para começar?</h3>
+              <h3 className="font-display text-xl font-medium text-white mb-1">Pronto para começar?</h3>
               <p className="text-gray-500 text-sm">Entre em contato e receba nossa tabela de preços completa.</p>
             </div>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
@@ -121,7 +121,7 @@ export default function Footer() {
           <div>
             <h4 className="font-bold text-white mb-4 text-xs uppercase tracking-widest">Serviços</h4>
             <ul className="space-y-2">
-              {["Atacado Automotivo","Dropshipping","Gestão Mercado Livre","Gestão Shopee","Criação de Anúncios","SEO para Marketplace","Gestão de Ads","Consultoria Sellers"].map((s) => (
+              {["Atacado Automotivo","Dropshipping","Gestão no Mercado Livre","Gestão na Shopee","Criação de Anúncios","SEO para Marketplace","Gestão de anúncios pagos","Consultoria para sellers"].map((s) => (
                 <li key={s} className="flex items-center gap-1.5 text-gray-500 text-sm">
                   <span className="w-1 h-1 rounded-full bg-brand/40" />{s}
                 </li>

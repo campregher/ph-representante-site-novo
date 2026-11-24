@@ -18,7 +18,7 @@ import AutoRefresh from "@/components/drop/AutoRefresh";
 const ML_SHIPPING_LABEL: Record<string, { label: string; tone: "blue" | "green" | "red" | "neutral" }> = {
   pending: { label: "Aguardando despacho", tone: "neutral" },
   handling: { label: "Em preparação", tone: "neutral" },
-  ready_to_ship: { label: "Pronto pra despachar", tone: "blue" },
+  ready_to_ship: { label: "Pronto para despachar", tone: "blue" },
   shipped: { label: "A caminho", tone: "blue" },
   delivered: { label: "Entregue", tone: "green" },
   not_delivered: { label: "Não entregue", tone: "red" },
@@ -67,7 +67,7 @@ export default async function DropDashboardPedidosPage() {
       <div>
         <h1 className="text-lg font-bold text-neutral-900">Pedidos</h1>
         <p className="text-sm text-neutral-500">
-          Siga os passos abaixo pra cada venda: emitir a NF, liberar a etiqueta pro fornecedor e atualizar o status.
+          Siga os passos abaixo para cada venda: emitir a NF, liberar a etiqueta para o fornecedor e atualizar o status.
         </p>
       </div>
 
@@ -81,7 +81,7 @@ export default async function DropDashboardPedidosPage() {
           },
           {
             id: "liberar_etiqueta",
-            label: "2. Liberar etiqueta pro fornecedor",
+            label: "2. Liberar etiqueta para o fornecedor",
             count: passo2LiberarEtiqueta.length,
             content: <PassoLiberarEtiqueta pedidos={passo2LiberarEtiqueta} />,
           },
@@ -116,7 +116,7 @@ function PassoEmitirNf({ pedidos }: { pedidos: PedidoDrop[] }) {
     <Card>
       <CardHeader
         title="Emita a NF do consumidor final no Mercado Livre"
-        description="A etiqueta só fica pronta pra baixar depois que a nota fiscal é declarada lá no Mercado Livre."
+        description="A etiqueta só fica pronta para baixar depois que a nota fiscal é declarada lá no Mercado Livre."
       />
       <CardBody className="p-0">
         <BlocoPorConta
@@ -208,15 +208,15 @@ function PassoLiberarEtiqueta({ pedidos }: { pedidos: PedidoDrop[] }) {
   if (pedidos.length === 0) {
     return (
       <Card>
-        <CardBody className="text-sm text-neutral-600">Nenhuma venda com etiqueta liberada pra enviar ao fornecedor agora.</CardBody>
+        <CardBody className="text-sm text-neutral-600">Nenhuma venda com etiqueta liberada para enviar ao fornecedor agora.</CardBody>
       </Card>
     );
   }
   return (
     <Card>
       <CardHeader
-        title="Baixe o pacote e mande pro fornecedor"
-        description="① Selecione os pedidos de um fornecedor e baixe um único pacote (etiquetas, notas fiscais e planilha). ② Depois de mandar no grupo de WhatsApp dele, marque como enviado."
+        title="Baixe o pacote e envie ao fornecedor"
+        description="① Selecione os pedidos de um fornecedor e baixe um único pacote (etiquetas, notas fiscais e planilha). ② Depois de enviar ao grupo de WhatsApp do fornecedor, marque como enviado."
       />
       <CardBody className="p-0">
         <BlocoPorConta pedidos={pedidos} render={(lista) => <GruposPorFornecedor pedidos={lista} />} />

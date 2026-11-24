@@ -200,7 +200,7 @@ const interestContent: Record<Lead["interest"], { title: string; steps: string[]
     title: "Conheça todos os serviços PH Representante",
     steps: [
       "🛒 Atacado: compre nosso catálogo completo de acessórios automotivos com preços exclusivos para revendedores.",
-      "📦 Dropshipping: venda sem estoque — você anuncia, repassa o pedido com a etiqueta SKU e as representadas cuidam do envio ao cliente final.",
+      "📦 Dropshipping: venda sem estoque — você anuncia, repassa o pedido com a etiqueta de envio com o SKU impresso e as representadas cuidam do envio ao cliente final.",
       "📊 Gestão de Marketplace: cuidamos de toda a operação da sua conta no Mercado Livre e Shopee.",
       "🎯 Consultoria: mentoria estratégica para sellers que querem crescer e profissionalizar a operação.",
     ],

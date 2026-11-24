@@ -102,7 +102,7 @@ export async function processarVendaML(mlUserId: string, orderId: string): Promi
     .select("cliente_id")
     .eq("ml_user_id", mlUserId)
     .maybeSingle();
-  if (!tokenRow) return { ok: false, motivo: "seller não encontrado pra esse ml_user_id" };
+  if (!tokenRow) return { ok: false, motivo: "seller não encontrado para esse ml_user_id" };
   const clienteId = tokenRow.cliente_id as string;
 
   // idempotência — webhook do ML reenvia notificações
@@ -251,7 +251,7 @@ export async function processarVendaML(mlUserId: string, orderId: string): Promi
 
   await avisarGestores(
     `Nova venda no ML — pedido #${numero}`,
-    `Seller vendeu ${itensValidos.length} item(ns) pelo Mercado Livre. Pronto pra despacho.`,
+    `Seller vendeu ${itensValidos.length} item(ns) pelo Mercado Livre. Pronto para despacho.`,
     `/sistema/pedidos/${pedidoId}`
   );
 

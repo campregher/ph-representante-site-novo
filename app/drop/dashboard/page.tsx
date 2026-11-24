@@ -75,7 +75,7 @@ export default async function DropDashboardInicioPage() {
 
   const passos = [
     { label: "Conectar sua conta do Mercado Livre", done: mlContas.length > 0, href: "/drop/dashboard/integracao" },
-    { label: "Ver produtos disponíveis pra anunciar", done: catalogo.length > 0, href: "/drop/dashboard/produtos" },
+    { label: "Ver produtos disponíveis para anunciar", done: catalogo.length > 0, href: "/drop/dashboard/produtos" },
     { label: "Publicar seu primeiro anúncio", done: anunciados.length > 0, href: "/drop/dashboard/produtos" },
     { label: "Fazer sua primeira venda", done: financeiro.mes.quantidade > 0, href: "/drop/dashboard/faturas" },
   ];
@@ -95,7 +95,7 @@ export default async function DropDashboardInicioPage() {
             <p className="mt-1 text-sm text-neutral-300">
               {tudoPronto
                 ? "Sua loja está rodando — acompanhe os números abaixo."
-                : "Falta pouco pra sua loja estar 100% rodando."}
+                : "Falta pouco para concluir a configuração da sua loja."}
             </p>
           </div>
           {!tudoPronto && (
@@ -109,7 +109,7 @@ export default async function DropDashboardInicioPage() {
       {/* Checklist de primeiros passos — some sozinho quando tudo estiver concluído */}
       {!tudoPronto && (
         <Card>
-          <CardHeader title="Primeiros passos" description="Siga essa ordem pra começar a vender mais rápido." />
+          <CardHeader title="Primeiros passos" description="Siga essa ordem para começar a vender mais rápido." />
           <CardBody className="space-y-1">
             <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
               <div
@@ -156,7 +156,7 @@ export default async function DropDashboardInicioPage() {
           tone="green"
         />
         <StatCardColor
-          label="Disponíveis pra anunciar"
+          label="Disponíveis para anunciar"
           value={catalogo.filter((p) => p.anuncios.length === 0).length}
           icon={<PackageSearch size={18} />}
           tone="brand"

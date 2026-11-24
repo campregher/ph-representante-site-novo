@@ -101,7 +101,7 @@ function RelatoCard({ relato }: { relato: DropRelatoProblema }) {
             value={resposta}
             onChange={(e) => setResposta(e.target.value)}
             rows={2}
-            placeholder="Resposta pro seller (opcional)"
+            placeholder="Resposta para o seller (opcional)"
           />
           <div className="flex gap-2">
             <Button size="sm" onClick={resolver} loading={pending}>

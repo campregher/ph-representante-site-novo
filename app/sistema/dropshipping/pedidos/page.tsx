@@ -21,7 +21,7 @@ const STATUS_LABEL = {
 const ML_SHIPPING_LABEL: Record<string, { label: string; tone: "blue" | "green" | "red" | "neutral" }> = {
   pending: { label: "Aguardando despacho", tone: "neutral" },
   handling: { label: "Em preparação", tone: "neutral" },
-  ready_to_ship: { label: "Pronto pra despachar", tone: "blue" },
+  ready_to_ship: { label: "Pronto para despachar", tone: "blue" },
   shipped: { label: "A caminho", tone: "blue" },
   delivered: { label: "Entregue", tone: "green" },
   not_delivered: { label: "Não entregue", tone: "red" },

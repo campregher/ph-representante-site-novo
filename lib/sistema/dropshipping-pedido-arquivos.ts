@@ -220,7 +220,7 @@ export async function processarPedidoAguardandoNF(
   pedido: PedidoAguardandoNF
 ): Promise<{ ficouPronto: boolean; motivo?: string }> {
   if (!pedido.ml_conta_id || !pedido.ml_shipping_id || !pedido.pedido_externo) {
-    return { ficouPronto: false, motivo: "faltam dados de envio/NF pra consultar" };
+    return { ficouPronto: false, motivo: "faltam dados de envio/NF para consultar" };
   }
 
   const statusNf = await consultarStatusNF(pedido.ml_conta_id, pedido.pedido_externo);

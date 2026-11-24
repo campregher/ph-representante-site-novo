@@ -5,12 +5,13 @@ import { Store, Users2, TrendingUp, Package, MapPin } from "lucide-react";
 import Link from "next/link";
 import { WHATSAPP_GROUP_URL } from "@/lib/constants";
 import ProductWall from "@/components/ProductWall";
+import RouteRail from "@/components/RouteRail";
 
 const stats = [
   { icon: Package,   value: "+1.000", label: "Produtos" },
-  { icon: Users2,    value: "+500",   label: "Sellers Atendidos" },
+  { icon: Users2,    value: "+500",   label: "Sellers atendidos" },
   { icon: MapPin,    value: "Todo",   label: "Brasil" },
-  { icon: TrendingUp,value: "+8",     label: "Marcas Representadas" },
+  { icon: TrendingUp,value: "+8",     label: "Marcas representadas" },
 ];
 
 export default function Hero() {
@@ -32,7 +33,7 @@ export default function Hero() {
           </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight mb-6 tracking-tight text-white"
+            className="font-display text-4xl sm:text-5xl lg:text-6xl font-medium leading-tight mb-6 tracking-tight text-white"
           >
             Acessórios automotivos para{" "}
             <span className="text-brand">atacado</span> e{" "}
@@ -86,12 +87,19 @@ export default function Hero() {
                   <stat.icon size={18} className="text-brand" />
                 </div>
                 <div>
-                  <p className="text-xl font-black text-white">{stat.value}</p>
+                  <p className="font-mono text-xl font-semibold text-white">{stat.value}</p>
                   <p className="text-xs text-gray-400">{stat.label}</p>
                 </div>
               </motion.div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Rota — do fornecedor ao comprador final */}
+      <div className="relative z-10 hidden w-full border-t border-white/5 bg-black/40 backdrop-blur-sm sm:block">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <RouteRail className="justify-center" />
         </div>
       </div>
     </section>

@@ -4,15 +4,17 @@ import { motion } from "framer-motion";
 import { Warehouse, Zap, TrendingUp, ArrowRight, CheckCircle2, Store, Package, Send, ShoppingCart, DollarSign } from "lucide-react";
 import { WHATSAPP_URL } from "@/lib/constants";
 
-const atacadoBenefits = ["Melhor margem de lucro","Prazo de pagamento diferenciado","Ideal para distribuidores e lojas","Estoque próprio com variedade","Preço especial por volume","Suporte comercial exclusivo","Entrega expressa para todo Brasil","Mix de produtos por região"];
-const dropBenefits    = ["Zero estoque necessário","Baixo investimento inicial","Ideal para iniciantes e sellers","Pagamento semanal ou diário","Integração com Mercado Livre e Shopee","Envio direto ao cliente final","Suporte para criação de anúncios","Crescimento sem limite de capital"];
+const atacadoBenefits = ["Melhor margem de lucro","Prazo de pagamento diferenciado","Ideal para distribuidores e lojas","Estoque próprio com variedade","Preço especial por volume","Suporte comercial exclusivo","Entrega expressa para todo o Brasil","Mix de produtos por região"];
+const dropBenefits    = ["Venda sem precisar manter estoque","Baixo investimento inicial","Ideal para iniciantes e sellers","Pagamento semanal ou diário","Integração com Mercado Livre e Shopee","Envio direto ao cliente final","Suporte para criação de anúncios","Expansão com menor investimento em estoque"];
 
+// Neutro em todos os passos — a continuidade entre eles é o que conta (a mesma
+// rota do Hero), não uma cor por etapa.
 const dropSteps = [
-  { icon: Store,        number: "01", title: "Você anuncia",      desc: "Seller publica os produtos das representadas no marketplace com sua margem de lucro.",                               border: "border-brand/30",      iconBg: "bg-brand/10",      iconC: "text-brand" },
-  { icon: ShoppingCart, number: "02", title: "Cliente compra",   desc: "Consumidor realiza a compra no seu anúncio.",                                                                             border: "border-orange-400/40", iconBg: "bg-orange-50",     iconC: "text-orange-500" },
-  { icon: Send,         number: "03", title: "Você repassa",     desc: "Seller envia o pedido com a etiqueta SKU para as representadas.",                                                         border: "border-yellow-400/40", iconBg: "bg-yellow-50",     iconC: "text-yellow-600" },
-  { icon: Package,      number: "04", title: "Representada envia", desc: "A representada recebe, separa, embala e posta no ponto de coleta com destino ao cliente final.",                        border: "border-green-400/40",  iconBg: "bg-green-50",      iconC: "text-green-600" },
-  { icon: DollarSign,   number: "05", title: "Você lucra",       desc: "Os custos são repassados à representada, que fatura diariamente ou semanalmente. Você fica com a margem.",               border: "border-blue-400/40",   iconBg: "bg-blue-50",       iconC: "text-blue-600" },
+  { icon: Store,        number: "01", title: "Você anuncia",      desc: "Você anuncia os produtos das marcas que representamos no marketplace com sua margem de lucro." },
+  { icon: ShoppingCart, number: "02", title: "Cliente compra",   desc: "Consumidor realiza a compra no seu anúncio." },
+  { icon: Send,         number: "03", title: "Você repassa",     desc: "Seller envia o pedido com a etiqueta de envio com o SKU impresso para as representadas." },
+  { icon: Package,      number: "04", title: "Representada envia", desc: "A representada recebe, separa, embala e posta no ponto de coleta com destino ao cliente final." },
+  { icon: DollarSign,   number: "05", title: "Você lucra",       desc: "Os custos são repassados à representada, que fatura diariamente ou semanalmente. Você fica com a margem." },
 ];
 
 const cardV = { hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } };
@@ -27,7 +29,7 @@ export default function BusinessModels() {
             <span className="text-xs font-bold text-brand uppercase tracking-widest">Modelos de Negócio</span>
             <span className="w-6 h-[3px] bg-brand flex-shrink-0" />
           </div>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mb-4 text-gray-900">Como trabalhar <span className="text-brand">conosco</span></h2>
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium mb-4 text-gray-900">Como trabalhar <span className="text-brand">conosco</span></h2>
           <p className="text-gray-600 text-lg max-w-xl mx-auto">Escolha o modelo ideal. Atendemos desde grandes distribuidores até quem está começando do zero.</p>
         </motion.div>
 
@@ -74,7 +76,7 @@ export default function BusinessModels() {
                   <h3 className="text-2xl font-black text-gray-900">Dropshipping</h3>
                 </div>
               </div>
-              <p className="text-gray-600 mb-6 leading-relaxed">Venda sem estoque. Anuncie os produtos das representadas nos marketplaces, repasse os pedidos com a etiqueta SKU e as representadas cuidam do envio. Baixo investimento inicial.</p>
+              <p className="text-gray-600 mb-6 leading-relaxed">Venda sem estoque. Anuncie os produtos das representadas nos marketplaces, repasse os pedidos com a etiqueta de envio com o SKU impresso e as representadas cuidam do envio. Baixo investimento inicial.</p>
               <ul className="space-y-2.5 mb-8">
                 {dropBenefits.map((b) => (
                   <li key={b} className="flex items-start gap-2.5 text-sm text-gray-600">
@@ -92,7 +94,7 @@ export default function BusinessModels() {
         {/* Steps */}
         <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
           <div className="text-center mb-10">
-            <h3 className="text-2xl sm:text-3xl font-black mb-2 text-gray-900">Como funciona o <span className="text-brand">Dropshipping</span> na prática?</h3>
+            <h3 className="font-display text-2xl sm:text-3xl font-medium mb-2 text-gray-900">Como funciona o <span className="text-brand">Dropshipping</span> na prática?</h3>
             <p className="text-gray-500 text-sm">5 passos simples para começar a vender hoje</p>
           </div>
 
@@ -100,17 +102,17 @@ export default function BusinessModels() {
             {dropSteps.map((step, i) => (
               <motion.div key={step.number} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1, duration: 0.4 }}
                 whileHover={{ y: -4 }}
-                className={`relative bg-white rounded-md p-5 border ${step.border} transition-all duration-300`}
+                className="relative bg-white rounded-md p-5 border border-gray-200 transition-all duration-300"
               >
                 {i < dropSteps.length - 1 && (
-                  <div className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-white border border-gray-300 items-center justify-center">
-                    <ArrowRight size={11} className="text-gray-400" />
+                  <div className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-white border border-brand/40 items-center justify-center">
+                    <ArrowRight size={11} className="text-brand" />
                   </div>
                 )}
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-3xl font-black text-gray-100">{step.number}</span>
-                  <div className={`w-10 h-10 rounded-md ${step.iconBg} flex items-center justify-center`}>
-                    <step.icon size={18} className={step.iconC} />
+                  <span className="font-mono text-3xl font-medium text-gray-200">{step.number}</span>
+                  <div className="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center">
+                    <step.icon size={18} className="text-gray-600" />
                   </div>
                 </div>
                 <h4 className="font-bold text-gray-900 mb-1.5 text-sm">{step.title}</h4>

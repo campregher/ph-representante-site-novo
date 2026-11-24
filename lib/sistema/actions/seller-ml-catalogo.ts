@@ -297,7 +297,7 @@ export async function publicarGrupoMLVariasContas(
   const gr = await buscarGrupoElegivel(dropDb, produtoIds, ctx.clienteId);
   if ("error" in gr) return { ok: false, error: gr.error };
   if (!Number.isFinite(precoRevenda) || precoRevenda < gr.precoMinimo)
-    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(gr.precoMinimo)}.` };
+    return { ok: false, error: `Preço mínimo para esse produto é ${formatBRL(gr.precoMinimo)}.` };
 
   const resultados: PublicarVariasContasResultado[] = [];
   for (const mlContaId of mlContaIds) {
@@ -366,7 +366,7 @@ export async function atualizarPrecoGrupoML(
   const gr = await buscarGrupoElegivel(dropDb, produtoIds, ctx.clienteId);
   if ("error" in gr) return { ok: false, error: gr.error };
   if (!Number.isFinite(novoPreco) || novoPreco < gr.precoMinimo)
-    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(gr.precoMinimo)}.` };
+    return { ok: false, error: `Preço mínimo para esse produto é ${formatBRL(gr.precoMinimo)}.` };
   const anuncios = await buscarAnunciosGrupo(dropDb, ctx.clienteId, mlContaId, produtoIds);
   if ("error" in anuncios) return { ok: false, error: anuncios.error };
   for (const anuncio of anuncios) {
@@ -424,7 +424,7 @@ export async function publicarProdutoML(
   const pr = await buscarProdutoElegivel(dropDb, produtoId, ctx.clienteId);
   if ("error" in pr) return { ok: false, error: pr.error };
   if (!Number.isFinite(precoRevenda) || precoRevenda < pr.precoMinimo)
-    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(pr.precoMinimo)}.` };
+    return { ok: false, error: `Preço mínimo para esse produto é ${formatBRL(pr.precoMinimo)}.` };
 
   const res = await publicarAnuncioMLDrop(ctx.clienteId, mlContaId, pr.produto, precoRevenda);
   if (!res.ok) return { ok: false, error: res.error };
@@ -453,7 +453,7 @@ export async function publicarProdutoMLVariasContas(
   const pr = await buscarProdutoElegivel(dropDb, produtoId, ctx.clienteId);
   if ("error" in pr) return { ok: false, error: pr.error };
   if (!Number.isFinite(precoRevenda) || precoRevenda < pr.precoMinimo)
-    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(pr.precoMinimo)}.` };
+    return { ok: false, error: `Preço mínimo para esse produto é ${formatBRL(pr.precoMinimo)}.` };
 
   const resultados: PublicarVariasContasResultado[] = [];
   for (const mlContaId of mlContaIds) {
@@ -573,7 +573,7 @@ export async function atualizarPrecoAnuncioML(
   const pr = await buscarProdutoElegivel(dropDb, produtoId, ctx.clienteId);
   if ("error" in pr) return { ok: false, error: pr.error };
   if (!Number.isFinite(novoPreco) || novoPreco < pr.precoMinimo)
-    return { ok: false, error: `Preço mínimo pra esse produto é ${formatBRL(pr.precoMinimo)}.` };
+    return { ok: false, error: `Preço mínimo para esse produto é ${formatBRL(pr.precoMinimo)}.` };
 
   const { data: anuncio } = await dropDb
     .from("seller_ml_anuncios")

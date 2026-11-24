@@ -57,12 +57,12 @@ export default async function DropDashboardFornecedoresPage() {
     <div className="max-w-5xl space-y-4">
       <div>
         <h1 className="text-lg font-bold text-neutral-900">Produtos para Anunciar</h1>
-        <p className="text-sm text-neutral-500">Escolha um fornecedor pra ver os produtos disponíveis.</p>
+        <p className="text-sm text-neutral-500">Escolha um fornecedor para ver os produtos disponíveis.</p>
       </div>
 
       {fornecedores.length === 0 ? (
         <Card>
-          <CardBody className="text-sm text-neutral-600">Nenhum produto disponível pra venda no momento.</CardBody>
+          <CardBody className="text-sm text-neutral-600">Nenhum produto disponível para venda no momento.</CardBody>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

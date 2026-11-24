@@ -10,6 +10,7 @@ import {
 } from "@/lib/sistema/schemas";
 import { onlyDigits } from "@/lib/sistema/format";
 import { solicitarTrocaEmailSeller } from "@/lib/sistema/actions/seller-troca-email";
+import { notificarSellerAprovado } from "@/lib/sistema/seller-notificacoes";
 import type { ActionResult } from "@/lib/sistema/types";
 
 async function guard() {
@@ -104,12 +105,22 @@ export async function aprovarCliente(id: string): Promise<ActionResult> {
   const g = await guard();
   if (g.error) return { ok: false, error: g.error };
   const supabase = await createSistemaClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clientes")
     .update({ status: "ativo", email_confirmado: true, updated_by: g.profile!.id })
     .eq("id", id)
-    .eq("status", "prospect");
+    .eq("status", "prospect")
+    .select("nome_fantasia, razao_social, email, whatsapp, is_seller")
+    .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (data?.is_seller) {
+    const nome = (data.nome_fantasia as string) || (data.razao_social as string) || "seller";
+    notificarSellerAprovado({
+      nome,
+      email: data.email as string | null,
+      whatsapp: data.whatsapp as string | null,
+    }).catch((e) => console.error("aprovarCliente notificarSeller:", e));
+  }
   revalidatePath("/sistema");
   revalidatePath("/sistema/clientes");
   revalidatePath(`/sistema/clientes/${id}`);

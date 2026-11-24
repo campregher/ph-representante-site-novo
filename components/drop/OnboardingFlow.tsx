@@ -177,7 +177,7 @@ export default function OnboardingFlow({
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold text-neutral-900">Bem-vindo! Só mais uma etapa</h1>
-        <p className="mt-1 text-sm text-neutral-500">Responda rapidinho pra gente te conhecer melhor.</p>
+        <p className="mt-1 text-sm text-neutral-500">Responda às perguntas para conhecermos melhor sua operação.</p>
       </div>
 
       <div>

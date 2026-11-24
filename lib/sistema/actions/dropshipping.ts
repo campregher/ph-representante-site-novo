@@ -91,6 +91,16 @@ export async function importarFornecedoresRepresentadas(): Promise<ActionResult<
   return { ok: true, criados, ignorados };
 }
 
+export async function alternarAtivoDropFornecedor(id: string, ativo: boolean): Promise<ActionResult> {
+  const g = await guard();
+  if (g.error) return { ok: false, error: g.error };
+  const db = await createDropshippingClient();
+  const { error } = await db.from("fornecedores").update({ ativo }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/sistema/dropshipping/fornecedores");
+  return { ok: true };
+}
+
 export async function excluirDropFornecedor(id: string): Promise<ActionResult> {
   const g = await guard();
   if (g.error) return { ok: false, error: g.error };
@@ -184,7 +194,7 @@ export async function salvarDropProdutosEmMassa(
   const g = await guard();
   if (g.error) return { ok: false, error: g.error };
   if (produtoIds.length === 0) return { ok: false, error: "Nenhum produto selecionado." };
-  if (Object.keys(patch).length === 0) return { ok: false, error: "Nenhuma alteração pra aplicar." };
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Nenhuma alteração para aplicar." };
 
   const db = await createDropshippingClient();
   const { error } = await db.from("produtos").update(patch).in("id", produtoIds);

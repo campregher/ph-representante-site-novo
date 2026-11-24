@@ -1,6 +1,7 @@
 import { requireSeller } from "@/lib/sistema/seller-auth";
 import { getMlRecords } from "@/lib/sistema/ml-auth";
-import DropMlContas from "@/components/drop/DropMlContas";
+import { metricasContaML, metodosEnvioRealML } from "@/lib/sistema/dropshipping-ml-catalogo";
+import DropMlContas, { type MlContaItem } from "@/components/drop/DropMlContas";
 import SellerLocked from "@/components/drop/SellerLocked";
 import { Card, CardHeader, CardBody } from "@/components/sistema/ui/Card";
 
@@ -16,15 +17,23 @@ export default async function DropDashboardIntegracaoPage() {
     );
   }
 
-  const mlContas = await getMlRecords(seller.id);
+  const mlContasRaw = await getMlRecords(seller.id);
+  const mlContas: MlContaItem[] = await Promise.all(
+    mlContasRaw.map(async (c) => {
+      const [metricas, envio] = await Promise.all([metricasContaML(c.id), metodosEnvioRealML(c.id)]);
+      return {
+        id: c.id,
+        nickname: c.ml_nickname,
+        metricas: metricas.ok ? metricas.metricas : null,
+        tiposEnvio: envio.ok ? envio.metodos.map((m) => m.nome) : [],
+      };
+    })
+  );
 
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-lg font-bold text-neutral-900">Integração</h1>
-      <DropMlContas
-        token={seller.portalToken}
-        contas={mlContas.map((c) => ({ id: c.id, nickname: c.ml_nickname }))}
-      />
+      <DropMlContas token={seller.portalToken} contas={mlContas} />
       <Card>
         <CardHeader title="Como funciona" />
         <CardBody className="space-y-2 text-sm text-neutral-600">

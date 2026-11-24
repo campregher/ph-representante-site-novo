@@ -13,6 +13,11 @@ export interface CnpjData {
   telefone: string;
   email: string;
   situacao: string;
+  /** CNAE principal, só dígitos (ex.: "4530701"). */
+  cnae_principal: string;
+  cnae_principal_texto: string;
+  /** CNAEs secundários, só dígitos. */
+  cnaes_secundarios: string[];
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -49,6 +54,11 @@ export async function buscarCnpj(
         telefone: ph ? `(${ph.area}) ${ph.number}` : "",
         email: Array.isArray(d.emails) && d.emails[0] ? d.emails[0].address : "",
         situacao: d.status?.text ?? "",
+        cnae_principal: d.mainActivity?.id != null ? String(d.mainActivity.id) : "",
+        cnae_principal_texto: d.mainActivity?.text ?? "",
+        cnaes_secundarios: Array.isArray(d.sideActivities)
+          ? d.sideActivities.map((a: any) => String(a.id)).filter(Boolean)
+          : [],
       };
       return { data };
     }
@@ -81,6 +91,11 @@ export async function buscarCnpj(
         telefone: tel ? `(${tel.slice(0, 2)}) ${tel.slice(2)}` : "",
         email: d.email ?? "",
         situacao: d.descricao_situacao_cadastral ?? "",
+        cnae_principal: d.cnae_fiscal != null ? String(d.cnae_fiscal) : "",
+        cnae_principal_texto: d.cnae_fiscal_descricao ?? "",
+        cnaes_secundarios: Array.isArray(d.cnaes_secundarios)
+          ? d.cnaes_secundarios.map((a: any) => String(a.codigo)).filter(Boolean)
+          : [],
       };
       return { data };
     }

@@ -40,7 +40,7 @@ async function MetodosEnvioCard({ clienteId }: { clienteId: string }) {
       <CardHeader title="Métodos de envio" />
       <CardBody className="space-y-3 text-sm">
         <p className="text-neutral-600">
-          O que está ativo agora em cada conta conectada, direto do Mercado Livre. Pra mudar, é no próprio painel do
+          O que está ativo agora em cada conta conectada, direto do Mercado Livre. Para mudar, é no próprio painel do
           Mercado Livre (Configurações da conta → Envios).
         </p>
         {resultados.map(({ conta, res }) => (

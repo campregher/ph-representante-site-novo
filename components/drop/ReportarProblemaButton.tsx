@@ -63,7 +63,7 @@ export default function ReportarProblemaButton() {
       >
         <div className="space-y-3">
           <p className="text-xs text-neutral-500">
-            Conta pra gente o que aconteceu — nosso time recebe o aviso e entra em contato se precisar.
+            Conte o que aconteceu. Nossa equipe receberá o relato e entrará em contato se precisar de mais informações.
           </p>
           <Field label="Assunto (opcional)">
             <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: etiqueta não baixou" />
@@ -73,7 +73,7 @@ export default function ReportarProblemaButton() {
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               rows={4}
-              placeholder="Descreva o problema com o máximo de detalhe que conseguir."
+              placeholder="Descreva o problema com o máximo de detalhes que conseguir."
             />
           </Field>
         </div>

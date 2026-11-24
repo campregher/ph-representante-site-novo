@@ -78,6 +78,17 @@ export function onlyDigits(value: string | null | undefined): string {
   return String(value ?? "").replace(/\D/g, "");
 }
 
+/** DDD (2) + número (8 ou 9 dígitos) → E.164 sem "+" (ex.: "5511986261490").
+ *  Aceita o número já com o "55" na frente ou sem. */
+export function normalizarWhatsappBR(raw: string | null | undefined): string | null {
+  const d = onlyDigits(raw);
+  if (d.length === 12 || d.length === 13) {
+    if (d.startsWith("55")) return d;
+  }
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  return null;
+}
+
 /** "1.234,56" | "1234.56" | "R$ 1.234,56" → 1234.56 (ou null se vazio/ inválido) */
 export function parseNumeroBR(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;

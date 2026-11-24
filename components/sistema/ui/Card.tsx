@@ -62,7 +62,7 @@ export function StatCard({
         <span className="text-xs font-medium text-neutral-500">{label}</span>
         {icon && <span className="text-neutral-400">{icon}</span>}
       </div>
-      <div className="mt-2 text-2xl font-bold tracking-tight text-neutral-900">{value}</div>
+      <div className="mt-2 font-mono text-2xl font-semibold tracking-tight tabular-nums text-neutral-900">{value}</div>
       {hint && <div className="mt-1 text-xs text-neutral-500">{hint}</div>}
     </div>
   );

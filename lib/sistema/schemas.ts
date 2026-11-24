@@ -258,6 +258,12 @@ export const sellerCadastroSchema = z
     message: "Informe a Inscrição Estadual (ou marque \"Isento\")",
     path: ["inscricao_estadual"],
   })
+  .refine((d) => !!d.whatsapp, {
+    // obrigatório pra sempre existir um número verificado por OTP — ver
+    // whatsapp-verificacao.ts e o gate de confirmação no formulário.
+    message: "Informe o WhatsApp e confirme o código de verificação",
+    path: ["whatsapp"],
+  })
   .refine((d) => d.senha === d.confirmar_senha, {
     message: "As senhas não conferem",
     path: ["confirmar_senha"],
@@ -311,7 +317,7 @@ export const SELLER_VENDAS_MES_OPTIONS = [
 ] as const;
 
 export const REGRA_NF_TEXTO =
-  'O Mercado Livre tem um emissor fiscal nativo, o "Faturador". Com ele ativo no painel do ML (CNPJ + Inscrição Estadual atualizada + certificado digital A1), a nota fiscal da sua venda pode ser emitida automaticamente. Se você não ativar, não tem problema — nada trava: você recebe a venda normalmente e, assim que declarar a nota fiscal manualmente no Mercado Livre e a etiqueta ficar disponível, o pedido aparece em "Pedidos" pra você baixar e enviar ao fornecedor.';
+  'O Mercado Livre tem um emissor fiscal nativo, o "Faturador". Com ele ativo no painel do ML (CNPJ + Inscrição Estadual atualizada + certificado digital A1), a nota fiscal da sua venda pode ser emitida automaticamente. Se você não ativar, não tem problema — nada trava: você recebe a venda normalmente e, assim que declarar a nota fiscal manualmente no Mercado Livre e a etiqueta ficar disponível, o pedido aparece em "Pedidos" para você baixar e enviar ao fornecedor.';
 
 export const sellerOnboardingSchema = z
   .object({

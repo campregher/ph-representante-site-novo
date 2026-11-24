@@ -147,7 +147,7 @@ export default function CategoriasLinhaPropriaManager({ categorias }: { categori
               onChange={(e) => setForm((f) => ({ ...f, ativa: e.target.checked }))}
               className="h-4 w-4 rounded border-neutral-300 text-brand"
             />
-            Ativa (aparece pra escolher nos produtos)
+            Ativa (aparece para escolher nos produtos)
           </label>
         </div>
       </Modal>

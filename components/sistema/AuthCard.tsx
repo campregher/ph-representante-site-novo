@@ -97,7 +97,7 @@ export default function AuthCard({
             >
               <ArrowLeft size={15} /> Voltar para o site
             </Link>
-            <div className="rounded-md border border-gray-900 bg-white p-6 sm:p-8">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-[0_0_0_1px_rgba(0,0,0,.03),0_1px_2px_-1px_rgba(0,0,0,.04),0_16px_40px_-12px_rgba(0,0,0,.12)] sm:p-8">
               {title && <h1 className="text-xl font-bold text-neutral-900">{title}</h1>}
               {subtitle && <p className="mt-1 text-sm text-neutral-500">{subtitle}</p>}
               <div className={title ? "mt-6" : ""}>{children}</div>
@@ -121,7 +121,7 @@ export default function AuthCard({
         >
           <ArrowLeft size={15} /> Voltar para o site
         </Link>
-        <div className="overflow-hidden rounded-md border border-gray-900 bg-white">
+        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_0_0_1px_rgba(0,0,0,.03),0_1px_2px_-1px_rgba(0,0,0,.04),0_16px_40px_-12px_rgba(0,0,0,.12)]">
           <div className="h-[3px] bg-brand" />
           <div className="flex items-center justify-center bg-dark-950 px-6 py-5">
             <Image
@@ -147,4 +147,4 @@ export default function AuthCard({
 }
 
 export const authInputClass =
-  "w-full rounded-md border border-neutral-300 bg-white py-2.5 pl-9 pr-3 text-sm text-neutral-900 placeholder-neutral-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15";
+  "w-full rounded-md border border-neutral-300 bg-white py-2.5 pl-9 pr-3 text-sm text-neutral-900 placeholder-neutral-400 focus:border-info focus:outline-none focus:ring-2 focus:ring-info/15";

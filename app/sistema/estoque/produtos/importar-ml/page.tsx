@@ -20,12 +20,12 @@ export default async function ImportarProdutosMlPage() {
   if (!conta) {
     return (
       <div>
-        <PageHeader title="Importar do Mercado Livre" description="Puxe os anúncios da conta do Mercado Livre da PH pra virar produto da linha própria." />
+        <PageHeader title="Importar do Mercado Livre" description="Importe os anúncios da conta da PH no Mercado Livre como produtos da linha própria." />
         <Card>
           <CardBody className="flex flex-col items-center gap-3 py-10 text-center">
             <ShoppingBag size={28} className="text-neutral-400" />
             <p className="text-sm text-neutral-600">
-              Conecte a conta do Mercado Livre da empresa pra ver os anúncios disponíveis pra importar.
+              Conecte a conta do Mercado Livre da empresa para ver os anúncios disponíveis para importar.
             </p>
             <a href="/api/sistema/ml/connect">
               <Button size="sm">Conectar Mercado Livre</Button>

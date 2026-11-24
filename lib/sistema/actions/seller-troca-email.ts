@@ -42,8 +42,8 @@ export async function solicitarTrocaEmailSeller(
         subject: "Confirme seu novo e-mail — PH Representante",
         html: `<div style="font-family:Arial,sans-serif;color:#111;line-height:1.6">
           <p>Olá, ${nome}!</p>
-          <p>Pediram a troca do seu e-mail de login na PH Representante pra este endereço.
-          Clique no link abaixo pra confirmar — enquanto não confirmar, seu login antigo continua
+          <p>Pediram a troca do seu e-mail de login na PH Representante para este endereço.
+          Clique no link abaixo para confirmar — enquanto não confirmar, seu login antigo continua
           funcionando normalmente.</p>
           <p><a href="${link}">${link}</a></p>
           <p>Se você não pediu essa troca, ignore este e-mail.</p>

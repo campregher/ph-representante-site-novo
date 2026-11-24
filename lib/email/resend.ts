@@ -23,6 +23,10 @@ export interface SendEmailInput {
   text?: string;
   replyTo?: string;
   attachments?: EmailAttachment[];
+  /** Sobrescreve o remetente padrão (RESEND_FROM_EMAIL) — usado quando o
+   *  destinatário é o mesmo endereço do remetente padrão, pra não cair em
+   *  spam por from==to (ex.: aviso interno pra contato@ saindo de contato@). */
+  from?: string;
 }
 
 export interface SendEmailResult {
@@ -45,7 +49,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   if (!apiKey) throw new Error("RESEND_API_KEY não configurada.");
 
   const body: Record<string, unknown> = {
-    from: fromAddress(),
+    from: input.from || fromAddress(),
     to: input.to,
     subject: input.subject,
     html: input.html,

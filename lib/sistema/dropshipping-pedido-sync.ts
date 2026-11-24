@@ -141,7 +141,7 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
     .order("created_at", { ascending: false })
     .limit(1);
   const tokenRow = tokenRows?.[0];
-  if (!tokenRow) return { ok: false, motivo: "seller não encontrado pra esse ml_user_id" };
+  if (!tokenRow) return { ok: false, motivo: "seller não encontrado para esse ml_user_id" };
   const mlContaId = tokenRow.id as string;
   const clienteId = tokenRow.cliente_id as string;
 
@@ -277,7 +277,7 @@ export async function processarVendaDropshipping(mlUserId: string, orderId: stri
 
   await avisarGestores(
     `[${sellerNome}] Nova venda de dropshipping — pedido #${numero}`,
-    `Seller vendeu ${itensValidos.length} item(ns) pelo Mercado Livre. Aguardando a NF pra liberar a etiqueta.`,
+    `Seller vendeu ${itensValidos.length} item(ns) pelo Mercado Livre. Aguardando a NF para liberar a etiqueta.`,
     "/sistema/dropshipping"
   );
 

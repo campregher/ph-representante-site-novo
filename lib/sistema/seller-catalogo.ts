@@ -64,9 +64,10 @@ export async function catalogoDropSeller(clienteId?: string): Promise<CatalogoDr
     drop
       .from("produtos")
       .select(
-        "id, sku, nome, descricao, imagem_url, imagens, variacao, categoria_interna, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores(nome, razao_social, cnpj, logo_url), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
+        "id, sku, nome, descricao, imagem_url, imagens, variacao, categoria_interna, estoque_atual, ml_category_id, transporte_aceito, fornecedor_id, fornecedor:fornecedores!inner(nome, razao_social, cnpj, logo_url), produto_precos(custo, preco_sugerido, tabela:tabelas_preco(codigo))"
       )
       .eq("ativo", true)
+      .eq("fornecedor.ativo", true)
       .gt("estoque_atual", 0)
       .order("nome")
       .limit(2000),

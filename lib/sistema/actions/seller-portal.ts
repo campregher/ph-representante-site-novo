@@ -5,6 +5,7 @@ import { createSistemaAdminClient } from "@/lib/supabase/server";
 import { disconnectMl, getMlRecord, getMlRecords } from "@/lib/sistema/ml-auth";
 import { validarDocumentoSeller } from "@/lib/sistema/seller-validacao";
 import { criarNotificacoes } from "@/lib/sistema/notificacoes";
+import { notificarSellerEmAnalise, notificarSellerAprovado } from "@/lib/sistema/seller-notificacoes";
 import type { ActionResult } from "@/lib/sistema/types";
 
 /** Desconecta a (primeira) conta ML do seller — usado só pelo portal antigo por token (single-account). */
@@ -68,7 +69,7 @@ export async function confirmarEmailSeller(
   const db = await createSistemaAdminClient();
   const { data: cliente } = await db
     .from("clientes")
-    .select("id, nome_fantasia, razao_social, cnpj, cpf, status, email_confirmado")
+    .select("id, nome_fantasia, razao_social, cnpj, cpf, status, email_confirmado, email, whatsapp")
     .eq("portal_token", portalToken)
     .maybeSingle();
   if (!cliente) return { ok: false, error: "Link inválido." };
@@ -84,25 +85,33 @@ export async function confirmarEmailSeller(
     cpf: cliente.cpf as string | null,
   });
 
+  const aprovadoAgora = validacao.aprovado && cliente.status === "prospect";
   const patch: Record<string, unknown> = { email_confirmado: true };
-  if (validacao.aprovado && cliente.status === "prospect") patch.status = "ativo";
+  if (aprovadoAgora) patch.status = "ativo";
   if (!validacao.aprovado) patch.observacoes = `Aprovação automática negada: ${validacao.motivo}`;
 
   const { error } = await db.from("clientes").update(patch).eq("id", cliente.id as string);
   if (error) return { ok: false, error: error.message };
 
+  const contato = { nome, email: cliente.email as string | null, whatsapp: cliente.whatsapp as string | null };
   if (validacao.aprovado) {
-    await avisarGestores(
-      `Seller aprovado automaticamente: ${nome}`,
-      validacao.motivo,
-      "/sistema/clientes?status=ativo"
-    );
+    await Promise.all([
+      avisarGestores(
+        `Seller aprovado automaticamente: ${nome}`,
+        validacao.motivo,
+        "/sistema/clientes?status=ativo"
+      ),
+      aprovadoAgora ? notificarSellerAprovado(contato) : Promise.resolve(),
+    ]);
   } else {
-    await avisarGestores(
-      `Seller precisa de revisão manual: ${nome}`,
-      validacao.motivo,
-      "/sistema/clientes?status=prospect"
-    );
+    await Promise.all([
+      avisarGestores(
+        `Seller precisa de revisão manual: ${nome}`,
+        validacao.motivo,
+        "/sistema/clientes?status=prospect"
+      ),
+      notificarSellerEmAnalise(contato),
+    ]);
   }
 
   return { ok: true, jaConfirmado: false, aprovado: validacao.aprovado, motivo: validacao.motivo, nome };

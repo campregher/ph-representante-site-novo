@@ -26,7 +26,7 @@ export default async function ConfirmarEmailPage({
     {
       icon: <CheckCircle2 size={36} className="text-green-600" />,
       titulo: `E-mail confirmado — cadastro aprovado, ${res.nome}!`,
-      texto: "Seu acesso já está liberado. Acesse seu portal pra ver o catálogo e conectar sua conta do Mercado Livre.",
+      texto: "Seu acesso já está liberado. Acesse seu portal para ver o catálogo e conectar sua conta do Mercado Livre.",
     }
   ) : (
     {

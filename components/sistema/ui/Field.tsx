@@ -3,7 +3,7 @@
 import { forwardRef, type ReactNode } from "react";
 
 const base =
-  "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder-neutral-400 focus:border-brand/50 focus:outline-none focus:ring-2 focus:ring-brand/15 disabled:bg-neutral-100 disabled:text-neutral-500";
+  "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder-neutral-400 focus:border-info/50 focus:outline-none focus:ring-2 focus:ring-info/15 disabled:bg-neutral-100 disabled:text-neutral-500";
 
 export function Label({
   children,

@@ -1,3 +1,4 @@
+import { faqs } from "@/lib/faqs";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import About from "@/components/About";
@@ -14,6 +15,18 @@ import WhatsAppButton from "@/components/WhatsAppButton";
 export default function Home() {
   return (
     <main className="bg-dark-900 overflow-x-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqs.map(({ q, a }) => ({
+            "@type": "Question",
+            name: q,
+            acceptedAnswer: { "@type": "Answer", text: a },
+          })),
+        }).replace(/</g, "\\u003c") }}
+      />
       <Navbar />
       <Hero />
       <About />

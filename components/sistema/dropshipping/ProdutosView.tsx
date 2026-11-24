@@ -113,7 +113,7 @@ export default function ProdutosView({
     });
   }
   async function buscarCategoriaMlMassa() {
-    if (!massaBuscaMl.trim()) return toast.error("Digite um termo pra buscar a categoria.");
+    if (!massaBuscaMl.trim()) return toast.error("Digite um termo para buscar a categoria.");
     setBuscandoMassaMl(true);
     setMassaSugestoesMl(null);
     try {
@@ -307,7 +307,7 @@ export default function ProdutosView({
         <Card className="mb-4 border-brand/40">
           <CardHeader
             title={`${selecionados.size} produto(s) selecionado(s)`}
-            description="Aplica a mesma alteração pra todos de uma vez."
+            description="Aplica a mesma alteração para todos de uma vez."
             action={
               <button onClick={limparSelecao} className="text-xs font-medium text-neutral-500 hover:text-neutral-800">
                 Limpar seleção
@@ -357,7 +357,7 @@ export default function ProdutosView({
 
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
-                Categoria no Mercado Livre — liga a categoria interna com a externa pra todos de uma vez
+                Categoria no Mercado Livre — vincula a categoria interna à categoria do marketplace para todos os produtos selecionados
               </p>
               <div className="flex items-center gap-2">
                 <Input
@@ -547,7 +547,7 @@ export default function ProdutosView({
             </Field>
           </FormGrid>
           <Field label="Descrição"><Textarea value={f.descricao} onChange={(e) => set("descricao", e.target.value)} rows={2} /></Field>
-          <Field label="Fotos" hint="Uma URL por linha — a primeira vira a capa mostrada pro seller e enviada ao Mercado Livre.">
+          <Field label="Fotos" hint="Informe uma URL por linha. A primeira imagem será a capa exibida ao seller e enviada ao Mercado Livre.">
             <Textarea
               value={f.imagens}
               onChange={(e) => set("imagens", e.target.value)}
